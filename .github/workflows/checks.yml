@@ -29,3 +29,18 @@ jobs:
         run: pnpm generate:types:cloudflare
       - name: Typecheck
         run: pnpm exec tsc --noEmit
+      - name: Build Payload application
+        env:
+          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
+        run: pnpm build
+      - name: Generate migration on local D1 mock
+        env:
+          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
+        run: pnpm payload migrate:create purkins_initial
+      - name: Archive generated migration for review
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: purkins-local-d1-migration
+          path: src/migrations/
+          if-no-files-found: error
