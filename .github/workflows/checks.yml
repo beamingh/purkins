@@ -37,6 +37,17 @@ jobs:
         env:
           PAYLOAD_SECRET: ci-local-only-not-a-production-secret
         run: pnpm payload migrate:create purkins_initial
+      - name: Validate migration against local D1
+        env:
+          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
+        run: pnpm payload migrate
+      - name: Export migration source for review
+        run: |
+          for file in src/migrations/*.ts src/migrations/*.json; do
+            echo "PURKINS_MIGRATION_BEGIN ${file}"
+            cat "${file}"
+            echo "PURKINS_MIGRATION_END ${file}"
+          done
       - name: Archive generated migration for review
         if: success()
         uses: actions/upload-artifact@v4
