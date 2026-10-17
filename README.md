@@ -48,4 +48,8 @@ This repository **does not yet implement** a working cash register, Facebook syn
 
 ## CI validation
 
-GitHub Actions on Node 24 validates unit permissions, lint, Cloudflare bindings, typecheck, a full production Next.js build, and applies the committed D1 migration against the local emulator. It does not deploy to Cloudflare.
+Manually triggered GitHub Actions on Node 24 validates unit permissions, lint, Cloudflare bindings, typecheck, a full production Next.js build, and applies the committed D1 migration against the local emulator. It does not deploy to Cloudflare.
+
+### Running checks deliberately
+
+The GitHub Actions workflow is **manual only**, using `workflow_dispatch`. Pushes and pull requests must not trigger tests automatically. To run tests, open **Actions → Purkins checks → Run workflow**, select `feat/payload-foundation`, and start the run. The workflow is also registered on `main` solely so GitHub offers its manual trigger before the application branch is merged. Run it against a branch containing the application, not the README-only `main` branch.
