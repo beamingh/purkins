@@ -2,7 +2,7 @@
 
 Private inventory and pricing workspace for **Purkins**, built with **Next.js + Payload CMS**.
 
-**Status:** feature branch, not deployed. Proposed address: `purkins.igoola.com`. No production Cloudflare resources, secrets, DNS or custom domains have been modified.
+**Status:** feature branch, not deployed. Dedicated Purkins D1 and R2 resources have been created; no Worker, production secret, DNS or custom domain has been deployed/configured. Proposed address: `purkins.igoola.com`.
 
 ## Architecture
 
@@ -14,16 +14,18 @@ This code is based on the [official Payload Cloudflare D1 starter](https://githu
 - `owner` and `partner` roles. A partner sees inventory and can suggest a selling price, but cannot view cost prices, change stock, approve prices or manage accounts.
 - Private R2-backed media, not public product URLs.
 
+**For local testing and Windows deployment instructions, see [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).**
+
 ## Do before deployment
 
 1. Check runtime compatibility with the official starter's Node requirement (`>=24.15.0`).
 2. Set the untracked Payload authentication secret and configure the Cloudflare local development bindings.
-3. Create a **separate** Purkins D1 database and R2 bucket, then replace the D1 placeholder ID in `wrangler.jsonc`. Never use SeeZambia databases or buckets.
-4. Generate Cloudflare and Payload types and check the application locally. There is no validated production build yet.
+3. Purkins' dedicated D1 database and R2 bucket already exist and are configured in `wrangler.jsonc`. Never use SeeZambia databases or buckets.
+4. Build and migration passed the last manually invoked GitHub validation. Complete local first-user, API and upload smoke tests before any production deployment.
 5. The initial D1 migration is committed in `src/migrations/` and has been successfully applied in CI to local D1. Review before production application.
 6. Test the initial owner flow at `/admin/create-first-user`, all role restrictions, photo uploads, direct API reads, and whether an unauthenticated request is denied. Confirm the first-user bootstrap is compatible with the custom user access policy.
 7. Protect the entire application with **Cloudflare Access before first public exposure**, not just `robots.txt`. An unclaimed first-user endpoint is a takeover risk.
-8. Confirm Cloudflare Workers bundle size, paid plan coverage, migrations and actual deployment compatibility before attaching `purkins.igoola.com`.
+8. Confirm Cloudflare Workers bundle size, paid plan coverage, migrations and actual deployment compatibility before attaching `purkins.igoola.com`. Deployment is interactive and requires explicit confirmation.
 
 **Do not deploy this scaffold until the migrations and private-access checks have passed.**
 

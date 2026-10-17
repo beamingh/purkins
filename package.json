@@ -6,9 +6,9 @@
   "type": "module",
   "scripts": {
     "build": "cross-env NODE_OPTIONS=\"--no-deprecation --max-old-space-size=8000\" next build",
-    "deploy": "pnpm run deploy:database && pnpm run deploy:app",
-    "deploy:app": "opennextjs-cloudflare build --env=$CLOUDFLARE_ENV && opennextjs-cloudflare deploy --env=$CLOUDFLARE_ENV",
-    "deploy:database": "cross-env NODE_ENV=production PAYLOAD_SECRET=ignore payload migrate && wrangler d1 execute D1 --command 'PRAGMA optimize' --env=$CLOUDFLARE_ENV --remote",
+    "deploy": "node scripts/deploy.mjs",
+    "deploy:app": "node scripts/require-deploy-approval.mjs && opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "deploy:database": "node scripts/require-deploy-approval.mjs && cross-env NODE_ENV=production PAYLOAD_SECRET=ignore payload migrate && wrangler d1 execute D1 --command=\"PRAGMA optimize\" --remote",
     "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
     "devsafe": "rm -rf .next && rm -rf .open-next && cross-env NODE_OPTIONS=--no-deprecation next dev",
     "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
@@ -18,10 +18,11 @@
     "ii": "pnpm install --ignore-workspace",
     "lint": "cross-env NODE_OPTIONS=--no-deprecation eslint .",
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
-    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
     "test": "vitest run tests/roles.test.ts tests/permissions.test.ts",
-    "test:unit": "vitest run tests/roles.test.ts tests/permissions.test.ts"
+    "test:unit": "vitest run tests/roles.test.ts tests/permissions.test.ts",
+    "check:local": "pnpm test:unit && pnpm lint && pnpm generate:types:cloudflare && pnpm exec tsc --noEmit && pnpm build"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.11.0",
