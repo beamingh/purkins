@@ -2,10 +2,6 @@ name: Purkins checks
 
 on:
   pull_request:
-  push:
-    branches:
-      - feat/**
-      - main
 
 permissions:
   contents: read
@@ -23,7 +19,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-          cache: pnpm
       - name: Resolve project dependencies
         run: pnpm install --no-frozen-lockfile
       - name: Test role and inventory permissions
