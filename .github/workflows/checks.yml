@@ -25,5 +25,7 @@ jobs:
         run: pnpm test:unit
       - name: Check source formatting and lint
         run: pnpm lint
+      - name: Generate Cloudflare binding types
+        run: pnpm generate:types:cloudflare
       - name: Typecheck
         run: pnpm exec tsc --noEmit
