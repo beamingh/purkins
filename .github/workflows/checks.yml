@@ -1,0 +1,39 @@
+name: Purkins checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-checks:
+    name: Unit tests and source checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Resolve project dependencies
+        run: pnpm install --no-frozen-lockfile
+      - name: Test role and inventory permissions
+        run: pnpm test:unit
+      - name: Check source formatting and lint
+        run: pnpm lint
+      - name: Generate Cloudflare binding types
+        run: pnpm generate:types:cloudflare
+      - name: Typecheck
+        run: pnpm exec tsc --noEmit
+      - name: Build Payload application
+        env:
+          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
+        run: pnpm build
+      - name: Apply committed migrations to local D1
+        env:
+          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
+        run: pnpm payload migrate
