@@ -8,13 +8,15 @@ Private inventory and pricing workspace for **Purkins**, built with **Next.js + 
 
 This code is based on the [official Payload Cloudflare D1 starter](https://github.com/payloadcms/payload/tree/main/templates/with-cloudflare-d1), rather than its full MongoDB/Stripe commerce starter, because Purkins needs inventory first. Existing Payload admin, authentication, Next.js routes and Cloudflare D1/R2 adapters are retained.
 
-- Payload admin at `/admin`, homepage redirects to admin.
+- Branded Purkins stockroom at `/workspace`; homepage redirects to the stockroom. Payload admin at `/admin` remains the editor for products, photos and users.
 - A private inventory collection with SKU, quantity, location, product photographs, category, size, price and status.
 - All prices are entered in **ZMW**, no payments or currency conversions yet.
 - `owner` and `partner` roles. A partner sees inventory and can suggest a selling price, but cannot view cost prices, change stock, approve prices or manage accounts.
 - Private R2-backed media, not public product URLs.
 
 **For local testing and Windows deployment instructions, see [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).**
+
+**For the SeeZambia-inspired workspace boundary and future MCP tool design, see [docs/ARCHITECTURE_AND_MCP.md](docs/ARCHITECTURE_AND_MCP.md).** MCP is planned but is not currently exposed.
 
 ## Do before deployment
 
