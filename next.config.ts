@@ -2,6 +2,8 @@ import { withPayload } from '@payloadcms/next/withPayload'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Cloudflare's local D1 proxy uses SQLite; parallel build workers can lock it.
+  experimental: { cpus: 1 },
   images: {
     localPatterns: [
       {
