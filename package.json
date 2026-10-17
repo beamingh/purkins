@@ -20,8 +20,8 @@
     "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview --env=$CLOUDFLARE_ENV",
     "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
-    "test": "vitest run tests/roles.test.ts",
-    "test:unit": "vitest run tests/roles.test.ts"
+    "test": "vitest run tests/roles.test.ts tests/permissions.test.ts",
+    "test:unit": "vitest run tests/roles.test.ts tests/permissions.test.ts"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.11.0",

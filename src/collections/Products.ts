@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isOwner, isTeam } from '@/access/roles'
+import { isOwner, isTeam } from '../access/roles'
 
 const ownerWrite = {
   update: ({ req }: { req: { user: unknown } }) => isOwner(req.user),
