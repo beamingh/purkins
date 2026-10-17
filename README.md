@@ -20,7 +20,7 @@ This code is based on the [official Payload Cloudflare D1 starter](https://githu
 2. Set the untracked Payload authentication secret and configure the Cloudflare local development bindings.
 3. Create a **separate** Purkins D1 database and R2 bucket, then replace the D1 placeholder ID in `wrangler.jsonc`. Never use SeeZambia databases or buckets.
 4. Generate Cloudflare and Payload types and check the application locally. There is no validated production build yet.
-5. Generate and review **new database migrations** for the Purkins collections. Old upstream template migrations were deliberately not copied.
+5. The initial D1 migration is committed in `src/migrations/` and has been successfully applied in CI to local D1. Review before production application.
 6. Test the initial owner flow at `/admin/create-first-user`, all role restrictions, photo uploads, direct API reads, and whether an unauthenticated request is denied. Confirm the first-user bootstrap is compatible with the custom user access policy.
 7. Protect the entire application with **Cloudflare Access before first public exposure**, not just `robots.txt`. An unclaimed first-user endpoint is a takeover risk.
 8. Confirm Cloudflare Workers bundle size, paid plan coverage, migrations and actual deployment compatibility before attaching `purkins.igoola.com`.
@@ -45,3 +45,7 @@ The first account uses Payload's bootstrap flow and receives the owner role by d
 Bulk entry and photo linking, sales receipts and atomic inventory deductions, stock change history, copy-to-Facebook product descriptions, and finally a public storefront/checkout.
 
 This repository **does not yet implement** a working cash register, Facebook sync, payment collection, public product pages, automated inventory deductions or verified production migrations.
+
+## CI validation
+
+GitHub Actions on Node 24 validates unit permissions, lint, Cloudflare bindings, typecheck, a full production Next.js build, and applies the committed D1 migration against the local emulator. It does not deploy to Cloudflare.
