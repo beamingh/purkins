@@ -1,5 +1,5 @@
 import type { CollectionConfig } from 'payload'
-import { isOwner, isTeam } from '../access/roles'
+import { initialRoleFor, isOwner, isTeam } from '../access/roles'
 
 export const Users: CollectionConfig = {
   slug: 'users',
@@ -42,10 +42,10 @@ export const Users: CollectionConfig = {
   hooks: {
     beforeChange: [
       ({ operation, req, data }) => {
-        // The initial bootstrap owner keeps the default owner role.
-        // Every further account created by an owner starts as a partner.
-        if (operation === 'create' && isOwner(req.user)) {
-          return { ...data, role: 'partner' }
+        // Never trust a client-supplied role during account creation.
+        // Payload's first-user endpoint alone can create the first owner.
+        if (operation === 'create') {
+          return { ...data, role: initialRoleFor(req.user) }
         }
         return data
       },

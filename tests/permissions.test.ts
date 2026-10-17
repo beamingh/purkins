@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { Products } from '../src/collections/Products'
 import { Media } from '../src/collections/Media'
 import { Users } from '../src/collections/Users'
+import { initialRoleFor } from '../src/access/roles'
 
 const request = (role?: string) =>
   ({ req: { user: role ? { id: 'user-1', role } : null } }) as never
@@ -37,5 +38,15 @@ describe('private Purkins inventory', () => {
     expect(fieldAccess('sellingPriceZMW', 'update', 'partner')).toBe(false)
     expect(fieldAccess('costPriceZMW', 'read', 'partner')).toBe(false)
     expect(fieldAccess('costPriceZMW', 'read', 'owner')).toBe(true)
+  })
+})
+
+describe('initial account roles', () => {
+  it('allocates the bootstrap account owner status and subsequent accounts partner status', () => {
+    expect(initialRoleFor(null)).toBe('owner')
+    expect(initialRoleFor({ role: 'owner' })).toBe('partner')
+    expect(initialRoleFor({ role: 'partner' })).toBe('owner')
+    // A partner cannot create users through the normal collection access.
+    expect(Users.access?.create?.(request('partner'))).toBe(false)
   })
 })
