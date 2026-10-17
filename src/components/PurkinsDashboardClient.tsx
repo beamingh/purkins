@@ -203,7 +203,7 @@ export default function PurkinsDashboardClient() {
       <header className="purkins-dashboard-toolbar">
         <div className="purkins-dashboard-heading">
           <span className="purkins-brand-mini" aria-hidden="true">P</span>
-          <div><strong>Purkins Stockroom</strong><small>Little Essentials, Big Love. · ${user.email}</small></div>
+          <div><strong>Purkins Stockroom</strong><small>Little Essentials, Big Love. · {user.email}</small></div>
         </div>
         <div className="purkins-dashboard-toolbar-actions">
           <button type="button" onClick={() => setRefresh((value) => value + 1)}>↻ Refresh</button>

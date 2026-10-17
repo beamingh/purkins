@@ -48,6 +48,10 @@ export default buildConfig({
   admin: {
     user: Users.slug,
     components: {
+      graphics: {
+        Logo: '/components/PurkinsBrand#PurkinsLogo',
+        Icon: '/components/PurkinsBrand#PurkinsIcon',
+      },
       views: {
         dashboard: {
           Component: '/components/PurkinsDashboard',
