@@ -57,7 +57,7 @@ pnpm payload migrate
 pnpm dev
 ```
 
-Open **http://localhost:3000/admin**. Register the first owner **only locally**. Create a sample product, add quantity and a ZMW price, and test an upload; local D1/R2 test data is separate from the real Purkins database and bucket.
+Run `pnpm generate:importmap` after pulling this dashboard change, then open **http://localhost:3000/admin**. Register the first owner **only locally**. Create a sample product, add quantity and a ZMW price, and test an upload; local D1/R2 test data is separate from the real Purkins database and bucket.
 
 Before using the account remotely, also verify that a pricing partner cannot edit quantity, see cost price, or approve a selling price, and anonymous requests cannot read inventory or photos. These are still manual acceptance tests, not completed production security tests.
 

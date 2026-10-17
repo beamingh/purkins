@@ -47,6 +47,13 @@ const cloudflare =
 export default buildConfig({
   admin: {
     user: Users.slug,
+    components: {
+      views: {
+        dashboard: {
+          Component: '/components/PurkinsDashboard',
+        },
+      },
+    },
     importMap: {
       baseDir: path.resolve(dirname),
     },

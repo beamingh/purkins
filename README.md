@@ -8,7 +8,7 @@ Private inventory and pricing workspace for **Purkins**, built with **Next.js + 
 
 This code is based on the [official Payload Cloudflare D1 starter](https://github.com/payloadcms/payload/tree/main/templates/with-cloudflare-d1), rather than its full MongoDB/Stripe commerce starter, because Purkins needs inventory first. Existing Payload admin, authentication, Next.js routes and Cloudflare D1/R2 adapters are retained.
 
-- Branded Purkins stockroom at `/workspace`; homepage redirects to the stockroom. Payload admin at `/admin` remains the editor for products, photos and users.
+- Branded Purkins stockroom replaces the **Payload dashboard at `/admin`**. Payload still supplies its own sidebar, authentication and `/admin/collections/*` editors for products, photos and users. `/` and legacy `/workspace` redirect to `/admin`.
 - A private inventory collection with SKU, quantity, location, product photographs, category, size, price and status.
 - All prices are entered in **ZMW**, no payments or currency conversions yet.
 - `owner` and `partner` roles. A partner sees inventory and can suggest a selling price, but cannot view cost prices, change stock, approve prices or manage accounts.
@@ -17,6 +17,10 @@ This code is based on the [official Payload Cloudflare D1 starter](https://githu
 **For local testing and Windows deployment instructions, see [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md).**
 
 **For the SeeZambia-inspired workspace boundary and future MCP tool design, see [docs/ARCHITECTURE_AND_MCP.md](docs/ARCHITECTURE_AND_MCP.md).** MCP is planned but is not currently exposed.
+
+## Local dashboard refresh
+
+After pulling the branch, run `pnpm generate:importmap` once so Payload registers the new dashboard component, then restart `pnpm dev` and open **http://localhost:3000/admin**. No database migration is required for this UI-only refactor. Tests remain manual-only.
 
 ## Do before deployment
 

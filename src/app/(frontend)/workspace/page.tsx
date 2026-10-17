@@ -1,12 +1,6 @@
-import PurkinsWorkspace from './Workspace'
-import './workspace.css'
+import { redirect } from 'next/navigation'
 
-export const metadata = {
-  title: 'Stockroom | Purkins',
-  description: 'Private Purkins inventory and pricing workspace.',
-  robots: { index: false, follow: false },
-}
-
-export default function WorkspacePage() {
-  return <PurkinsWorkspace />
+/** Compatibility redirect: operational work is now entirely under /admin. */
+export default function FormerWorkspace() {
+  redirect('/admin')
 }

@@ -4,8 +4,9 @@ This is deliberately a **small, separate Purkins application**. We inspected See
 
 ## Presentation and admin boundary
 
-- `/workspace` is the branded, mobile-friendly operational front end. The default route `/` redirects there.
-- `/admin` remains Payload CMS's existing authenticated editor for inventory, media and users. The new UI links to those existing workflows rather than rewriting CRUD.
+- **`/admin` is the single branded Purkins home**, implemented by replacing Payload's dashboard view inside its standard authenticated DefaultTemplate.
+- Payload keeps its existing sidebar, login, inventory/media/user editors and permissions. The dashboard links to those editor routes; it does not duplicate navigation.
+- `/` and former `/workspace` both redirect to `/admin` for compatibility.
 - The workspace authenticates with `GET /api/users/me`; unauthorized visitors are shown a sign-in screen, never catalogue data.
 - All workspace reads use the existing same-origin Payload REST API under the logged-in user session; Payload collection/field access remains authoritative. Do not put a client-side role check in place of backend authorization.
 - The cards query the latest items with pagination; per-status counts use separate, real server queries. Prices are in ZMW. Cost price is never presented to a partner.
