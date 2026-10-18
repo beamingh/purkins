@@ -1,4 +1,4 @@
-name: Purkins checks
+name: Purkins Minshop manual checks
 
 on:
   workflow_dispatch:
@@ -7,33 +7,23 @@ permissions:
   contents: read
 
 jobs:
-  static-checks:
-    name: Unit tests and source checks
+  storefront:
+    name: Verify Minshop foundation and Purkins theme
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: '10'
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
-      - name: Resolve project dependencies
-        run: pnpm install --no-frozen-lockfile
-      - name: Test role and inventory permissions
-        run: pnpm test:unit
-      - name: Check source formatting and lint
-        run: pnpm lint
-      - name: Generate Cloudflare binding types
-        run: pnpm generate:types:cloudflare
-      - name: Typecheck
-        run: pnpm exec tsc --noEmit
-      - name: Build Payload application
-        env:
-          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
-        run: pnpm build
-      - name: Apply committed migrations to local D1
-        env:
-          PAYLOAD_SECRET: ci-local-only-not-a-production-secret
-        run: pnpm payload migrate
+          cache: 'npm'
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Enforce theme boundaries
+        run: npm run theme:check
+      - name: Check storefront contracts
+        run: npm run test:storefront-contract
+      - name: Type-check source
+        run: npm run check
+      - name: Build Astro Worker
+        run: npm run build
