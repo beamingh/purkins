@@ -298,7 +298,7 @@ export async function reserveInventory(
       checks.push('COALESCE((SELECT stock FROM products WHERE id = ? AND active = 1), -1) >= ?');
       checkValues.push(target.productId, target.quantity);
     } else {
-      checks.push('COALESCE((SELECT stock FROM product_variants WHERE id = ? AND active = 1), -1) >= ?');
+      checks.push('COALESCE((SELECT v.stock FROM product_variants v JOIN products p ON p.id = v.product_id WHERE v.id = ? AND v.active = 1 AND p.active = 1), -1) >= ?');
       checkValues.push(target.variantId, target.quantity);
     }
   }
