@@ -37,9 +37,23 @@ function ensureLocalSecret(name) {
   console.log(`  • generated ${name} → .dev.vars`);
 }
 
-function runLocalTool(relativeCli, args, extraEnv = {}) {
-  const cli = join(root, ...relativeCli);
-  if (!existsSync(cli)) throw new Error(`Missing ${relativeCli.join('/')}. Run npm ci first.`);
+function runLocalTool(packageName, binName, args, extraEnv = {}) {
+  // Read each package's declared CLI entry rather than guessing its location.
+  // Astro currently uses bin/astro.mjs; Wrangler uses bin/wrangler.js.
+  const packageDir = join(root, 'node_modules', packageName);
+  const manifestPath = join(packageDir, 'package.json');
+  if (!existsSync(manifestPath)) {
+    throw new Error(`Missing ${packageName}. Run npm ci first.`);
+  }
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+  const binPath = typeof manifest.bin === 'string' ? manifest.bin : manifest.bin?.[binName];
+  if (!binPath) {
+    throw new Error(`${packageName} does not declare a ${binName} CLI.`);
+  }
+  const cli = join(packageDir, binPath);
+  if (!existsSync(cli)) {
+    throw new Error(`Installed ${binName} CLI missing at ${cli}. Check npm installation.`);
+  }
   const result = spawnSync(process.execPath, [cli, ...args], {
     cwd: root,
     stdio: 'inherit',
@@ -47,7 +61,7 @@ function runLocalTool(relativeCli, args, extraEnv = {}) {
   });
   if (result.error) throw result.error;
   if (result.status !== 0) {
-    throw new Error(`${relativeCli.at(-1)} failed (exit ${result.status ?? 'unknown'}).`);
+    throw new Error(`${binName} failed (exit ${result.status ?? 'unknown'}).`);
   }
 }
 
@@ -58,18 +72,18 @@ try {
 
   if (!skipBuild || !existsSync(configPath)) {
     console.log('▸ [1/2] Building (astro build)…');
-    runLocalTool(['node_modules', 'astro', 'astro.js'], ['build']);
+    runLocalTool('astro', 'astro', ['build']);
   } else {
     console.log('▸ [1/2] Skipping build (--no-build).');
   }
   if (!existsSync(configPath)) throw new Error(`Missing ${configPath} after build.`);
 
   console.log('▸ [2/2] Applying migrations to LOCAL D1…');
-  runLocalTool(['node_modules', 'wrangler', 'bin', 'wrangler.js'], ['d1', 'migrations', 'apply', 'DB', '--local'], { CI: '1' });
+  runLocalTool('wrangler', 'wrangler', ['d1', 'migrations', 'apply', 'DB', '--local'], { CI: '1' });
   if (seed) {
     if (existsSync(join(root, 'seed.sql'))) {
       console.log('▸ Seeding LOCAL D1 with example data…');
-      runLocalTool(['node_modules', 'wrangler', 'bin', 'wrangler.js'], ['d1', 'execute', 'DB', '--local', '--file=./seed.sql'], { CI: '1' });
+      runLocalTool('wrangler', 'wrangler', ['d1', 'execute', 'DB', '--local', '--file=./seed.sql'], { CI: '1' });
     } else {
       console.log('  (--seed requested but seed.sql is missing — skipped)');
     }
