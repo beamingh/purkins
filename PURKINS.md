@@ -60,3 +60,60 @@ GitHub CI remains **workflow_dispatch only**. Nothing runs automatically on push
 5. Confirm import consistency, run local test/build and inspect the storefront in Windows before provisioning any live infrastructure.
 
 Keep the previous `feat/payload-foundation` branch unchanged as a recovery/reference branch. Do not merge or delete it during this evaluation.
+
+## Purkins inventory feature branch
+
+The `feat/purkins-inventory` branch adds an additive D1 migration
+(`0040_purkins_intake.sql`) and a private costing table.
+
+- New items start **inactive/unpublished**, with an auto-generated `PUR-000001`-style
+  product code. Their size, colour, age range, and physical storage location are
+  recorded at intake; per-size/per-colour purchasable variant inventory still
+  needs a later phase.
+- Enter purchase cost in ZMW or ZAR. If ZAR, **enter the actual exchange rate
+  in kwacha per rand** used for costing; no rate is guessed. A per-item overhead
+  allocation covers travel/transport/lodging. The suggested selling price uses
+  **markup on landed cost**, not gross margin, and the owner must explicitly
+  accept the selling price. Unspecified cost or markup is not silently replaced
+  by an invented value.
+- Costs and approvals live in `purkins_intake`, not the public `products`
+  table. The existing single-admin Minshop password is currently the only
+  access boundary: **do not share Admin access with a partner**. Genuine
+  owner/partner roles, route-level role guards, audit history and field
+  redaction are required before enabling additional accounts or MCP write access.
+- Saving any product edit revokes prior approval and hides the product until
+  re-approved. An explicit **Approve selling price & publish** action requires
+  positive ZMW selling price, a photo, a recorded purchase cost and a selling
+  price at least equal to estimated landed cost.
+- Previous sample/legacy products are preserved and do not automatically get
+  intake metadata. They can be removed deliberately once the real catalog is
+  ready; never overwrite them as part of the additive migration.
+
+### Local test in Windows PowerShell
+
+Starting with a working local Minshop checkout and dependencies:
+
+```powershell
+git -c http.version=HTTP/1.1 fetch --no-tags origin refs/heads/feat/purkins-inventory:refs/remotes/origin/feat/purkins-inventory
+git switch --track -c feat/purkins-inventory origin/feat/purkins-inventory
+npx --no-install vitest run src/features/purkins
+npm run theme:check
+npm run check
+npm run build
+npm run db:migrate
+npm run preview
+```
+
+`npm run db:migrate` applies committed migrations to **local D1 only**;
+it preserves the existing `.wrangler/state` catalog and Admin setup.
+The database migration requires stopping the running local preview first.
+No remote migrations, cloud resource changes or production deployments
+are included in this branch.
+
+### Deferred work
+
+Before launch: hardened per-user owner/partner authorization, staff-specific
+audit logs and approval rights, linked size+colour SKU/variant intake,
+bulk/photo intake, real Zambia payment and fulfilment rails, verification
+of the full checkout and inventory reservation workflow, and final Purkins
+logo/mascot assets. This implementation is not production-ready.
