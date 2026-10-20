@@ -36,7 +36,18 @@ describe('Purkins stock intake through demo settlement', () => {
       "CREATE TABLE pending_payments (payment_hash TEXT PRIMARY KEY, status TEXT DEFAULT 'pending')",
     ];
     for (const sql of schema) await db.exec(sql);
-    await db.exec(readFileSync(new URL('../../../migrations/0040_purkins_intake.sql', import.meta.url), 'utf8'));
+    // D1's exec() treats comment-only fragments as empty statements. Run each
+    // real statement separately so the migration is exercised unchanged.
+    const migrationSql = readFileSync(
+      new URL('../../../migrations/0040_purkins_intake.sql', import.meta.url),
+      'utf8',
+    );
+    const statements = migrationSql
+      .replace(/^\\s*--.*$/gm, '')
+      .split(';')
+      .map((statement) => statement.trim())
+      .filter(Boolean);
+    for (const statement of statements) await db.prepare(statement).run();
   }, 30_000);
 
   afterAll(async () => { await mf?.dispose(); });
