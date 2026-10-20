@@ -24,6 +24,17 @@ describe('parseProductForm', () => {
     }
   });
 
+  it('stores Purkins prices in ZMW minor units, not USD', () => {
+    const r = parseProductForm(
+      form({ name: 'Baby romper', price: '250.00', stock: '1', currency: 'ZMW', active: 'on' }),
+    );
+    expect('data' in r).toBe(true);
+    if ('data' in r) {
+      expect(r.data.price_cents).toBe(25000);
+      expect(r.data.currency).toBe('zmw');
+    }
+  });
+
   it('treats an absent checkbox as active=0', () => {
     const r = parseProductForm(form({ name: 'Tee', price: '5', stock: '1' }));
     if ('data' in r) expect(r.data.active).toBe(0);

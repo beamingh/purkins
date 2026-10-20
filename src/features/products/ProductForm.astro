@@ -94,7 +94,7 @@ const inputClass =
 
   <div class="grid grid-cols-2 gap-4">
     <div>
-      <label class="block text-sm font-medium" for="price">Price (USD)</label>
+      <label class="block text-sm font-medium" for="price">Price ({defaultCurrency.toUpperCase()})</label>
       <input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} />
     </div>
     <div>
