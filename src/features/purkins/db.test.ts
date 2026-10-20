@@ -15,7 +15,7 @@ function stubDb(
   saved: IntakeRecord | null,
   product: { price_cents: number; currency: string; image_key: string | null } | null,
 ) {
-  const batch = vi.fn(async () => []);
+  const batch = vi.fn(async (_statements: unknown[]) => []);
   const db = {
     prepare(sql: string) {
       return {
