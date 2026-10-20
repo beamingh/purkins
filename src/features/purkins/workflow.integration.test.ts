@@ -43,7 +43,7 @@ describe('Purkins stock intake through demo settlement', () => {
       'utf8',
     );
     const statements = migrationSql
-      .replace(/^\\s*--.*$/gm, '')
+      .replace(/^\s*--.*$/gm, '')
       .split(';')
       .map((statement) => statement.trim())
       .filter(Boolean);
