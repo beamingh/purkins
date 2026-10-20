@@ -1,0 +1,45 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+
+// Source-level guardrails complement the D1 workflow test.
+// They intentionally do not pretend to execute an Astro HTTP request.
+const source = (url: string) => readFileSync(new URL(url, import.meta.url), 'utf8');
+
+describe('Purkins inventory route and form safety wiring', () => {
+  it('always creates private drafts and saves private intake details', () => {
+    const create = source('../../pages/api/admin/products.ts');
+    expect(create).toContain('parseIntakeFields(form)');
+    expect(create).toContain('active: 0, image_key: null');
+    expect(create).toContain('await insertIntake(env.DB, productId, intake.data)');
+  });
+
+  it('revokes visibility and approval on any edit to a Purkins item', () => {
+    const edit = source('../../pages/api/admin/products/[id].ts');
+    expect(edit).toContain('active: intake ? 0 : parsed.data.active');
+    expect(edit).toContain('await saveIntakeDraft(env.DB, id, parsedIntake.data)');
+  });
+
+  it('uses an explicit approval endpoint and never publishes on product creation', () => {
+    const route = source('../../pages/api/admin/products/[id]/approve.ts');
+    expect(route).toContain('await approveIntake(env.DB, product.id)');
+    const create = source('../../pages/api/admin/products.ts');
+    expect(create).not.toContain('approveIntake(');
+  });
+
+  it('keeps the photograph first in the intake form and prevents self-publication', () => {
+    const form = source('../products/ProductForm.astro');
+    const photo = form.indexOf('name="image"');
+    const name = form.indexOf('name="name"');
+    expect(photo).toBeGreaterThan(0);
+    expect(name).toBeGreaterThan(photo);
+    expect(form).toContain('disabled={intakeEnabled}');
+    expect(form).toContain('data-intake-use-price');
+  });
+
+  it('keeps the private intake table out of customer-facing listing queries', () => {
+    const productDb = source('../products/db.ts');
+    const catalog = source('../storefront/catalog.ts');
+    expect(productDb).not.toContain('purkins_intake');
+    expect(catalog).not.toContain('purkins_intake');
+  });
+});
