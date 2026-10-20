@@ -63,12 +63,24 @@ const inputClass =
   enctype="multipart/form-data"
   id={formId}
   class="max-w-lg space-y-4"
+  data-purkins-intake={intakeEnabled ? '' : undefined}
 >
   {
     error && (
       <p class="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
         {error}
       </p>
+    )
+  }
+
+    {
+    showImage && (
+      <div>
+        <label class="block text-sm font-medium" for="image">
+          Image
+        </label>
+        <input id="image" name="image" type="file" accept="image/*" class="mt-1 block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-xs file:font-medium file:uppercase file:tracking-wider file:text-on-brand hover:file:bg-brand-hover" />
+      </div>
     )
   }
 
@@ -152,13 +164,15 @@ const inputClass =
               value={intake?.markup_percent ?? ''} placeholder="e.g. 35" />
           </label>
         </div>
-        {intake && (
-          <p class="rounded-md bg-paper p-3 text-sm">
-            Estimated landed cost: <strong>{intakeLanded !== null ? `K${(intakeLanded / 100).toFixed(2)}` : 'Not calculated'}</strong>
-            {' · '}
-            Suggested price: <strong>{intakeSuggested !== null ? `K${(intakeSuggested / 100).toFixed(2)}` : 'Set cost and markup'}</strong>
-          </p>
-        )}
+        <div class="rounded-md bg-paper p-3 text-sm">
+          Estimated landed cost: <strong data-intake-landed>{intakeLanded !== null ? `K${(intakeLanded / 100).toFixed(2)}` : 'Enter cost to calculate'}</strong>
+          {' · '}
+          Suggested price: <strong data-intake-suggested>{intakeSuggested !== null ? `K${(intakeSuggested / 100).toFixed(2)}` : 'Set cost and markup'}</strong>
+          <button type="button" data-intake-use-price disabled
+            class="mt-3 block rounded-md border border-line bg-white px-3 py-2 text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50">
+            Use suggested selling price
+          </button>
+        </div>
         <p class="text-xs text-muted">The selling price at the top of the form remains the price shoppers pay. Saving any edit revokes an earlier approval and unpublishes the item; review again to publish.</p>
       </fieldset>
     )
@@ -224,17 +238,6 @@ const inputClass =
   </fieldset>
 
   {
-    showImage && (
-      <div>
-        <label class="block text-sm font-medium" for="image">
-          Image
-        </label>
-        <input id="image" name="image" type="file" accept="image/*" class="mt-1 block w-full text-sm text-muted file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-xs file:font-medium file:uppercase file:tracking-wider file:text-on-brand hover:file:bg-brand-hover" />
-      </div>
-    )
-  }
-
-  {
     categoryOptions.length > 0 && (
       <fieldset>
         <legend class="block text-sm font-medium">Categories</legend>
@@ -278,3 +281,35 @@ const inputClass =
     <a href="/admin/products" class="rounded-md border border-line px-5 py-2 hover:bg-surface">Cancel</a>
   </div>
 </form>
+
+<script>
+  import { parseIntakeFields, landedCostCents, suggestedSellingPriceCents } from '../purkins/intake';
+
+  for (const form of document.querySelectorAll<HTMLFormElement>('form[data-purkins-intake]')) {
+    const landedOutput = form.querySelector<HTMLElement>('[data-intake-landed]');
+    const suggestedOutput = form.querySelector<HTMLElement>('[data-intake-suggested]');
+    const useButton = form.querySelector<HTMLButtonElement>('[data-intake-use-price]');
+    const priceField = form.querySelector<HTMLInputElement>('input[name="price"]');
+    let suggestion: number | null = null;
+
+    function update() {
+      const parsed = parseIntakeFields(new FormData(form));
+      const landed = 'data' in parsed ? landedCostCents(parsed.data) : null;
+      suggestion = 'data' in parsed ? suggestedSellingPriceCents(parsed.data) : null;
+      if (landedOutput) landedOutput.textContent =
+        landed === null ? 'Enter cost and rate to calculate' : `K${(landed / 100).toFixed(2)}`;
+      if (suggestedOutput) suggestedOutput.textContent =
+        suggestion === null ? 'Enter cost and markup to calculate' : `K${(suggestion / 100).toFixed(2)}`;
+      if (useButton) useButton.disabled = suggestion === null;
+    }
+
+    form.addEventListener('input', update);
+    form.addEventListener('change', update);
+    useButton?.addEventListener('click', () => {
+      if (suggestion === null || !priceField) return;
+      priceField.value = (suggestion / 100).toFixed(2);
+      priceField.focus();
+    });
+    update();
+  }
+</script>
