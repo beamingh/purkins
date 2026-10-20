@@ -94,6 +94,15 @@ export async function approveIntake(
   if (product.price_cents < landed) return 'Selling price cannot be below the estimated landed cost.';
   if (!product.image_key) return 'Add a product photograph before publishing.';
 
+  // Purchasers can choose a variant price instead of the parent price. A
+  // below-cost active size/colour option must never bypass the owner review.
+  const { results: variants } = await db.prepare(
+    'SELECT price_cents FROM product_variants WHERE product_id=? AND active=1',
+  ).bind(productId).all<{ price_cents: number }>();
+  if ((variants ?? []).some((variant) => variant.price_cents < landed)) {
+    return 'An active variant price is below the estimated landed cost.';
+  }
+
   // Batch is transactional. Approval status and public visibility move together.
   await db.batch([
     db.prepare("UPDATE purkins_intake SET status='approved', updated_at=datetime('now') WHERE product_id=?")

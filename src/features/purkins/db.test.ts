@@ -14,6 +14,7 @@ const intake: IntakeRecord = {
 function stubDb(
   saved: IntakeRecord | null,
   product: { price_cents: number; currency: string; image_key: string | null } | null,
+  variants: { price_cents: number }[] = [],
 ) {
   const batch = vi.fn(async (_statements: unknown[]) => []);
   const db = {
@@ -21,6 +22,7 @@ function stubDb(
       return {
         bind: (..._params: unknown[]) => ({
           first: async () => sql.includes('FROM purkins_intake') ? saved : product,
+          all: async () => ({ results: sql.includes('FROM product_variants') ? variants : [] }),
         }),
       };
     },
@@ -44,6 +46,14 @@ describe('Purkins approval safeguards', () => {
     const { db, batch } = stubDb({ ...intake, purchase_cost_minor: null },
       { price_cents: 14000, currency: 'zmw', image_key: 'img' });
     expect(await approveIntake(db, 4)).toMatch(/purchase cost/);
+    expect(batch).not.toHaveBeenCalled();
+  });
+  it('blocks an active variant sold below landed cost', async () => {
+    const { db, batch } = stubDb(
+      intake, { price_cents: 14000, currency: 'zmw', image_key: 'img' },
+      [{ price_cents: 9500 }],
+    );
+    expect(await approveIntake(db, 4)).toMatch(/variant price.*below/);
     expect(batch).not.toHaveBeenCalled();
   });
   it('uses one atomic batch to approve and publish', async () => {
