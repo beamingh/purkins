@@ -18,10 +18,24 @@ function purgeFailure(
   );
 }
 
+// Miniflare's local Worker (and a Worker with caching disabled) may expose
+// `cache` without a `purge` method. Neither has a Workers Cache to invalidate.
+// Keep real purge rejections fatal for low-frequency mutations.
+let unavailablePurgeLogged = false;
+function skipUnavailableMutationPurge(purger: CachePurger): boolean {
+  if (typeof purger?.purge === 'function') return false;
+  if (!unavailablePurgeLogged) {
+    console.info(JSON.stringify({ event: 'workers_cache_purge_unavailable', action: 'skip' }));
+    unavailablePurgeLogged = true;
+  }
+  return true;
+}
+
 /**
  * Invalidate low-frequency content mutations synchronously after their D1
- * write. A failed tag purge falls back to the whole entrypoint cache; if that
- * also fails, the handler fails rather than silently accepting stale content.
+ * write. If the runtime provides no purge API, there is no Workers Cache
+ * available to invalidate. An available API that rejects the tag purge falls
+ * back to purge-everything; if both fail, this handler fails closed.
  */
 export async function purgeCacheTags(
   tags: Iterable<string>,
@@ -29,6 +43,7 @@ export async function purgeCacheTags(
 ): Promise<void> {
   const normalized = normalizeCacheTags(tags);
   if (normalized.length === 0) return;
+  if (skipUnavailableMutationPurge(purger)) return;
 
   try {
     const result = await purger.purge({ tags: normalized });
@@ -60,6 +75,11 @@ export function purgeProductCache(
 export async function purgeEntireCache(
   purger: CachePurger = cache,
 ): Promise<void> {
+  // A deployment-wide purge must never pretend to succeed when unsupported.
+  if (typeof purger?.purge !== 'function') {
+    throw new Error('The Workers cache purge API is unavailable.');
+  }
+
   try {
     const result = await purger.purge({ purgeEverything: true });
     if (result.success) return;
@@ -81,6 +101,7 @@ export async function purgeStockProductCache(
 ): Promise<void> {
   const tags = productCacheTags(productPublicIds);
   if (tags.length === 0) return;
+  if (skipUnavailableMutationPurge(purger)) return;
 
   try {
     const result = await purger.purge({ tags });

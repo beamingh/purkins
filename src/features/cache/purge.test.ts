@@ -65,4 +65,16 @@ describe('Workers cache purge', () => {
     expect(purge).toHaveBeenCalledOnce();
     expect(purge).toHaveBeenCalledWith({ tags: ['product:prod_a'] });
   });
+  it('allows catalog mutations when the runtime has no Workers Cache purge API', async () => {
+    // Local Wrangler preview has caching disabled and no cache.purge method.
+    const unsupported = {} as CachePurger;
+    await expect(purgeCacheTags(['shell', 'catalog'], unsupported)).resolves.toBeUndefined();
+    await expect(purgeProductCache(['prod_a'], unsupported)).resolves.toBeUndefined();
+    await expect(purgeStockProductCache(['prod_a'], unsupported)).resolves.toBeUndefined();
+  });
+
+  it('does not report deployment-wide purge success without the purge API', async () => {
+    await expect(purgeEntireCache({} as CachePurger)).rejects.toThrow('unavailable');
+  });
+
 });
