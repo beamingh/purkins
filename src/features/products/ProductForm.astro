@@ -4,11 +4,13 @@ import type { CategoryOption } from '../categories/db';
 import { getConfig, toMajorUnits, currencyDecimals } from '../../config';
 import { formatWeightValue, type WeightUnit } from '../shipping/weight';
 import { attachmentActive } from '../digitalDelivery/rollout.ts';
+import { landedCostCents, suggestedSellingPriceCents, type IntakeRecord } from '../purkins/intake';
 
 interface Props {
   action: string;
   submitLabel: string;
   product?: Product | null;
+  intake?: IntakeRecord | null;
   error?: string | null;
   /** Depth-tagged categories to choose from (empty = no categories yet). */
   categoryOptions?: CategoryOption[];
@@ -30,6 +32,7 @@ const {
   action,
   submitLabel,
   product = null,
+  intake = null,
   error = null,
   categoryOptions = [],
   selectedCategoryIds = [],
@@ -44,7 +47,10 @@ const defaultCurrency = product?.currency ?? getConfig().currency;
 const priceDecimals = currencyDecimals(defaultCurrency);
 const price = product
   ? toMajorUnits(product.price_cents, product.currency).toFixed(currencyDecimals(product.currency))
-  : '';
+  : (0).toFixed(priceDecimals);
+const intakeLanded = intake ? landedCostCents(intake) : null;
+const intakeSuggested = intake ? suggestedSellingPriceCents(intake) : null;
+const intakeEnabled = product === null || intake !== null;
 // Input increment matches the currency's precision: 0.01 (USD), 1 (JPY), 0.001 (BHD).
 const priceStep = priceDecimals > 0 ? (10 ** -priceDecimals).toFixed(priceDecimals) : '1';
 const inputClass =
@@ -102,6 +108,61 @@ const inputClass =
       <input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} />
     </div>
   </div>
+
+
+  {
+    intakeEnabled && (
+      <fieldset class="rounded-lg border border-line bg-surface p-4 space-y-3">
+        <legend class="px-2 text-sm font-semibold">Purkins stock intake &amp; costing</legend>
+        <p class="text-xs text-muted">New products are private drafts. This cost information is accessible to the current admin login only; do not share that login with a partner until separate roles are implemented.</p>
+        {intake && <p class="text-sm">Item code: <strong>{intake.sku}</strong> · Price review: <strong>{intake.status === 'approved' ? 'Approved' : 'Draft'}</strong></p>}
+        <div class="grid gap-3 sm:grid-cols-2">
+          <label class="text-sm">Size
+            <input class={inputClass} name="size_label" maxlength="60" value={intake?.size_label ?? ''} placeholder="0–3 months" />
+          </label>
+          <label class="text-sm">Colour
+            <input class={inputClass} name="colour" maxlength="60" value={intake?.colour ?? ''} placeholder="Cream" />
+          </label>
+          <label class="text-sm">Age range
+            <input class={inputClass} name="age_range" maxlength="60" value={intake?.age_range ?? ''} placeholder="Newborn" />
+          </label>
+          <label class="text-sm">Storage location
+            <input class={inputClass} name="storage_location" maxlength="100" value={intake?.storage_location ?? ''} placeholder="Sack A / Shelf 1" />
+          </label>
+          <label class="text-sm">Purchase currency
+            <select class={inputClass} name="purchase_currency">
+              <option value="ZMW" selected={!intake || intake.purchase_currency === 'ZMW'}>ZMW (kwacha)</option>
+              <option value="ZAR" selected={intake?.purchase_currency === 'ZAR'}>ZAR (rand)</option>
+            </select>
+          </label>
+          <label class="text-sm">Original purchase cost (each)
+            <input class={inputClass} type="number" inputmode="decimal" name="purchase_cost" min="0" step="0.01"
+              value={intake?.purchase_cost_minor != null ? (intake.purchase_cost_minor / 100).toFixed(2) : ''} placeholder="Leave blank if unknown" />
+          </label>
+          <label class="text-sm">Exchange rate (K per R1)
+            <input class={inputClass} type="number" inputmode="decimal" name="zar_to_zmw" min="0.000001" step="0.000001"
+              value={intake?.zar_to_zmw ?? ''} placeholder="Required for rand costs" />
+          </label>
+          <label class="text-sm">Allocated sourcing overhead (K per item)
+            <input class={inputClass} type="number" inputmode="decimal" name="overhead_zwm" min="0" step="0.01"
+              value={((intake?.overhead_zwm_cents ?? 0) / 100).toFixed(2)} />
+          </label>
+          <label class="text-sm">Target markup (% over landed cost)
+            <input class={inputClass} type="number" inputmode="numeric" name="markup_percent" min="0" max="500" step="1"
+              value={intake?.markup_percent ?? ''} placeholder="e.g. 35" />
+          </label>
+        </div>
+        {intake && (
+          <p class="rounded-md bg-paper p-3 text-sm">
+            Estimated landed cost: <strong>{intakeLanded !== null ? `K${(intakeLanded / 100).toFixed(2)}` : 'Not calculated'}</strong>
+            {' · '}
+            Suggested price: <strong>{intakeSuggested !== null ? `K${(intakeSuggested / 100).toFixed(2)}` : 'Set cost and markup'}</strong>
+          </p>
+        )}
+        <p class="text-xs text-muted">The selling price at the top of the form remains the price shoppers pay. Saving any edit revokes an earlier approval and unpublishes the item; review again to publish.</p>
+      </fieldset>
+    )
+  }
 
   {attachmentActive() && <fieldset class="rounded-md border border-line p-4">
     <legend class="px-1 text-sm font-medium">Shipping</legend>
@@ -200,8 +261,12 @@ const inputClass =
   }
 
   <label class="flex items-center gap-2 text-sm">
-    <input name="active" type="checkbox" checked={product ? product.active === 1 : true} class="h-4 w-4" />
+    <input name="active" type="checkbox"
+      checked={!!product && product.active === 1 && intake?.status !== 'draft'}
+      disabled={intakeEnabled}
+      class="h-4 w-4" />
     Active (visible in storefront)
+    {intakeEnabled && <span class="text-xs text-muted">Purkins items are published only through price approval after saving.</span>}
   </label>
 
   <input type="hidden" name="currency" value={defaultCurrency} />

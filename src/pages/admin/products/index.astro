@@ -8,6 +8,7 @@ import { orderByClause } from '../../../features/products/sort';
 import { paginate, queryHref } from '../../../pagination';
 import Pagination from '../../../components/Pagination.astro';
 import { menuReferencesFor } from '../../../features/navigation/admin';
+import { getIntakesForProducts } from '../../../features/purkins/db';
 import FilterBar from '../../../components/FilterBar.astro';
 import {
   parseProductFilters,
@@ -42,6 +43,7 @@ const products = await listAllProducts(env.DB, PAGE_SIZE, offset, order, filterC
 // Bounded to this page of rows, so the nav warning costs one query, not one
 // per product.
 const menuRefs = await menuReferencesFor(env.DB, 'product', products.map((p) => p.id));
+const purkinsIntakes = await getIntakesForProducts(env.DB, products.map((p) => p.id));
 // Sort and pagination links carry the active filters, so paging or re-sorting
 // a filtered list doesn't silently drop back to everything.
 const filterQuery = productFilterParams(filters);
@@ -131,7 +133,14 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
                   usage="thumbnail"
                   class="h-10 w-10 rounded object-cover"
                 />
-                <span class="font-medium">{p.name}</span>
+                <span class="font-medium">{p.name}
+                  {purkinsIntakes.get(p.id) && (
+                    <small class="mt-1 block text-xs font-normal text-muted">
+                      {purkinsIntakes.get(p.id)?.sku} · {purkinsIntakes.get(p.id)?.status === 'approved' ? 'Approved' : 'Draft'}
+                      {purkinsIntakes.get(p.id)?.storage_location && ` · ${purkinsIntakes.get(p.id)?.storage_location}`}
+                    </small>
+                  )}
+                </span>
               </a>
             </td>
             <td data-label="Price" class="py-3 pr-4 tabular-nums">{formatPrice(p.price_cents)}</td>

@@ -17,6 +17,7 @@ import { productImageSources } from '../../../../features/products/image';
 import { zonesRequireWeight } from '../../../../features/shipping/calculator';
 import { formatWeightValue } from '../../../../features/shipping/weight';
 import { shippingFor } from '../../../../features/shipping/effective';
+import { getIntake } from '../../../../features/purkins/db';
 
 // The route param is the prod_ public ID; numeric row ids are not accepted.
 const publicId = parsePublicId(Astro.params.id, 'product');
@@ -29,6 +30,7 @@ if (!product) {
 const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
 const selectedCategoryIds = (await categoriesForProduct(env.DB, product.id)).map((c) => c.id);
 const images = await listProductImages(env.DB, product.id);
+const intake = await getIntake(env.DB, product.id);
 const error = Astro.url.searchParams.get('error');
 
 // Variants + extras (show all, including any inactive, so the admin sees everything).
@@ -72,10 +74,24 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       View on store ↗
     </a>
   </div>
+  {intake && (
+    <section class="mb-6 rounded-lg border border-line bg-surface p-4">
+      <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
+      {intake.status === 'draft' && (
+        <>
+          <p class="mt-1 text-xs text-muted">Save your photos, costs and selling price before approval. Publishing requires a photo, a positive price and recovery of estimated landed cost.</p>
+          <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
+            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">Approve selling price &amp; publish</button>
+          </form>
+        </>
+      )}
+    </section>
+  )}
   <ProductForm
     action={`/api/admin/products/${product.public_id}`}
     submitLabel="Save changes"
     product={product}
+    intake={intake}
     categoryOptions={categoryOptions}
     selectedCategoryIds={selectedCategoryIds}
     error={error}

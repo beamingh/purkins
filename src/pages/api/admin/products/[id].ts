@@ -37,6 +37,8 @@ import { indexProduct, unindexProduct } from '../../../../features/search';
 import { parsePublicId } from '../../../../features/ids/publicId';
 import { CACHE_TAG } from '../../../../features/cache/tags';
 import { purgeCacheTags } from '../../../../features/cache/purge';
+import { parseIntakeFields } from '../../../../features/purkins/intake';
+import { getIntake, saveIntakeDraft, removeIntake } from '../../../../features/purkins/db';
 
 export const prerender = false;
 
@@ -113,6 +115,7 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     // Removes the product and its image ASSOCIATIONS. The files stay in the
     // media library — they may be used by other products or pages, and the
     // library is the only place an object is deleted.
+    await removeIntake(env.DB, id);
     await deleteProduct(env.DB, id);
     try {
       await unindexProduct(id); // no-op unless vector search is on
@@ -135,6 +138,9 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     requireWeight: zonesRequireWeight(shippingFor(locals.settings).config),
   });
   if ('error' in parsed) return fail(parsed.error);
+  const intake = await getIntake(env.DB, id);
+  const parsedIntake = intake ? parseIntakeFields(form) : null;
+  if (parsedIntake && 'error' in parsedIntake) return fail(parsedIntake.error);
 
   // Weights are checked before ANY write. applyVariantForm runs last, after the
   // image, product, and category mutations — reporting the error from there left
@@ -188,7 +194,11 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     }
   }
 
-  await updateProduct(env.DB, id, { ...parsed.data, image_key, slug });
+  // Editing a reviewed Purkins item revokes approval before any publish can occur.
+  await updateProduct(env.DB, id, { ...parsed.data, active: intake ? 0 : parsed.data.active, image_key, slug });
+  if (parsedIntake && 'data' in parsedIntake) {
+    await saveIntakeDraft(env.DB, id, parsedIntake.data);
+  }
   if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) {
     await setProductFile(env.DB, id, await uploadDigitalFile(getFileStorage(), deliverable));
   } else if (attachmentActive() && form.get('remove_deliverable') != null) {

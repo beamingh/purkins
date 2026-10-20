@@ -23,6 +23,8 @@ import { uploadDigitalFile, validateDigitalFile } from '../../../features/produc
 import { attachmentActive } from '../../../features/digitalDelivery/rollout.ts';
 import { CACHE_TAG } from '../../../features/cache/tags';
 import { purgeCacheTags } from '../../../features/cache/purge';
+import { parseIntakeFields } from '../../../features/purkins/intake';
+import { insertIntake, removeIntake } from '../../../features/purkins/db';
 
 export const prerender = false;
 
@@ -40,6 +42,8 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     requireWeight: zonesRequireWeight(shippingFor(locals.settings).config),
   });
   if ('error' in parsed) return redirect(fail(parsed.error), 303);
+  const intake = parseIntakeFields(form);
+  if ('error' in intake) return redirect(fail(intake.error), 303);
 
   let mediaId: number | null = null;
   const file = form.get('image');
@@ -65,7 +69,14 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   // Writing the uploaded key here directly would be an UNGUARDED reference: the
   // media row is unreferenced until the attach lands, so a concurrent library
   // delete could leave the product pointing at an object that no longer exists.
-  const productId = await createProduct(env.DB, { ...parsed.data, image_key: null, slug });
+  // Never expose a newly entered item, regardless of a forged 'active' field.
+  const productId = await createProduct(env.DB, { ...parsed.data, active: 0, image_key: null, slug });
+  try {
+    await insertIntake(env.DB, productId, intake.data);
+  } catch (error) {
+    await deleteProduct(env.DB, productId);
+    throw error;
+  }
   if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) {
     await setProductFile(env.DB, productId, await uploadDigitalFile(getFileStorage(), deliverable));
   }
@@ -75,6 +86,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
       // The claim needs a product id, so the row has to exist first. Undo it
       // rather than reporting a failure while leaving a half-made product
       // behind for the merchant to trip over on the next attempt.
+      await removeIntake(env.DB, productId);
       await deleteProduct(env.DB, productId);
       return redirect(fail(attached.error), 303);
     }
