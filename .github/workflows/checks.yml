@@ -20,7 +20,7 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
       - name: Test private Purkins inventory and costing
-        run: npx --no-install vitest run src/features/purkins
+        run: npm run test:purkins
       - name: Enforce theme boundaries
         run: npm run theme:check
       - name: Check storefront contracts

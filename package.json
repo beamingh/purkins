@@ -16,6 +16,7 @@
     "test:d1": "astro build && npm run test:integration",
     "test:storefront-equivalence": "astro build && bash test/integration/storefront-baselines.sh",
     "test:storefront-contract": "vitest run test/storefront",
+    "test:purkins": "vitest run src/features/purkins",
     "theme:check": "node scripts/check-themes.mjs",
     "verify": "npm run theme:sync && vitest run && astro check && npm run theme:check && astro build && node scripts/check-built-css.mjs && npm run test:integration && node --experimental-strip-types scripts/check-stripe-countries.mjs && npm run mcp:check && npm run scaffold:check",
     "verify:theme": "node scripts/verify-theme.mjs",

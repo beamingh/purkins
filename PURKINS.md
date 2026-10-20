@@ -96,7 +96,7 @@ Starting with a working local Minshop checkout and dependencies:
 ```powershell
 git -c http.version=HTTP/1.1 fetch --no-tags origin refs/heads/feat/purkins-inventory:refs/remotes/origin/feat/purkins-inventory
 git switch --track -c feat/purkins-inventory origin/feat/purkins-inventory
-npx --no-install vitest run src/features/purkins
+npm run test:purkins
 npm run theme:check
 npm run check
 npm run build
@@ -117,3 +117,23 @@ audit logs and approval rights, linked size+colour SKU/variant intake,
 bulk/photo intake, real Zambia payment and fulfilment rails, verification
 of the full checkout and inventory reservation workflow, and final Purkins
 logo/mascot assets. This implementation is not production-ready.
+
+### Automated intake → sale test coverage
+
+Run `npm run test:purkins` to check:
+- draft creation, item-code uniqueness, private costing and unpublished catalog;
+- explicit approval rules, cost recovery and required photos;
+- variant cost floors and parent-product visibility guards;
+- automatic revocation of approval on edits;
+- actual Miniflare D1 demo reservation and paid-order settlement, including
+  no overselling and no double stock decrement on repeated settlement;
+- static route/form wiring guardrails.
+
+The D1 workflow suite uses **ephemeral in-memory Miniflare state** and applies
+`0040_purkins_intake.sql` to an isolated fixture; it cannot change
+`.wrangler/state` or the remote store. The image test models a successfully
+uploaded image key; it does not test R2 upload, browser controls, or the
+entire checkout HTTP flow. Those remain separate launch-blocking checks.
+
+Tests were committed but must pass on a real Node 24 install before merging.
+The GitHub workflow remains manual-only and does not deploy.
