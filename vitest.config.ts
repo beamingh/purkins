@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { getViteConfig } from 'astro/config';
+import CopyFailuresReporter from './test/support/copy-failures-reporter';
 import { resolveTheme } from './scripts/themes.mjs';
 import { themeCssPath, writeThemeArtifacts } from './scripts/theme-css.mjs';
 
@@ -29,6 +30,7 @@ export default getViteConfig(
   {
     test: {
       environment: 'node',
+      reporters: ['default', new CopyFailuresReporter()],
       include: ['src/**/*.test.ts', 'test/storefront/**/*.test.{ts,mjs}', 'test/scripts/**/*.test.mjs'],
       alias: {
         '#theme': theme.dir,

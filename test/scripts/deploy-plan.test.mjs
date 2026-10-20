@@ -198,20 +198,24 @@ describe('private deliverable provisioning', () => {
     expect(template).toMatch(/never enable r2\.dev or attach a custom domain/i);
   });
 
-  // wrangler rejects an unsubstituted placeholder as a bucket name, and the
-  // theme jobs render the template themselves — so a placeholder added here but
-  // not to the workflow only fails in CI, after a push. Pin the two together.
-  it('substitutes every template placeholder in CI', () => {
+  // Minshop's upstream verify.yml was intentionally removed: Purkins runs
+  // manually dispatched checks only, and checks.yml reads the committed
+  // Wrangler config. The *provisioning* script still needs to render every
+  // placeholder whenever an owner explicitly provisions a separate instance.
+  it('renders every template placeholder in explicit provisioning, not CI', () => {
     const placeholders = [
       ...new Set(readFileSync('wrangler.template.jsonc', 'utf8').match(/__[A-Z_]+__/g) ?? []),
     ];
-    const workflow = readFileSync('.github/workflows/verify.yml', 'utf8');
+    const provision = readFileSync('scripts/provision-cf.sh', 'utf8');
+    const workflow = readFileSync('.github/workflows/checks.yml', 'utf8');
     expect(placeholders.length).toBeGreaterThan(0);
     for (const placeholder of placeholders) {
-      // Both render sites must cover it: the verify job and the theme matrix.
-      const substitutions = workflow.split(`s/${placeholder}/`).length - 1;
-      expect(substitutions, `${placeholder} is not substituted at both render sites`).toBe(2);
+      expect(provision, `${placeholder} is not rendered during provisioning`)
+        .toContain(`s/${placeholder}/`);
     }
+    expect(workflow).toMatch(/^on:\s*\n\s+workflow_dispatch:/m);
+    expect(workflow).not.toMatch(/^\s*(?:push|pull_request):/m);
+    expect(workflow).not.toMatch(/wrangler\.template\.jsonc|provision:cf|db:migrate:remote|wrangler deploy/i);
   });
 
   it('records the per-instance bucket and preserves that record if deletion fails', () => {
