@@ -23,7 +23,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:seed": "wrangler d1 execute DB --local --file=./seed.sql",
     "provision:cf": "bash scripts/provision-cf.sh",
-    "provision:local": "bash scripts/provision-local.sh",
+    "provision:local": "node scripts/provision-local.mjs",
     "destroy:cf": "bash scripts/destroy-cf.sh",
     "destroy:local": "bash scripts/destroy-local.sh",
     "admin:reset": "bash scripts/admin-reset.sh",

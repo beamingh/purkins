@@ -34,14 +34,14 @@ npm run test:storefront-contract
 
 `npm ci` will download a separate Astro dependency set. Avoid installing the MCP subproject until we are ready to test it.
 
-The upstream local provisioning script is **Bash** and uses `openssl`. Launch **Git Bash** (not plain PowerShell) in the same repository:
+Local provisioning is now **cross-platform Node.js** and runs directly in PowerShell; Git Bash, WSL and OpenSSL are unnecessary:
 
-```bash
-npm run provision:local
-npm run dev
+```powershell
+npm run provision:local -- --seed
+npm run preview
 ```
 
-Then open `http://localhost:4321/` and `http://localhost:4321/admin`. The provisioning script also prints a production-like local preview command (`npm run preview`, usually port 8787). If you want generic demo products, `npm run provision:local -- --seed` instead; do not confuse seeded example data with real Purkins stock.
+Open `http://localhost:8787/` and `http://localhost:8787/admin/setup`. Remove `--seed` to start without generic demo products. Do not confuse demonstration data with real Purkins stock. The setup reuses existing `.dev.vars` secrets and affects only local D1.
 
 Never commit `.dev.vars`. The local setup generates its own secrets.
 
