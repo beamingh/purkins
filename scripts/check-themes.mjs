@@ -92,6 +92,11 @@ const DENIED_MODULES = [
 
 const SOURCE_EXTENSIONS = ['.astro', '.ts', '.tsx', '.mjs', '.js'];
 
+// Git's repository paths use '/' on every platform. Filesystem resolution uses
+// native separators (Windows uses '\\'), so canonicalise paths *after* resolving
+// a file and before applying policy comparisons or storing traversal keys.
+const toRepoPath = (file) => file.replaceAll('\\', '/');
+
 /**
  * Comments are stripped before scanning. Storefront files are expected to
  * DOCUMENT their boundary ("never reads Astro.locals"), and matching that prose
@@ -150,7 +155,7 @@ async function resolveLocal(specifier, fromFile) {
   ];
   for (const candidate of candidates) {
     try {
-      if ((await stat(candidate)).isFile()) return candidate;
+      if ((await stat(candidate)).isFile()) return toRepoPath(candidate);
     } catch {
       // Keep trying; an unresolvable specifier is reported by the caller.
     }
@@ -170,7 +175,7 @@ async function* walk(dir) {
   for (const entry of entries) {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) yield* walk(full);
-    else if (SOURCE_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) yield full;
+    else if (SOURCE_EXTENSIONS.some((extension) => entry.name.endsWith(extension))) yield toRepoPath(full);
   }
 }
 
@@ -281,7 +286,7 @@ async function checkEntry(entry, rootDir, policy) {
 
 const paths = process.argv.slice(2);
 for (const rawRoot of paths.length > 0 ? paths : defaultPaths()) {
-  const root = rawRoot.replace(/\/+$/, '');
+  const root = toRepoPath(rawRoot).replace(/\/+$/, '');
   // A root named `controls` takes the core-control policy. Matching the
   // directory name rather than one hardcoded path lets the same checker be
   // pointed at a candidate theme or a future preset.
