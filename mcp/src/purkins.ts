@@ -131,6 +131,32 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
     return reply({stock: stock.filter((s) => s !== null), limit, offset});
   });
 
+  server.registerTool('search_purkins_stock', {
+    description: 'Find private Purkins stock by product name, brand, internal SKU, supplier barcode (product or size), or bag/sack location. Preserves leading-zero codes.',
+    inputSchema: {
+      q: z.string().trim().min(1).max(100),
+      limit: z.number().int().min(1).max(50).default(20),
+    },
+  }, async ({q, limit}) => {
+    const {results} = await db.prepare(
+      'SELECT DISTINCT p.public_id FROM products p ' +
+      'JOIN purkins_intake i ON i.product_id=p.id ' +
+      'LEFT JOIN product_variants v ON v.product_id=p.id ' +
+      'LEFT JOIN purkins_variant_identifiers vi ON vi.variant_id=v.id ' +
+      'WHERE instr(lower(p.name),lower(?))>0 OR instr(lower(COALESCE(i.brand,\'\')),lower(?))>0 ' +
+      'OR instr(lower(i.sku),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(i.supplier_barcode,\'\')),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(vi.supplier_barcode,\'\')),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(i.storage_location,\'\')),lower(?))>0 ' +
+      'ORDER BY p.public_id LIMIT ?',
+    ).bind(q,q,q,q,q,q,limit).all<{public_id:string}>();
+    const stock = await Promise.all((results ?? []).map(async (row) => {
+      const product = await getProductByPublicId(db, row.public_id);
+      return product ? stockView(db, product) : null;
+    }));
+    return reply({matches: stock.filter((s) => s !== null), q});
+  });
+
   server.registerTool('get_purkins_stock', {
     description: 'Operator-only full item record with separate Purkins SKU and supplier barcode; accepts prod_ ID or slug.',
     inputSchema: {id: z.string().min(1)},
