@@ -38,16 +38,15 @@ describe('Purkins stock intake through demo settlement', () => {
     for (const sql of schema) await db.exec(sql);
     // D1's exec() treats comment-only fragments as empty statements. Run each
     // real statement separately so the migration is exercised unchanged.
-    const migrationSql = readFileSync(
-      new URL('../../../migrations/0040_purkins_intake.sql', import.meta.url),
-      'utf8',
-    );
-    const statements = migrationSql
-      .replace(/^\s*--.*$/gm, '')
-      .split(';')
-      .map((statement) => statement.trim())
-      .filter(Boolean);
-    for (const statement of statements) await db.prepare(statement).run();
+    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql']) {
+      const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
+      const statements = migrationSql
+        .replace(/^\s*--.*$/gm, '')
+        .split(';')
+        .map((statement) => statement.trim())
+        .filter(Boolean);
+      for (const statement of statements) await db.prepare(statement).run();
+    }
   }, 30_000);
 
   afterAll(async () => { await mf?.dispose(); });
