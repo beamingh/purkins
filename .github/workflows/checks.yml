@@ -29,7 +29,11 @@ jobs:
         run: npm run check
       - name: Build Astro Worker
         run: npm run build
+      - name: Check production dependency advisories
+        run: npm audit --omit=dev --audit-level=high
       - name: Install isolated MCP packages
         run: npm ci --prefix mcp
       - name: MCP typecheck and Worker dry run (not deployment)
         run: npm run mcp:check
+      - name: Check MCP production dependency advisories
+        run: npm audit --prefix mcp --omit=dev --audit-level=high
