@@ -1,5 +1,8 @@
 # Purkins — Minshop foundation
 
+> **Branch status (23 October 2026): SUPERSEDED / READ-ONLY INVENTORY BASE.** Inherited by `feat/purkins-stock-cataloguing`, which contains the inventory work plus barcode and MCP changes. Do not merge or develop this branch separately.
+> **Architecture:** Minshop + Astro/Cloudflare Workers/D1/R2. Payload CMS is discontinued.
+
 **Branch:** `feat/minshop-foundation` (based on `main`).
 
 **Upstream:** [ddyy/minshop](https://github.com/ddyy/minshop), MIT license, imported from commit `c964bf746926ae039a97d69720eee26fb97ba06f` (18 Oct 2026). This branch contains a source import and initial Purkins theme/configuration, **not a validated production release**.
