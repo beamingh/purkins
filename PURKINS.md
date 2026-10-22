@@ -1,5 +1,8 @@
 # Purkins — Minshop foundation
 
+> **Branch status (23 October 2026): ACTIVE / NOT YET READY TO MERGE.** This is the current Minshop/Astro stock and MCP feature branch. `main` is the eventual integration target. Complete the manual tests, security review, and local D1 checks in `docs/BRANCH_STATUS.md` before merging. No production deployment is authorized.
+> **Architecture:** Minshop + Astro/Cloudflare Workers/D1/R2. Payload CMS is discontinued.
+
 **Branch:** `feat/minshop-foundation` (based on `main`).
 
 **Upstream:** [ddyy/minshop](https://github.com/ddyy/minshop), MIT license, imported from commit `c964bf746926ae039a97d69720eee26fb97ba06f` (18 Oct 2026). This branch contains a source import and initial Purkins theme/configuration, **not a validated production release**.
