@@ -1,5 +1,6 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import {
+  normalizeSupplierBarcode,
   generateItemSku,
   landedCostCents,
   type IntakeFields,
@@ -44,12 +45,16 @@ export async function insertIntake(
     `INSERT INTO purkins_intake
       (product_id, sku, size_label, colour, age_range, storage_location,
        purchase_currency, purchase_cost_minor, zar_to_zmw, overhead_zwm_cents,
-       markup_percent, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+       markup_percent, brand, supplier_barcode, retail_tag_minor, retail_tag_currency,
+       pack_count, condition_status, internal_notes, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
   ).bind(
     productId, sku, fields.size_label, fields.colour, fields.age_range, fields.storage_location,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
     fields.overhead_zwm_cents, fields.markup_percent,
+    fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
+    fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
+    fields.condition_status ?? 'complete', fields.internal_notes ?? null,
   ).run();
 }
 
@@ -63,12 +68,17 @@ export async function saveIntakeDraft(
     `UPDATE purkins_intake
       SET size_label=?, colour=?, age_range=?, storage_location=?, purchase_currency=?,
           purchase_cost_minor=?, zar_to_zmw=?, overhead_zwm_cents=?, markup_percent=?,
+          brand=?, supplier_barcode=?, retail_tag_minor=?, retail_tag_currency=?,
+          pack_count=?, condition_status=?, internal_notes=?,
           status='draft', updated_at=datetime('now')
       WHERE product_id=?`,
   ).bind(
     fields.size_label, fields.colour, fields.age_range, fields.storage_location,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
-    fields.overhead_zwm_cents, fields.markup_percent, productId,
+    fields.overhead_zwm_cents, fields.markup_percent,
+    fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
+    fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
+    fields.condition_status ?? 'complete', fields.internal_notes ?? null, productId,
   ).run();
 }
 
@@ -87,6 +97,9 @@ export async function approveIntake(
   ).bind(productId).first<{ price_cents: number; currency: string; image_key: string | null }>();
   if (!product) return 'Product not found.';
   if (product.currency.toLowerCase() !== 'zmw') return 'Purkins approvals require ZMW selling prices.';
+  if ((intake.condition_status ?? 'complete') !== 'complete') {
+    return 'Review incomplete or unchecked stock before publishing.';
+  }
   if (intake.purchase_cost_minor === null) return 'Enter the purchase cost before approving.';
   const landed = landedCostCents(intake);
   if (landed === null) return 'A conversion rate is needed to calculate landed cost.';
@@ -110,4 +123,35 @@ export async function approveIntake(
     db.prepare('UPDATE products SET active=1 WHERE id=?').bind(productId),
   ]);
   return null;
+}
+
+/** Supplier codes stay in Purkins-private tables, not in public variant DTOs. */
+export async function getVariantSupplierBarcodes(
+  db: D1Database, productId: number,
+): Promise<Map<number, string>> {
+  const { results } = await db.prepare(
+    `SELECT v.id AS variant_id, i.supplier_barcode
+       FROM product_variants v
+       LEFT JOIN purkins_variant_identifiers i ON i.variant_id = v.id
+      WHERE v.product_id = ?`,
+  ).bind(productId).all<{variant_id: number; supplier_barcode: string | null}>();
+  return new Map((results ?? []).filter(
+    (r): r is {variant_id: number; supplier_barcode: string} => r.supplier_barcode !== null,
+  ).map((r) => [r.variant_id, r.supplier_barcode]));
+}
+
+export async function setVariantSupplierBarcode(
+  db: D1Database, variantId: number, raw: string | null | undefined,
+): Promise<void> {
+  const barcode = normalizeSupplierBarcode(raw);
+  if (barcode === null) {
+    await db.prepare('DELETE FROM purkins_variant_identifiers WHERE variant_id=?')
+      .bind(variantId).run();
+    return;
+  }
+  await db.prepare(
+    `INSERT INTO purkins_variant_identifiers (variant_id, supplier_barcode)
+     VALUES (?, ?) ON CONFLICT(variant_id)
+     DO UPDATE SET supplier_barcode=excluded.supplier_barcode`,
+  ).bind(variantId, barcode).run();
 }
