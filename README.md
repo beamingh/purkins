@@ -1,12 +1,33 @@
 # Purkins | Baby & Mum Essentials
 
-This is the **Purkins Minshop foundation** branch. The storefront is powered by Minshop, a Cloudflare Workers + D1 + R2 e-commerce project. [Read the Purkins setup and safety guide](PURKINS.md) before provisioning or deploying.
+**Chosen stack:** Minshop + Astro, Cloudflare Workers, D1 and R2. This
+repository is **not** a Payload CMS project. Payload and Next.js are
+discontinued and retained only as historical Git references.
 
-**Project status:** imported and initially branded; local tests, payment integration, team roles, and MCP governance remain to be completed. Existing Payload work is preserved on `feat/payload-foundation`.
+**Status (23 October 2026):** active work is on
+`feat/purkins-stock-cataloguing`, currently proposed in a **draft PR to
+`main`**. The root `main` branch is the intended integration target,
+not yet a tested/deployed storefront. **No branch is approved for
+production deployment or live stock migration.**
+
+- [Purkins project setup and safety guide](PURKINS.md)
+- [Active and superseded branch register](docs/BRANCH_STATUS.md)
+- [Stock intake model and example stock handling](docs/purkins-stock-cataloguing.md)
+
+Owner-facing product creation starts as private inventory; buyer-facing
+publication is explicit. Operator MCP offers read-only access by default:
+write tools additionally require the `PURKINS_MCP_WRITES_ENABLED=true`
+configuration switch, which must remain disabled until authentication,
+audit logging, write idempotency and concurrency have been reviewed.
+
+**The material below is imported upstream Minshop documentation, not a
+Purkins deployment checklist.** Follow the Purkins guides linked above
+rather than running upstream one-click deployment or remote migration
+commands without a separate explicit deployment review.
 
 ---
 
-# minshop
+# Upstream Minshop documentation
 
 [![Verify](https://github.com/ddyy/minshop/actions/workflows/verify.yml/badge.svg)](https://github.com/ddyy/minshop/actions/workflows/verify.yml)
 [![npm](https://img.shields.io/npm/v/create-minshop?label=create-minshop)](https://www.npmjs.com/package/create-minshop)
