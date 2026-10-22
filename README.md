@@ -1,5 +1,16 @@
 # Purkins | Baby & Mum Essentials
 
+> **DISCONTINUED / ARCHIVED DESIGN (23 October 2026).** Purkins no longer uses
+> Next.js or Payload CMS. This branch is retained **only for historical reference**.
+> Do not merge, deploy, provision infrastructure from, or resume development on
+> this branch. The active implementation uses **Astro + Minshop + Cloudflare
+> Workers/D1/R2**, with `feat/purkins-stock-cataloguing` as the current working
+> branch and `main` as the intended integration branch.
+>
+> Any resources created for the earlier Payload experiment must be reviewed
+> separately before reuse or retirement. The notes below are historical,
+> **not current setup instructions**.
+
 Private inventory and pricing workspace for **Purkins**, built with **Next.js + Payload CMS**.
 
 **Status:** feature branch, not deployed. Dedicated Purkins D1 and R2 resources have been created; no Worker, production secret, DNS or custom domain has been deployed/configured. Proposed address: `purkins.igoola.com`.
