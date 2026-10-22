@@ -17,6 +17,13 @@ export interface IntakeFields {
   zar_to_zmw: number | null;
   overhead_zwm_cents: number;
   markup_percent: number | null;
+  brand?: string | null;
+  supplier_barcode?: string | null;
+  retail_tag_minor?: number | null;
+  retail_tag_currency?: PurchaseCurrency;
+  pack_count?: number | null;
+  condition_status?: 'complete' | 'incomplete' | 'review';
+  internal_notes?: string | null;
 }
 
 export interface IntakeRecord extends IntakeFields {
@@ -29,6 +36,16 @@ export interface IntakeRecord extends IntakeFields {
 export function generateItemSku(productId: number): string {
   if (!Number.isSafeInteger(productId) || productId < 1) throw new Error('Invalid product ID');
   return `PUR-${String(productId).padStart(6, '0')}`;
+}
+
+/** Supplier reference as text: preserve leading zeroes and do not assume EAN checksums. */
+export function normalizeSupplierBarcode(raw: string | null | undefined): string | null {
+  const code = String(raw ?? '').trim();
+  if (!code) return null;
+  if (code.length > 80 || !/^[A-Za-z0-9][A-Za-z0-9._ -]*$/.test(code)) {
+    throw new Error('Supplier barcode must be 1–80 letters, numbers, spaces or ._- characters.');
+  }
+  return code;
 }
 
 const read = (form: FormData, field: string): string =>
@@ -79,7 +96,27 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
       markup_percent = Number(markupRaw);
     }
 
+    const tagCurrency = (read(form, 'retail_tag_currency') || 'ZAR').toUpperCase();
+    if (tagCurrency !== 'ZAR' && tagCurrency !== 'ZMW') {
+      throw new Error('Price-tag currency must be ZAR or ZMW.');
+    }
+    const packRaw = read(form, 'pack_count');
+    const pack_count = packRaw ? Number(packRaw) : null;
+    if (packRaw && (!/^[1-9][0-9]{0,2}$/.test(packRaw) || !Number.isSafeInteger(pack_count))) {
+      throw new Error('Pack count must be an integer from 1 to 999.');
+    }
+    const condition = read(form, 'condition_status') || 'complete';
+    if (condition !== 'complete' && condition !== 'incomplete' && condition !== 'review') {
+      throw new Error('Unknown stock condition.');
+    }
     return { data: {
+      brand: optionalText(form, 'brand', 100),
+      supplier_barcode: normalizeSupplierBarcode(read(form, 'supplier_barcode')),
+      retail_tag_minor: currencyAmount(read(form, 'retail_tag_price'), 'Supplier price tag'),
+      retail_tag_currency: tagCurrency,
+      pack_count,
+      condition_status: condition,
+      internal_notes: optionalText(form, 'internal_notes', 2000),
       size_label: optionalText(form, 'size_label', 60),
       colour: optionalText(form, 'colour', 60),
       age_range: optionalText(form, 'age_range', 60),
