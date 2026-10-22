@@ -42,6 +42,14 @@ describe('Purkins approval safeguards', () => {
     expect(await approveIntake(db, 4)).toMatch(/photograph/);
     expect(batch).not.toHaveBeenCalled();
   });
+  it('does not approve a missing-pieces pack even when cost and photo are known', async () => {
+    const { db, batch } = stubDb(
+      { ...intake, condition_status: 'incomplete' },
+      { price_cents: 14000, currency: 'zmw', image_key: 'img' },
+    );
+    await expect(approveIntake(db, 4)).resolves.toMatch(/Review incomplete/);
+    expect(batch).not.toHaveBeenCalled();
+  });
   it('does not approve unknown purchase costs', async () => {
     const { db, batch } = stubDb({ ...intake, purchase_cost_minor: null },
       { price_cents: 14000, currency: 'zmw', image_key: 'img' });
