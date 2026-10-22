@@ -47,6 +47,42 @@ describe('Purkins private intake', () => {
   it('rejects markup over the maximum', () => {
     expect('error' in parseIntakeFields(form({markup_percent:'501'}))).toBe(true);
   });
+  it('keeps a supplier price tag separate from the actual purchase cost', () => {
+    const parsed = parseIntakeFields(form({
+      brand: 'Little Castle', supplier_barcode: '000111992810002',
+      retail_tag_price: '69.99', retail_tag_currency: 'ZAR',
+      pack_count: '3', condition_status: 'complete',
+      storage_location: 'Grey Sack / Blue PEP Plastic Bag',
+      purchase_currency: 'ZAR',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.supplier_barcode).toBe('000111992810002');
+    expect(parsed.data.retail_tag_minor).toBe(6999);
+    expect(parsed.data.purchase_cost_minor).toBeNull();
+    expect(parsed.data.pack_count).toBe(3);
+    expect(landedCostCents(parsed.data)).toBeNull();
+  });
+
+  it('holds incomplete stock for review and keeps the explanation private', () => {
+    const parsed = parseIntakeFields(form({
+      condition_status: 'incomplete',
+      internal_notes: 'One yellow sock missing; red and blue pair present',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.condition_status).toBe('incomplete');
+    expect(parsed.data.internal_notes).toContain('missing');
+  });
+
+  it.each([
+    { supplier_barcode: '<invalid>' },
+    { pack_count: '0' },
+    { pack_count: '2.5' },
+    { condition_status: 'published' },
+    { retail_tag_price: '59.999' },
+  ])('rejects invalid supplier intake fields: %j', (values) => {
+    expect(parseIntakeFields(form(values))).toHaveProperty('error');
+  });
+
   it('does not treat missing markups as zero', () => {
     const parsed = parseIntakeFields(form({purchase_cost:'40', overhead_zwm:'10'}));
     if ('data' in parsed) expect(suggestedSellingPriceCents(parsed.data)).toBeNull();
