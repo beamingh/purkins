@@ -17,7 +17,7 @@ import { productImageSources } from '../../../../features/products/image';
 import { zonesRequireWeight } from '../../../../features/shipping/calculator';
 import { formatWeightValue } from '../../../../features/shipping/weight';
 import { shippingFor } from '../../../../features/shipping/effective';
-import { getIntake } from '../../../../features/purkins/db';
+import { getIntake, getVariantSupplierBarcodes } from '../../../../features/purkins/db';
 
 // The route param is the prod_ public ID; numeric row ids are not accepted.
 const publicId = parsePublicId(Astro.params.id, 'product');
@@ -35,6 +35,7 @@ const error = Astro.url.searchParams.get('error');
 
 // Variants + extras (show all, including any inactive, so the admin sees everything).
 const variants = await listVariants(env.DB, product.id, true);
+const supplierBarcodes = intake ? await getVariantSupplierBarcodes(env.DB, product.id) : new Map<number, string>();
 const extras = await listExtras(env.DB, product.id, true);
 // The product's main photo — a variant with no specific image falls back to this
 // (so new variants default to showing it rather than an empty box).
@@ -283,6 +284,25 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
         save); "+ Add variant" clones it for adding several at once. All inputs use
         form="product-form" so they submit with the product's Save changes. */}
     <h3 class="mb-3 text-sm font-medium">Variants</h3>
+    {intake && variants.length > 0 && (
+      <div class="mb-6 rounded-md border border-line bg-surface p-4">
+        <p class="mb-1 text-sm font-semibold">Supplier barcodes by size or colour (private)</p>
+        <p class="mb-3 text-xs text-muted">Use this for a supplier's original code. The SKU inside each variant row is Purkins' own code. Save variants first, then add their supplier codes here.</p>
+        <div class="space-y-2">
+          {variants.map((v) => (
+            <form method="POST" action={`/api/admin/products/${product.public_id}/supplier-barcode`}
+              class="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="variant_id" value={v.public_id ?? ''} />
+              <label class="min-w-36 text-xs">{v.label}</label>
+              <input name="supplier_barcode" type="text" maxlength="80" value={supplierBarcodes.get(v.id) ?? ''}
+                placeholder="Supplier barcode, if printed"
+                class="min-w-48 flex-1 rounded-md border border-line bg-paper px-3 py-2 text-sm" />
+              <button type="submit" class="rounded-md border border-line px-3 py-2 text-xs hover:border-brand">Save barcode</button>
+            </form>
+          ))}
+        </div>
+      </div>
+    )}
     <div data-variant-rows data-default-price={major(product.price_cents)} class="space-y-3">
       {
         [...variants, null].map((v) => (
