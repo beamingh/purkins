@@ -129,6 +129,12 @@ const inputClass =
         <p class="text-xs text-muted">New products are private drafts. This cost information is accessible to the current admin login only; do not share that login with a partner until separate roles are implemented.</p>
         {intake && <p class="text-sm">Item code: <strong>{intake.sku}</strong> · Price review: <strong>{intake.status === 'approved' ? 'Approved' : 'Draft'}</strong></p>}
         <div class="grid gap-3 sm:grid-cols-2">
+          <label class="text-sm">Brand
+            <input class={inputClass} name="brand" maxlength="100" value={intake?.brand ?? ''} placeholder="Little Castle, Real Baby…" />
+          </label>
+          <label class="text-sm">Supplier barcode / label code
+            <input class={inputClass} name="supplier_barcode" maxlength="80" value={intake?.supplier_barcode ?? ''} placeholder="Preserves leading zeroes" />
+          </label>
           <label class="text-sm">Size
             <input class={inputClass} name="size_label" maxlength="60" value={intake?.size_label ?? ''} placeholder="0–3 months" />
           </label>
@@ -140,6 +146,32 @@ const inputClass =
           </label>
           <label class="text-sm">Storage location
             <input class={inputClass} name="storage_location" maxlength="100" value={intake?.storage_location ?? ''} placeholder="Sack A / Shelf 1" />
+          </label>
+          <label class="text-sm">Items per sellable pack
+            <input class={inputClass} type="number" name="pack_count" min="1" max="999" step="1"
+              value={intake?.pack_count ?? ''} placeholder="1, 2, 3, 5…" />
+          </label>
+          <label class="text-sm">Stock condition
+            <select class={inputClass} name="condition_status">
+              <option value="complete" selected={!intake || (intake.condition_status ?? 'complete') === 'complete'}>Complete, new</option>
+              <option value="review" selected={intake?.condition_status === 'review'}>Needs checking</option>
+              <option value="incomplete" selected={intake?.condition_status === 'incomplete'}>Incomplete / missing pieces</option>
+            </select>
+          </label>
+          <label class="text-sm">Original supplier price tag (reference only)
+            <input class={inputClass} name="retail_tag_price" type="number" min="0" step="0.01"
+              value={intake?.retail_tag_minor != null ? (intake.retail_tag_minor / 100).toFixed(2) : ''}
+              placeholder="e.g. 69.99 (not cost)" />
+          </label>
+          <label class="text-sm">Tag currency
+            <select class={inputClass} name="retail_tag_currency">
+              <option value="ZAR" selected={!intake || (intake.retail_tag_currency ?? 'ZAR') === 'ZAR'}>ZAR (R)</option>
+              <option value="ZMW" selected={intake?.retail_tag_currency === 'ZMW'}>ZMW (K)</option>
+            </select>
+          </label>
+          <label class="text-sm sm:col-span-2">Private stock notes
+            <textarea class={inputClass} name="internal_notes" maxlength="2000" rows="3"
+              placeholder="Bundle contents, missing pieces, any uncertain details…">{intake?.internal_notes ?? ''}</textarea>
           </label>
           <label class="text-sm">Purchase currency
             <select class={inputClass} name="purchase_currency">
