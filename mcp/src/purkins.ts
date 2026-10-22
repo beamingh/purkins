@@ -88,7 +88,7 @@ async function stockView(db: D1Database, product: Product) {
   const variants = await listVariants(db, product.id, true);
   return {
     id: product.public_id, slug: product.slug, name: product.name,
-    description: product.description, stock: product.stock,
+    description: product.description, stock: variants.length ? variants.filter((v) => v.active === 1).reduce((sum, v) => sum + v.stock, 0) : product.stock,
     price_cents: product.price_cents, currency: product.currency,
     active: product.active === 1, intake: privateIntake,
     variants: variants.map((v) => ({
@@ -145,11 +145,12 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
       'LEFT JOIN purkins_variant_identifiers vi ON vi.variant_id=v.id ' +
       'WHERE instr(lower(p.name),lower(?))>0 OR instr(lower(COALESCE(i.brand,\'\')),lower(?))>0 ' +
       'OR instr(lower(i.sku),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(v.sku,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(i.supplier_barcode,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(vi.supplier_barcode,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(i.storage_location,\'\')),lower(?))>0 ' +
       'ORDER BY p.public_id LIMIT ?',
-    ).bind(q,q,q,q,q,q,limit).all<{public_id:string}>();
+    ).bind(q,q,q,q,q,q,q,limit).all<{public_id:string}>();
     const stock = await Promise.all((results ?? []).map(async (row) => {
       const product = await getProductByPublicId(db, row.public_id);
       return product ? stockView(db, product) : null;
@@ -181,7 +182,10 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
     const names = variants.map((v) => v.label.trim().toLowerCase());
     if (new Set(names).size !== names.length) throw new Error('Duplicate variant labels. Include both size and colour in each label.');
     for (const v of variants) normalizeSupplierBarcode(v.supplier_barcode);
-    const slug = await uniqueSlug(db, slugify(name));
+    const expectedSlug = slugify(name);
+    const prior = await getProductBySlug(db, expectedSlug);
+    if (prior) return reply({error:'An item with this name already exists; search and update it instead of creating duplicate stock.', existing: prior.public_id});
+    const slug = await uniqueSlug(db, expectedSlug);
     const id = await createProduct(db, {
       name, slug, description: description ?? null, price_cents, stock: variants.length
         ? variants.reduce((sum, v) => sum + v.stock, 0) : stock,
