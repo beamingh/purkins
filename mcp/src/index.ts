@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
+import { registerPurkinsTools } from './purkins';
 import { z } from 'zod';
 import { timingSafeEqual } from 'node:crypto';
 
@@ -307,6 +308,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
 
     // --- operator tier: only when a valid MCP_TOKEN was presented ---
     if (!this.props?.operator) return;
+
+    // Purkins-only operator tools: private intake, variant stock and approvals.
+    registerPurkinsTools(this.server, db);
 
     // --- reads ---
     this.server.registerTool(
