@@ -3,9 +3,11 @@
 > **Branch status (23 October 2026): ACTIVE / NOT YET READY TO MERGE.** This is the current Minshop/Astro stock and MCP feature branch. `main` is the eventual integration target. Complete the manual tests, security review, and local D1 checks in `docs/BRANCH_STATUS.md` before merging. No production deployment is authorized.
 > **Architecture:** Minshop + Astro/Cloudflare Workers/D1/R2. Payload CMS is discontinued.
 
-**Branch:** `feat/minshop-foundation` (based on `main`).
+**Integration candidate:** `feat/purkins-stock-cataloguing` (draft PR into `main`). Originally bootstrapped from `feat/minshop-foundation`.
 
-**Upstream:** [ddyy/minshop](https://github.com/ddyy/minshop), MIT license, imported from commit `c964bf746926ae039a97d69720eee26fb97ba06f` (18 Oct 2026). This branch contains a source import and initial Purkins theme/configuration, **not a validated production release**.
+**Upstream:** [ddyy/minshop](https://github.com/ddyy/minshop), MIT license, imported from commit `c964bf746926ae039a97d69720eee26fb97ba06f` (18 Oct 2026). The Minshop import is now followed by the Purkins inventory and catalogue changes. **The result is not yet a validated production release**.
+
+See [the definitive branch and merge status](docs/BRANCH_STATUS.md) and [stock/MCP catalogue model](docs/purkins-stock-cataloguing.md).
 
 ## Why we're doing this
 
@@ -28,8 +30,8 @@ In PowerShell, from your existing repository `C:\GitHub\purkins`:
 
 ```powershell
 git fetch origin
-git switch feat/minshop-foundation
-git pull --ff-only origin feat/minshop-foundation
+git switch feat/purkins-stock-cataloguing
+git pull --ff-only origin feat/purkins-stock-cataloguing
 npm ci
 npm run theme:check
 npm run test:storefront-contract
