@@ -102,7 +102,7 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
     }
     const packRaw = read(form, 'pack_count');
     const pack_count = packRaw ? Number(packRaw) : null;
-    if (packRaw && (!/^[1-9][0-9]{0,2}$/.test(packRaw) || !Number.isSafeInteger(pack_count))) {
+    if (packRaw && (!/^[1-9][0-9]{0,2}$/.test(packRaw) || !Number.isSafeInteger(Number(packRaw)))) {
       throw new Error('Pack count must be an integer from 1 to 999.');
     }
     const condition = read(form, 'condition_status') || 'complete';
