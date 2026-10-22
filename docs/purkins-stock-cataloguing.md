@@ -40,6 +40,16 @@ costs, supplier barcodes, storage locations or internal condition notes.
 | Safari Dream 2-pack leggings | One product; supplier barcode 117939910001, 0-3m, R89.99 tag |
 | Socks with missing yellow sock | Separate incomplete/review item, never merged with an intact set without inspection |
 
+## MCP write safety
+
+**Private operator access does not automatically grant write permission.**
+All Purkins and generic Minshop operator MCP write tools are *not registered*
+unless the Worker is configured with `PURKINS_MCP_WRITES_ENABLED=true`;
+the checked-in Wrangler template explicitly sets it to `false`.
+Keep it false in production until per-user permissions, audit logs, duplicate
+request/idempotency protection and concurrent edit handling have been reviewed.
+Buyer-facing public tools remain distinct and do not receive private cost data.
+
 ## Operator-only MCP tools
 
 - `list_purkins_stock`: paginate draft and approved stock with private metadata.
