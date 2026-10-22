@@ -33,7 +33,7 @@
     "reset:remote": "bash scripts/reset.sh --remote",
     "mcp:dev": "wrangler dev --config mcp/wrangler.jsonc --persist-to .wrangler/state",
     "mcp:deploy": "wrangler deploy --config mcp/wrangler.jsonc",
-    "mcp:check": "bash scripts/check-mcp.sh",
+    "mcp:check": "node scripts/check-mcp.mjs",
     "scaffold:check": "npm test --prefix create-minshop && npm pack ./create-minshop --dry-run",
     "theme:sync": "node scripts/theme-sync.mjs",
     "db:seed:storefront-states": "bash scripts/seed-storefront-states.sh"
