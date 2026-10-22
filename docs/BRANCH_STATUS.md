@@ -24,9 +24,9 @@ reason to cherry-pick old implementation files into the active branch.
 - [x] Local developer reported `npm test`: 87 files, 954 tests passed on the earlier `0c1851b` checkout; subsequent tooling changes need validation.
 - [x] Local developer reported `npm run check`: zero errors, zero warnings (two harmless hints).
 - [x] Local developer reported `npm run build`: Astro production build succeeded.
-- [ ] Run `npm run theme:check` separately and confirm it passes.
-- [ ] `npm run mcp:check` passes. The previous Bash-based entrypoint failed on Windows before validation; the current npm command uses a native Node.js checker and performs **no deployment**.
-- [ ] Clear or explicitly assess **high/critical production dependency advisories** for the storefront and MCP. Local `npm audit --omit=dev` reported 14 findings (13 high, 1 critical); `npm audit --prefix mcp --omit=dev` is not yet reported. The manual-only GitHub checks now fail on high/critical findings. Prefer `npm audit fix --package-lock-only` within existing semver ranges, then reinstall and retest; do not blindly use `--force`.
+- [x] Local developer reported `npm run theme:check`: `storefront boundary: ok`.
+- [x] Local developer reported `npm run mcp:check`: TypeScript passed and Wrangler 4.118.0 dry run succeeded (2,775.19 KiB upload / 517.89 KiB gzip), with `PURKINS_MCP_WRITES_ENABLED=false`; no Worker deployed.
+- [ ] Clear or explicitly assess **high/critical production dependency advisories** for the storefront and MCP. Local storefront `npm audit --omit=dev`: **14 findings (13 high, 1 critical)**. Local MCP `npm audit --prefix mcp --omit=dev`: **9 findings (3 moderate, 5 high, 1 critical)**. The manual-only GitHub checks now fail on high/critical findings. Prefer `npm audit fix --package-lock-only` within existing semver ranges, then reinstall, re-audit and retest; do not blindly use `--force` or merge unreviewed major upgrades.
 - [ ] Apply migrations 0040 and 0041 to **isolated local D1** and confirm clean and upgrade paths, not remote D1.
 - [ ] Verify stock workflow through Admin, including sizes, per-size barcodes, draft state, incomplete stock, and accurate pack counts.
 - [ ] Exercise private operator MCP tools against a local test DB, including auth denial, cost privacy, data validation, repeated/concurrent writes, and approval revocation.
