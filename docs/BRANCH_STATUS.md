@@ -21,8 +21,12 @@ reason to cherry-pick old implementation files into the active branch.
 
 ## What must happen before the active code is merged
 
-- [ ] `npm test`, `npm run check`, `npm run theme:check`, and `npm run build` all pass on the feature branch.
-- [ ] `npm run mcp:check` passes (MCP package dependencies/environment must be available), with no Worker deployment.
+- [x] Local developer reported `npm test`: 87 files, 954 tests passed on the earlier `0c1851b` checkout; subsequent tooling changes need validation.
+- [x] Local developer reported `npm run check`: zero errors, zero warnings (two harmless hints).
+- [x] Local developer reported `npm run build`: Astro production build succeeded.
+- [ ] Run `npm run theme:check` separately and confirm it passes.
+- [ ] `npm run mcp:check` passes. The previous Bash-based entrypoint failed on Windows before validation; the current npm command uses a native Node.js checker and performs **no deployment**.
+- [ ] Clear or explicitly assess **high/critical production dependency advisories** for the storefront and MCP. Local `npm audit --omit=dev` reported 14 findings (13 high, 1 critical); `npm audit --prefix mcp --omit=dev` is not yet reported. The manual-only GitHub checks now fail on high/critical findings. Prefer `npm audit fix --package-lock-only` within existing semver ranges, then reinstall and retest; do not blindly use `--force`.
 - [ ] Apply migrations 0040 and 0041 to **isolated local D1** and confirm clean and upgrade paths, not remote D1.
 - [ ] Verify stock workflow through Admin, including sizes, per-size barcodes, draft state, incomplete stock, and accurate pack counts.
 - [ ] Exercise private operator MCP tools against a local test DB, including auth denial, cost privacy, data validation, repeated/concurrent writes, and approval revocation.
