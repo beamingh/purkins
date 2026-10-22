@@ -259,6 +259,11 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
     if (all.some((v) => v.id !== existing?.id && v.label.trim().toLowerCase() === label.toLowerCase())) {
       return reply({error:'Duplicate variant label. Include size and colour.'});
     }
+    // First unpublish, so a failed stock/price edit cannot remain customer-visible.
+    await db.batch([
+      db.prepare('UPDATE products SET active=0, variant_label=? WHERE id=?').bind('Size / Colour', p.id),
+      db.prepare("UPDATE purkins_intake SET status='draft' WHERE product_id=?").bind(p.id),
+    ]);
     if (existing) {
       const current = (await getVariantSupplierBarcodes(db, p.id)).get(existing.id) ?? null;
       await updateVariant(db, existing.id, {
@@ -271,10 +276,6 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
       const nextSku = sku?.trim() || generateItemSku(p.id) + '-V' + String(all.length + 1).padStart(2,'0');
       await addVariant(db, p.id, {label, stock, price_cents, sku: nextSku, supplier_barcode: barcode}, nextSku);
     }
-    await db.batch([
-      db.prepare('UPDATE products SET active=0, variant_label=? WHERE id=?').bind('Size / Colour', p.id),
-      db.prepare("UPDATE purkins_intake SET status='draft' WHERE product_id=?").bind(p.id),
-    ]);
     return reply({updated:p.public_id, active:false, status:'draft'});
   });
 
