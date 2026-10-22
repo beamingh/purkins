@@ -18,7 +18,12 @@
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   // Buyer tools proxy the storefront's public JSON API; point this at the store.
-  "vars": { "STOREFRONT_URL": "https://__NAME__.workers.dev" },
+  // READ-ONLY DEFAULT. Never enable this until operator write auth, audit,
+  // idempotency and concurrency gates have been reviewed and tested.
+  "vars": {
+    "STOREFRONT_URL": "https://__NAME__.workers.dev",
+    "PURKINS_MCP_WRITES_ENABLED": "false"
+  },
   // The buyer tier is unauthenticated, and this Worker is the only place the
   // real client IP is visible (buyer tools proxy the storefront server-side).
   "unsafe": {
