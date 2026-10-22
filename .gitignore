@@ -5,6 +5,11 @@ node_modules/
 dist/
 .astro/
 .output/
+# Local generated artifacts; the retired Payload/Next.js stack is not used
+.next/
+next-env.d.ts
+# Wrangler can regenerate Cloudflare binding types for local projects
+cloudflare-env.d.ts
 
 # Cloudflare / Wrangler local state (also covers mcp/.wrangler, mcp/.dev.vars)
 .wrangler/
