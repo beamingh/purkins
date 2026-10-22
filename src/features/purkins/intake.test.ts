@@ -6,9 +6,11 @@ import {
   suggestedSellingPriceCents,
 } from './intake';
 
-const form = (values: Record<string, string>): FormData => {
+const form = (values: Record<string, string | undefined>): FormData => {
   const f = new FormData();
-  for (const [name, value] of Object.entries(values)) f.set(name, value);
+  for (const [name, value] of Object.entries(values)) {
+    if (value !== undefined) f.set(name, value);
+  }
   return f;
 };
 describe('Purkins private intake', () => {
@@ -80,7 +82,7 @@ describe('Purkins private intake', () => {
     { condition_status: 'published' },
     { retail_tag_price: '59.999' },
   ])('rejects invalid supplier intake fields: %j', (values) => {
-    expect(parseIntakeFields(form(values as Record<string, string>))).toHaveProperty('error');
+    expect(parseIntakeFields(form(values))).toHaveProperty('error');
   });
 
   it('does not treat missing markups as zero', () => {
