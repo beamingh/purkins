@@ -118,7 +118,7 @@ async function addVariant(
   });
 }
 
-export function registerPurkinsTools(server: McpServer, db: D1Database): void {
+export function registerPurkinsTools(server: McpServer, db: D1Database, allowWrites = false): void {
   server.registerTool('list_purkins_stock', {
     description: 'Operator-only Purkins intake records, including drafts, private costs, supplier tags, barcodes, storage and size stocks. Never exposed to shoppers.',
     inputSchema: {
@@ -165,6 +165,10 @@ export function registerPurkinsTools(server: McpServer, db: D1Database): void {
     const product = await resolve(db, id);
     return reply(product ? (await stockView(db, product) ?? {error: 'No Purkins intake record.'}) : {error: 'Product not found.'});
   });
+
+  // Read-only is the safe default, even with a valid operator token. Owner writes
+  // require a separate, explicit instance-level switch after review.
+  if (!allowWrites) return;
 
   server.registerTool('create_purkins_stock', {
     description: 'Create PRIVATE, unpublished Purkins stock (including multiple sizes); never publish or infer selling price, costs or conversion. Each pack is one sellable stock unit.',
