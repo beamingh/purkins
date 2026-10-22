@@ -7,7 +7,7 @@ import { parseProductForm } from '../products/form';
 import { reserveInventory, getActiveReservationItems } from '../orders/reservations';
 import { recordPaidOrder } from '../orders/db';
 import { parseIntakeFields, generateItemSku } from './intake';
-import { approveIntake, getIntake, insertIntake, saveIntakeDraft } from './db';
+import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode } from './db';
 
 /* Isolated in-memory D1; no Wrangler state, remote D1, or real payments.
  * Executes the actual Purkins migration plus Minshop product/order functions.
@@ -81,6 +81,21 @@ describe('Purkins stock intake through demo settlement', () => {
     (await db.prepare('SELECT stock FROM products WHERE id=?').bind(id).first<{ stock: number }>())?.stock;
   const item = (id: number, qty = 1, variantId?: number) =>
     ({ productId: id, variantId, name: 'Purkins test romper', priceCents: 15000, quantity: qty });
+
+  it('records each size barcode privately and blocks an incomplete pack from publication', async () => {
+    const { id } = await createDraft('Tagged Incomplete Pack');
+    const variant = await db.prepare(
+      "INSERT INTO product_variants (product_id, label, price_cents, stock, active) VALUES (?, '3-6m', 15000, 2, 1) RETURNING id",
+    ).bind(id).first<{ id: number }>();
+    if (!variant) throw new Error('Variant missing');
+    await setVariantSupplierBarcode(db, variant.id, '000111992810002');
+    expect((await getVariantSupplierBarcodes(db, id)).get(variant.id)).toBe('000111992810002');
+    await db.prepare("UPDATE products SET image_key='media/fake-test.webp' WHERE id=?").bind(id).run();
+    await db.prepare("UPDATE purkins_intake SET condition_status='incomplete', retail_tag_minor=6999 WHERE product_id=?").bind(id).run();
+    expect((await getIntake(db, id))?.retail_tag_minor).toBe(6999);
+    expect(await approveIntake(db, id)).toMatch(/Review incomplete/);
+    expect((await db.prepare('SELECT active FROM products WHERE id=?').bind(id).first<{active:number}>())?.active).toBe(0);
+  });
 
   it('saves a coded draft, hides it from public results, and rejects stock reservation', async () => {
     const { id } = await createDraft('Private Cream Romper');
