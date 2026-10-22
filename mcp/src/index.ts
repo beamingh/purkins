@@ -311,8 +311,11 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     // --- operator tier: only when a valid MCP_TOKEN was presented ---
     if (!this.props?.operator) return;
 
-    // Purkins-only operator tools: private intake, variant stock and approvals.
-    registerPurkinsTools(this.server, db);
+    // A valid operator token enables sensitive reads, NOT automatic write access.
+    // All operator writes require this explicit config switch; default is off.
+    const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
+      .PURKINS_MCP_WRITES_ENABLED === 'true';
+    registerPurkinsTools(this.server, db, allowWrites);
 
     // --- reads ---
     this.server.registerTool(
@@ -409,7 +412,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       async ({ days }) => result(await dailyOrderTotals(db, days)),
     );
 
-    // --- writes (gated by the bearer auth in the fetch handler) ---
+    // --- writes: token AND explicit instance-level enablement required ---
+    if (!allowWrites) return;
     this.server.registerTool(
       'create_product',
       {
