@@ -43,7 +43,7 @@ describe('Purkins stock intake through demo settlement', () => {
       const statements = migrationSql
         .replace(/^\s*--.*$/gm, '')
         .split(';')
-        .map((statement) => statement.trim())
+        .map((statement: string) => statement.trim())
         .filter(Boolean);
       for (const statement of statements) await db.prepare(statement).run();
     }
