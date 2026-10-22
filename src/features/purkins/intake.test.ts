@@ -80,7 +80,7 @@ describe('Purkins private intake', () => {
     { condition_status: 'published' },
     { retail_tag_price: '59.999' },
   ])('rejects invalid supplier intake fields: %j', (values) => {
-    expect(parseIntakeFields(form(values))).toHaveProperty('error');
+    expect(parseIntakeFields(form(values as Record<string, string>))).toHaveProperty('error');
   });
 
   it('does not treat missing markups as zero', () => {
