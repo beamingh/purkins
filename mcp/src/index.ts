@@ -1,6 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
 import { registerPurkinsTools } from './purkins';
+import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
+import { parseIntakeFields } from '../../src/features/purkins/intake';
 import { z } from 'zod';
 import { timingSafeEqual } from 'node:crypto';
 
@@ -420,10 +422,11 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           description: z.string().optional(),
           stock: z.number().int().nonnegative().default(0),
           currency: z.string().default('usd'),
-          active: z.boolean().default(true),
+          active: z.boolean().default(false),
         },
       },
       async ({ name, price_cents, description, stock, currency, active }) => {
+        if (active) return result({error: 'Purkins stock cannot be published on creation. Use create_purkins_stock, then explicit approval.'});
         const slug = await uniqueSlug(db, slugify(name));
         const input: ProductInput = {
           name,
@@ -433,7 +436,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           currency,
           image_key: null,
           stock,
-          active: active ? 1 : 0,
+          active: 0,
           // Weight is set in Admin (it needs the store's display unit); a new
           // product starts shippable with an unknown weight, which is harmless
           // until a weight-priced rate exists.
@@ -441,6 +444,15 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           requires_shipping: 1,
         };
         const rowId = await createProduct(db, input);
+        // Compatibility tool stays safe: every Purkins item needs private intake.
+        const blank = parseIntakeFields(new FormData());
+        if ('error' in blank) throw new Error(blank.error);
+        try {
+          await insertIntake(db, rowId, {...blank.data, condition_status: 'review'});
+        } catch (error) {
+          await db.prepare('DELETE FROM products WHERE id=?').bind(rowId).run();
+          throw error;
+        }
         const created = await getProduct(db, rowId);
         return result({ id: requirePublicId(created?.public_id ?? null, rowId, 'product'), slug });
       },
@@ -466,6 +478,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         const cur = await resolveProduct(db, id);
         if (cur === 'numeric') return result(NUMERIC_PRODUCT_ERROR);
         if (!cur) return result(`No product with id ${id}.`);
+        if (active === true) return result({error: 'Direct publication through update_product is blocked. Use approve_purkins_stock.'});
         const input: ProductInput = {
           name: name ?? cur.name,
           slug: cur.slug,
@@ -474,14 +487,23 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
           currency: currency ?? cur.currency,
           image_key: cur.image_key,
           stock: stock ?? cur.stock,
-          active: active !== undefined ? (active ? 1 : 0) : cur.active,
+          active: 0,
           // Not editable here, but must be carried: updateProduct writes every
           // column, so omitting these would silently clear them.
           weight_grams: cur.weight_grams,
           requires_shipping: cur.requires_shipping,
         };
         await updateProduct(db, cur.id, input);
-        return result({ id: requirePublicId(cur.public_id, cur.id, 'product'), slug: cur.slug });
+        // A generic edit must never preserve an old stock approval.
+        const currentIntake = await getIntake(db, cur.id);
+        if (currentIntake) {
+          await saveIntakeDraft(db, cur.id, currentIntake);
+        } else {
+          const blank = parseIntakeFields(new FormData());
+          if ('error' in blank) throw new Error(blank.error);
+          await insertIntake(db, cur.id, {...blank.data, condition_status: 'review'});
+        }
+        return result({ id: requirePublicId(cur.public_id, cur.id, 'product'), slug: cur.slug, active: false, status: 'draft' });
       },
     );
 
