@@ -19,8 +19,8 @@ jobs:
           cache: 'npm'
       - name: Install locked dependencies
         run: npm ci
-      - name: Test private Purkins inventory and costing
-        run: npm run test:purkins
+      - name: Run full unit and Purkins integration test suite
+        run: npm test
       - name: Enforce theme boundaries
         run: npm run theme:check
       - name: Check storefront contracts
@@ -29,3 +29,7 @@ jobs:
         run: npm run check
       - name: Build Astro Worker
         run: npm run build
+      - name: Install isolated MCP packages
+        run: npm ci --prefix mcp
+      - name: MCP typecheck and Worker dry run (not deployment)
+        run: npm run mcp:check
