@@ -49,8 +49,7 @@ the public/Admin isolation.
 ```powershell
 git fetch origin
 git switch --track origin/feat/purkins-public-admin-mcp-workers
-npm ci
-npm ci --prefix mcp
+npm ci # root npm workspace also installs MCP
 npx vitest run test/scripts/purkins-route-split.test.mjs test/scripts/purkins-permanent.test.mjs
 npm test
 npm run check
@@ -121,5 +120,8 @@ auth cookies/CSRF and shared secrets across the two origins. Eventually set
 resources and confirm sitemap availability. Do not create or transfer to a
 second D1 at launch.
 
+The root `package.json` declares `mcp/` as an npm workspace, with a single
+root `package-lock.json`. Run only `npm ci` from the repository root; the
+Admin+MCP bundle resolves the workspace dependencies without a second install.
 The old `mcp/wrangler.template.jsonc` remains for generic Minshop's
 standalone-MCP tooling but is **not** the Purkins permanent deployment path.
