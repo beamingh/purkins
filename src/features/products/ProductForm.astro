@@ -370,6 +370,12 @@ const inputClass =
   // location, supplier cost or internal notes in URLs or persistent storage.
   const desk = document.querySelector<HTMLFormElement>('form[data-purkins-desk]');
   if (desk) {
+    // A rapid double-click must not create two separate drafts.
+    let submitting = false;
+    desk.addEventListener('submit', (event) => {
+      if (submitting) event.preventDefault();
+      else submitting = true;
+    });
     const locationField = desk.querySelector<HTMLInputElement>('input[name="storage_location"]');
     const locationKey = 'purkins:stock-intake:location:v1';
     if (locationField) {
