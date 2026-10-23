@@ -635,7 +635,7 @@ The live demo is `https://demo-mcp.minshop.dev/mcp` — the buyer tier is open, 
 
 The tier is fixed when the session opens and carried into the Durable Object as props, so a session cannot escalate mid-flight. Unregistered tools are not merely refused — they are absent from `tools/list` and unreachable by name.
 
-**Why a separate Worker** (own `mcp/package.json`, own `node_modules`): the Astro adapter owns the storefront Worker's entry, and the Agents SDK pulls in workerd/miniflare deps that perturb Astro's build if hoisted into the root tree. Keeping it a sibling Worker isolates both.
+**Generic Minshop MCP remains a separately deployable Worker**, with its own `mcp/package.json` for dependency boundaries. The root now declares `mcp/` as an npm workspace and holds the single lockfile, so `npm ci` at the repository root installs both sets. Purkins uses two Workers instead (public storefront and protected Admin+MCP), sharing the same D1; the legacy standalone MCP Worker is not deployed for Purkins.
 
 **Why buyer tools proxy the public JSON API** rather than querying D1: checkout needs reservations, provider adapters, and the secret vault, none of which this Worker has. Routing every buyer tool through the public API also bounds the tier by construction — it can only reach public URLs, so it cannot expose admin data even by mistake. Set `STOREFRONT_URL` to the storefront's origin.
 
@@ -650,7 +650,7 @@ The two list tools accept `limit` and `offset` and return the page alongside `to
 **Auth:** a bearer token gates the *operator* tier only. Set `MCP_TOKEN`; operator clients send `Authorization: Bearer <token>`. An invalid token is a 401, never a silent downgrade to buyer tools. With `MCP_TOKEN` unset the operator tier is unavailable (503 if a header is presented) while the buyer tier keeps working — a store with no token can still sell to agents. (Cloudflare's Workers OAuth Provider is the upgrade for scoped/multi-user operator access.)
 
 ```sh
-cd mcp && npm install && cd ..
+npm ci    # from repository root; includes the MCP workspace
 cp mcp/.dev.vars.example mcp/.dev.vars      # set MCP_TOKEN
 npm run mcp:dev                              # local, shares the storefront's local D1
 npm run mcp:check                            # dry-run build
