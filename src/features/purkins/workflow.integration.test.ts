@@ -41,12 +41,9 @@ describe('Purkins stock intake through demo settlement', () => {
     // real statement separately so the migration is exercised unchanged.
     for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
-      const statements = migrationSql
-        .replace(/^\s*--.*$/gm, '')
-        .split(';')
-        .map((statement: string) => statement.trim())
-        .filter(Boolean);
-      for (const statement of statements) await db.prepare(statement).run();
+      // Run the full cleaned SQL script: migration 0043 includes a SQLite
+      // trigger whose body contains semicolons (unsafe to split on ';').
+      await db.exec(migrationSql.replace(/^\s*--.*$/gm, '').trim());
     }
   }, 30_000);
 
