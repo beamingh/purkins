@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { splitPurkinsMigrationSql } from './migration-test-sql';
 import { Miniflare } from 'miniflare';
 import type { D1Database } from '@cloudflare/workers-types';
 import { getIntake } from './db';
@@ -12,8 +13,11 @@ describe('Purkins location migration 0043', () => {
 
   async function apply(name: string) {
     const raw = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
-    // exec accepts complete SQL scripts, including CREATE TRIGGER bodies.
-    await db.exec(raw.replace(/^\s*--.*$/gm, '').trim());
+    // Execute each prepared statement separately, keeping the entire
+    // CREATE TRIGGER ... BEGIN ... END block together.
+    for (const sql of splitPurkinsMigrationSql(raw)) {
+      await db.prepare(sql).run();
+    }
   }
 
   beforeAll(async () => {
