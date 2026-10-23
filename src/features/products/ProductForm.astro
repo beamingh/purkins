@@ -121,6 +121,21 @@ const inputClass =
       <p class="mt-1 text-xs text-gray-500">Plain text or Markdown — paragraphs, lists, links, and <code>/images/…</code> media render on the product page.</p>
   </div>
 
+  {intakeEnabled && (
+    <section class="rounded-lg border border-line bg-surface p-4 space-y-2" aria-label="Selling price method">
+      <label class="block text-sm font-semibold" for="pricing_mode">How do you want to price this item?</label>
+      <select id="pricing_mode" class={inputClass} name="pricing_mode" data-intake-pricing-mode>
+        <option value="manual" selected={selectedPricingMode === 'manual'}>Manual price — enter selling price directly</option>
+        <option value="cost_based" selected={selectedPricingMode === 'cost_based'}>Cost-based — calculate from purchase cost and markup</option>
+      </select>
+      <p data-intake-manual-help class="text-xs text-muted" hidden={selectedPricingMode !== 'manual'}>
+        Enter the selling price in kwacha below. Purchase cost, exchange rate, overhead
+        and markup are optional. Without those inputs, cost recovery is unknown.
+        Publishing still requires a photo, complete condition and your approval.
+      </p>
+    </section>
+  )}
+
   <div class="grid grid-cols-2 gap-4">
     <div>
       <label class="block text-sm font-medium" for="price">Selling price ({defaultCurrency.toUpperCase()})</label>
@@ -184,19 +199,6 @@ const inputClass =
             <textarea class={inputClass} name="internal_notes" maxlength="2000" rows="3"
               placeholder="Bundle contents, missing pieces, any uncertain details…">{intake?.internal_notes ?? ''}</textarea>
           </label>
-        </div>
-        <div class="border-t border-line pt-4 space-y-2">
-          <label class="block text-sm font-semibold" for="pricing_mode">How do you want to set the selling price?</label>
-          <select id="pricing_mode" class={inputClass} name="pricing_mode" data-intake-pricing-mode>
-            <option value="manual" selected={selectedPricingMode === 'manual'}>Manual price — enter selling price directly</option>
-            <option value="cost_based" selected={selectedPricingMode === 'cost_based'}>Cost-based — calculate from purchase cost and markup</option>
-          </select>
-          <p data-intake-manual-help class="text-xs text-muted" hidden={selectedPricingMode !== 'manual'}>
-            Enter the selling price in kwacha above. Purchase cost, exchange rate,
-            sourcing overhead and markup are optional. Without cost data, margin and
-            cost recovery are unknown. Publishing still requires your approval, a
-            product photo and stock condition marked complete.
-          </p>
         </div>
         <div data-intake-cost-fields hidden={selectedPricingMode === 'manual'} class="space-y-3">
           <div class="grid gap-3 sm:grid-cols-2">
