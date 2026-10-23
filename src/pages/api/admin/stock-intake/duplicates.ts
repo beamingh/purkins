@@ -36,8 +36,13 @@ export const POST: APIRoute = async ({ request }) => {
       WHERE instr(lower(p.name), lower(?)) > 0
          OR (i.supplier_barcode = ?)
          OR (i.sku = ?)
+         OR EXISTS (
+           SELECT 1 FROM product_variants v
+           JOIN purkins_variant_identifiers vi ON vi.variant_id = v.id
+           WHERE v.product_id = p.id AND vi.supplier_barcode = ?
+         )
       ORDER BY p.id DESC LIMIT 8`,
-  ).bind(q, q, q).all<{
+  ).bind(q, q, q, q).all<{
     id: string | null;
     name: string;
     sku: string | null;
