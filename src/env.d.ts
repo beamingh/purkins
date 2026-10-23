@@ -41,6 +41,18 @@ declare namespace App {
   }
 }
 
+// The Admin build imports the legacy MCP handler from mcp/src/index.ts.
+// That module was originally typechecked only under mcp/worker-configuration.d.ts.
+// Supply its narrow Env shape to the root project without adding all generated
+// mcp worker types to Astro's root TypeScript program.
+interface Env extends Cloudflare.Env {
+  MCP_TOKEN: string;
+  STOREFRONT_URL: string;
+  MCP_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
+  STORE_MCP: DurableObjectNamespace;
+  PURKINS_MCP_WRITES_ENABLED?: string;
+}
+
 declare namespace Cloudflare {
   interface Env {
     DB: import('@cloudflare/workers-types').D1Database;
