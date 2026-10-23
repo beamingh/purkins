@@ -61,6 +61,20 @@ function optionalText(form: FormData, name: string, maxLength: number): string |
   return value || null;
 }
 
+/**
+ * Admin accepts either a previously saved location or a new one. New takes
+ * priority when filled. Legacy/MCP callers still send 'storage_location'.
+ * Names remain private free-text paths (e.g. Grey Sack / Blue PEP Bag).
+ */
+function storageLocationFromForm(form: FormData): string | null {
+  if (!form.has('storage_location_existing') && !form.has('storage_location_new')) {
+    return optionalText(form, 'storage_location', 100);
+  }
+  const created = optionalText(form, 'storage_location_new', 100);
+  const existing = optionalText(form, 'storage_location_existing', 100);
+  return created ?? existing;
+}
+
 function currencyAmount(value: string, field: string): number | null {
   if (!value) return null;
   // Exactly two decimals for both ZMW and ZAR. Reject scientific notation.
@@ -130,7 +144,7 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
       size_label: optionalText(form, 'size_label', 60),
       colour: optionalText(form, 'colour', 60),
       age_range: optionalText(form, 'age_range', 60),
-      storage_location: optionalText(form, 'storage_location', 100),
+      storage_location: storageLocationFromForm(form),
       purchase_currency,
       purchase_cost_minor,
       zar_to_zmw,
