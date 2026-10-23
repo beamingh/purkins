@@ -283,11 +283,25 @@ const SECURITY_HEADERS: Record<string, string> = {
 /** Add the security headers, rebuilding when the response's headers are immutable
  *  (e.g. a Response.redirect to a payment provider, or a Cache API hit). */
 function withSecurityHeaders(res: Response): Response {
-  const headers = isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)
+  const prelaunch = isPrelaunchNoindex(env.PRELAUNCH_NOINDEX);
+  const headers = prelaunch
     ? { ...SECURITY_HEADERS, 'x-robots-tag': PRELAUNCH_ROBOTS_HEADER }
     : SECURITY_HEADERS;
+  const apply = (target: Headers) => {
+    for (const [k, v] of Object.entries(headers)) target.set(k, v);
+    // A cached prelaunch response could still contain this header after launch.
+    // Remove only our own directive; preserve unrelated route-level restrictions.
+    if (!prelaunch && target.get('x-robots-tag') === PRELAUNCH_ROBOTS_HEADER) {
+      target.delete('x-robots-tag');
+    }
+    // Do not cache prelaunch HTML with a baked-in noindex meta tag. Otherwise
+    // promoting indexing could temporarily replay old noindex HTML from cache.
+    if (prelaunch && target.get('content-type')?.toLowerCase().includes('text/html')) {
+      target.set('cache-control', 'private, no-store');
+    }
+  };
   try {
-    for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
+    apply(res.headers);
     return res;
   } catch {
     const rebuilt = new Response(res.body, {
@@ -295,7 +309,7 @@ function withSecurityHeaders(res: Response): Response {
       statusText: res.statusText,
       headers: new Headers(res.headers),
     });
-    for (const [k, v] of Object.entries(headers)) rebuilt.headers.set(k, v);
+    apply(rebuilt.headers);
     return rebuilt;
   }
 }
