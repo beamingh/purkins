@@ -48,11 +48,16 @@ export async function listStorageLocations(
  * do not invite a partner until role-level permissions are implemented.
  */
 export async function getIntake(db: D1Database, productId: number): Promise<IntakeRecord | null> {
-  return db.prepare(
-    LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS storage_location
+  // SELECT i.* already includes the legacy storage_location column. Use a
+  // distinct SQL alias: duplicate output names can otherwise hide the new path.
+  const row = await db.prepare(
+    LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS current_location
       FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
       WHERE i.product_id=?`,
-  ).bind(productId).first<IntakeRecord>();
+  ).bind(productId).first<IntakeRecord & { current_location: string | null }>();
+  if (!row) return null;
+  const { current_location, ...intake } = row;
+  return { ...intake, storage_location: current_location };
 }
 
 export async function getIntakesForProducts(
@@ -66,11 +71,14 @@ export async function getIntakesForProducts(
     const batch = productIds.slice(i, i + 100);
     const placeholder = batch.map(() => '?').join(',');
     const { results } = await db.prepare(
-      LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS storage_location
+      LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS current_location
         FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
         WHERE i.product_id IN (${placeholder})`,
-    ).bind(...batch).all<IntakeRecord>();
-    for (const row of results ?? []) output.set(row.product_id, row);
+    ).bind(...batch).all<IntakeRecord & { current_location: string | null }>();
+    for (const row of results ?? []) {
+      const { current_location, ...intake } = row;
+      output.set(row.product_id, { ...intake, storage_location: current_location });
+    }
   }
   return output;
 }
