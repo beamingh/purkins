@@ -12,9 +12,8 @@ describe('Purkins location migration 0043', () => {
 
   async function apply(name: string) {
     const raw = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
-    for (const sql of raw.replace(/^\s*--.*$/gm, '').split(';').map((s) => s.trim()).filter(Boolean)) {
-      await db.prepare(sql).run();
-    }
+    // exec accepts complete SQL scripts, including CREATE TRIGGER bodies.
+    await db.exec(raw.replace(/^\s*--.*$/gm, '').trim());
   }
 
   beforeAll(async () => {
