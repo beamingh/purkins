@@ -16,6 +16,7 @@ import {
   generateItemSku, normalizeSupplierBarcode, parseIntakeFields,
   type IntakeFields, type IntakeRecord,
 } from '../../src/features/purkins/intake';
+import { assignIntakeLocation, getLocation, resolveLegacyLocation } from '../../src/features/purkins/locations';
 
 // Never send private cost, location or supplier codes to the buyer tier.
 // These registrations are invoked ONLY behind the MCP operator-token gate.
@@ -32,6 +33,7 @@ const detailsSchema = z.object({
   colour: z.string().max(60).nullable().optional(),
   age_range: z.string().max(60).nullable().optional(),
   storage_location: z.string().max(100).nullable().optional(),
+  location_id: z.string().regex(/^loc_[0-9a-f]{24}$/).nullable().optional(),
   retail_tag_minor: money.nullable().optional(),
   retail_tag_currency: z.enum(['ZAR', 'ZMW']).optional(),
   pack_count: z.number().int().min(1).max(999).nullable().optional(),
@@ -183,7 +185,16 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
     },
   }, async ({name, description, stock, price_cents, intake, variants}) => {
     // Validate all inputs, including barcodes, before the first D1 write.
-    const fields = parseDetails({...intake, condition_status: intake.condition_status ?? 'review'});
+    if (intake.location_id && !(await getLocation(db, intake.location_id))) {
+      return reply({ error: 'Specified storage location does not exist.' });
+    }
+    const fields = parseDetails({
+      ...intake,
+      // When an immutable ID is supplied, do not also create a duplicate root
+      // from any legacy textual storage path.
+      storage_location: intake.location_id !== undefined ? null : intake.storage_location,
+      condition_status: intake.condition_status ?? 'review',
+    });
     const names = variants.map((v) => v.label.trim().toLowerCase());
     if (new Set(names).size !== names.length) throw new Error('Duplicate variant labels. Include both size and colour in each label.');
     for (const v of variants) normalizeSupplierBarcode(v.supplier_barcode);
@@ -198,6 +209,9 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
     });
     try {
       await insertIntake(db, id, fields);
+      if (intake.location_id !== undefined) {
+        await assignIntakeLocation(db, id, intake.location_id);
+      }
       for (let i = 0; i < variants.length; i++) {
         const v = variants[i]!;
         const sku = v.sku?.trim() || generateItemSku(id) + '-V' + String(i + 1).padStart(2, '0');
@@ -232,6 +246,9 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
     if (!p) return reply({error:'Product not found.'});
     const old = await getIntake(db, p.id);
     if (!old) return reply({error:'No Purkins intake record.'});
+    if (patch?.location_id && !(await getLocation(db, patch.location_id))) {
+      return reply({error:'Specified storage location does not exist.'});
+    }
     const fields = parseDetails({
       ...(old as IntakeRecord),
       ...patch,
@@ -244,6 +261,13 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
       weight_grams: p.weight_grams, requires_shipping: p.requires_shipping,
     });
     await saveIntakeDraft(db, p.id, fields);
+    if (patch?.location_id !== undefined) {
+      await assignIntakeLocation(db, p.id, patch.location_id);
+    } else if (patch && Object.prototype.hasOwnProperty.call(patch, 'storage_location')) {
+      // Legacy string-based MCP callers create or use a single root node.
+      const target = await resolveLegacyLocation(db, patch.storage_location ?? null);
+      await assignIntakeLocation(db, p.id, target);
+    }
     return reply({updated:p.public_id, active:false, status:'draft'});
   });
 
