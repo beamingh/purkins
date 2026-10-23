@@ -403,7 +403,8 @@ const inputClass =
       hints.hidden = true;
       list.replaceChildren();
       if (!terms.length) return;
-      controller = new AbortController();
+      const currentController = new AbortController();
+      controller = currentController;
       try {
         const matches = await Promise.all(terms.map(async (term) => {
           const target = new URL('/api/admin/stock-intake/duplicates', window.location.origin);
@@ -412,14 +413,14 @@ const inputClass =
             credentials: 'same-origin',
             headers: { Accept: 'application/json' },
             cache: 'no-store',
-            signal: controller!.signal,
+            signal: currentController.signal,
           });
           if (!response.ok) throw new Error('Duplicate lookup unavailable');
           const data: { matches?: Array<{ id: string; name: string; sku: string | null }> } =
             await response.json();
           return Array.isArray(data.matches) ? data.matches : [];
         }));
-        if (controller.signal.aborted) return;
+        if (currentController.signal.aborted) return;
         const unique = new Map(matches.flat().filter((m) =>
           typeof m.id === 'string' && m.id.startsWith('prod_') && typeof m.name === 'string',
         ).map((m) => [m.id, m]));
