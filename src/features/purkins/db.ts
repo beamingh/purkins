@@ -117,16 +117,33 @@ export async function saveIntakeDraft(
   productId: number,
   fields: IntakeFields,
 ): Promise<void> {
+  // Legacy text-based editors and MCP callers can change storage_location.
+  // Previously the text changed but location_id kept pointing at the old sack,
+  // so getIntake() still displayed the old path. Keep BOTH columns consistent.
+  // A separate Admin ID picker may assign a chosen child after this draft save.
+  const previous = await getIntake(db, productId);
+  if (!previous) throw new Error('Purkins intake item not found.');
+
+  let nextLocationId: string | null;
+  if (fields.storage_location === previous.storage_location && previous.location_id) {
+    // No location change: retain the stable ID (and its live hierarchy).
+    nextLocationId = previous.location_id;
+  } else {
+    // An empty text location explicitly unassigns the item. A changed
+    // nonempty legacy label becomes a root node, never a guessed hierarchy.
+    nextLocationId = await resolveLegacyLocation(db, fields.storage_location);
+  }
+
   await db.prepare(
     `UPDATE purkins_intake
-      SET size_label=?, colour=?, age_range=?, storage_location=?, purchase_currency=?,
+      SET size_label=?, colour=?, age_range=?, storage_location=?, location_id=?, purchase_currency=?,
           purchase_cost_minor=?, zar_to_zmw=?, overhead_zwm_cents=?, markup_percent=?,
           brand=?, supplier_barcode=?, retail_tag_minor=?, retail_tag_currency=?,
           pack_count=?, condition_status=?, internal_notes=?, pricing_mode=?,
           status='draft', updated_at=datetime('now')
       WHERE product_id=?`,
   ).bind(
-    fields.size_label, fields.colour, fields.age_range, fields.storage_location,
+    fields.size_label, fields.colour, fields.age_range, fields.storage_location, nextLocationId,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
     fields.overhead_zwm_cents, fields.markup_percent,
     fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
