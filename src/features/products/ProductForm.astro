@@ -20,6 +20,8 @@ interface Props {
   showImage?: boolean;
   /** Rapid intake uses the existing safe draft-creation route with a next-item flow. */
   intakeDesk?: boolean;
+  /** Saved private location paths offered to Admin users only. */
+  storageLocations?: string[];
   /** Optional form id, so out-of-tree inputs (e.g. the variants editor) can submit
       with this form via the HTML `form="..."` attribute. */
   formId?: string;
@@ -40,6 +42,7 @@ const {
   selectedCategoryIds = [],
   showImage = true,
   intakeDesk = false,
+  storageLocations = [],
   formId,
   weightUnit = 'g',
   weightRequired = false,
@@ -171,8 +174,21 @@ const inputClass =
             <input class={inputClass} name="age_range" maxlength="60" value={intake?.age_range ?? ''} placeholder="Newborn" />
           </label>
           <label class="text-sm">Storage location
-            <input class={inputClass} name="storage_location" maxlength="100" value={intake?.storage_location ?? ''} placeholder="Sack A / Shelf 1" />
+            <select class={inputClass} name="storage_location_existing" data-intake-existing-location>
+              <option value="" selected={!intake?.storage_location}>Choose a saved location (optional)</option>
+              {storageLocations.map((location) => (
+                <option value={location} selected={location.toLowerCase() === intake?.storage_location?.toLowerCase()}>{location}</option>
+              ))}
+            </select>
           </label>
+          <details class="rounded-md border border-line bg-paper p-3 sm:col-span-2" data-intake-new-location>
+            <summary class="cursor-pointer text-sm font-medium text-brand">+ Create a new storage location</summary>
+            <label class="mt-3 block text-sm">
+              New location name
+              <input class={inputClass} name="storage_location_new" maxlength="100" placeholder="e.g. Grey Sack / Blue PEP Bag" />
+            </label>
+            <p class="mt-2 text-xs text-muted">Save this item to add the location to future selections. If filled, the new location overrides the selection above. Locations are private.</p>
+          </details>
           <label class="text-sm">Items per sellable pack
             <input class={inputClass} type="number" name="pack_count" min="1" max="999" step="1"
               value={intake?.pack_count ?? ''} placeholder="1, 2, 3, 5…" />
@@ -383,6 +399,21 @@ const inputClass =
       if (useButton) useButton.disabled = suggestion === null;
     }
 
+    // Explicit saved-or-new choices work even without JavaScript. When JS is
+    // available, selecting one clears the other so no stale override surprises.
+    const savedLocation = form.querySelector('select[name="storage_location_existing"]') as unknown as HTMLSelectElement | null;
+    const newLocation = form.querySelector<HTMLInputElement>('input[name="storage_location_new"]');
+    const newLocationDetails = form.querySelector('details[data-intake-new-location]') as unknown as HTMLDetailsElement | null;
+    savedLocation?.addEventListener('change', () => {
+      if (savedLocation.value && newLocation) {
+        newLocation.value = '';
+        if (newLocationDetails) newLocationDetails.open = false;
+      }
+    });
+    newLocation?.addEventListener('input', () => {
+      if (newLocation.value.trim() && savedLocation) savedLocation.value = '';
+    });
+
     form.addEventListener('input', update);
     form.addEventListener('change', update);
     useButton?.addEventListener('click', () => {
@@ -403,24 +434,34 @@ const inputClass =
       if (submitting) event.preventDefault();
       else submitting = true;
     });
-    const locationField = desk.querySelector<HTMLInputElement>('input[name="storage_location"]');
+    const locationSelect = desk.querySelector('select[name="storage_location_existing"]') as unknown as HTMLSelectElement | null;
+    const newLocationInput = desk.querySelector<HTMLInputElement>('input[name="storage_location_new"]');
+    const newLocationPanel = desk.querySelector('details[data-intake-new-location]') as unknown as HTMLDetailsElement | null;
     const locationKey = 'purkins:stock-intake:location:v1';
-    if (locationField) {
-      try {
-        const prior = sessionStorage.getItem(locationKey);
-        if (prior && !locationField.value) locationField.value = prior;
-      } catch {
-        // Private browsing may disable sessionStorage: intake still functions.
-      }
-      locationField.addEventListener('input', () => {
-        try {
-          if (locationField.value) sessionStorage.setItem(locationKey, locationField.value);
-          else sessionStorage.removeItem(locationKey);
-        } catch {
-          // Optional convenience only.
+    try {
+      const prior = sessionStorage.getItem(locationKey);
+      if (prior && locationSelect && newLocationInput) {
+        if (Array.from(locationSelect.options).some((option) => option.value === prior)) {
+          locationSelect.value = prior;
+        } else {
+          newLocationInput.value = prior;
+          if (newLocationPanel) newLocationPanel.open = true;
         }
-      });
+      }
+    } catch {
+      // Private browsing may disable sessionStorage; manual selection still works.
     }
+    const rememberLocation = () => {
+      const value = newLocationInput?.value.trim() || locationSelect?.value || '';
+      try {
+        if (value) sessionStorage.setItem(locationKey, value);
+        else sessionStorage.removeItem(locationKey);
+      } catch {
+        // Optional convenience only.
+      }
+    };
+    locationSelect?.addEventListener('change', rememberLocation);
+    newLocationInput?.addEventListener('input', rememberLocation);
 
     const nameField = desk.querySelector<HTMLInputElement>('input[name="name"]');
     const barcodeField = desk.querySelector<HTMLInputElement>('input[name="supplier_barcode"]');
