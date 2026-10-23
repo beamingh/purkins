@@ -9,9 +9,22 @@ import { normalizeIntakeLookup } from '../../../../features/purkins/intakeDesk';
  */
 export const prerender = false;
 
-export const GET: APIRoute = async ({ url }) => {
-  const q = normalizeIntakeLookup(url.searchParams.get('q'));
+export const POST: APIRoute = async ({ request }) => {
+  // Supplier barcodes are private references: accept them in the request body,
+  // never as URLs that get copied into access logs and shared browser history.
   const headers = { 'Cache-Control': 'private, no-store' };
+  if (Number(request.headers.get('content-length') ?? 0) > 2048) {
+    return new Response('Request too large', { status: 413, headers });
+  }
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return new Response('Invalid JSON', { status: 400, headers });
+  }
+  const q = normalizeIntakeLookup(
+    raw && typeof raw === 'object' && 'q' in raw && typeof raw.q === 'string' ? raw.q : null,
+  );
   if (!q) return new Response(JSON.stringify({ matches: [] }), {
     headers: { ...headers, 'Content-Type': 'application/json' },
   });
