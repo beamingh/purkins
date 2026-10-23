@@ -1,4 +1,5 @@
 ---
+import { listStorageLocations } from '../../features/purkins/db';
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import ProductForm from '../../features/products/ProductForm.astro';
@@ -8,6 +9,7 @@ import { shippingFor } from '../../features/shipping/effective';
 import { parsePublicId } from '../../features/ids/publicId';
 
 const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
+const storageLocations = await listStorageLocations(env.DB);
 const error = Astro.url.searchParams.get('error');
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
@@ -59,6 +61,7 @@ const { results: recentDrafts } = await env.DB.prepare(
       submitLabel="Save private draft"
       intakeDesk={true}
       categoryOptions={categoryOptions}
+      storageLocations={storageLocations}
       error={error}
       weightUnit={weightUnit}
       weightRequired={weightRequired}
