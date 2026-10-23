@@ -7,8 +7,8 @@ import { parseProductForm } from '../products/form';
 import { reserveInventory, getActiveReservationItems } from '../orders/reservations';
 import { recordPaidOrder } from '../orders/db';
 import { parseIntakeFields, generateItemSku } from './intake';
-import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
-import { createLocation, moveLocation, assignIntakeLocation, listLocationTree } from './locations';
+import { approveIntake, getIntake, getIntakesForProducts, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
+import { createLocation, moveLocation, assignIntakeLocation, listLocationTree, locationFromForm } from './locations';
 
 /* Isolated in-memory D1; no Wrangler state, remote D1, or real payments.
  * Executes the actual Purkins migration plus Minshop product/order functions.
@@ -135,8 +135,28 @@ describe('Purkins stock intake through demo settlement', () => {
     const after = await getIntake(db, id);
     expect(after?.location_id).toBe(bag);
     expect(after?.storage_location).toBe('House / Storeroom / Grey Sack / Blue PEP Bag');
+    expect((await getIntakesForProducts(db, [id])).get(id)?.storage_location)
+      .toBe('House / Storeroom / Grey Sack / Blue PEP Bag');
     expect((await getProduct(db, id))).not.toHaveProperty('location_id');
     expect((await listLocationTree(db)).find((l) => l.id === bag)?.depth).toBe(3);
+  });
+
+  it('creates child stock locations directly from Admin form inputs', async () => {
+    const sack = await createLocation(db, 'Intake Form Sack', 'sack', null);
+    const form = new FormData();
+    form.set('location_id', '');
+    form.set('storage_location_new', 'New Blue Bag');
+    form.set('storage_location_parent_id', sack);
+    form.set('storage_location_kind', 'bag');
+    const id = await locationFromForm(db, form);
+    expect(id).toMatch(/^loc_[0-9a-f]{24}$/);
+    const bag = (await listLocationTree(db)).find((l) => l.id === id);
+    expect(bag).toMatchObject({ parent_id: sack, kind: 'bag', path: 'Intake Form Sack / New Blue Bag' });
+    const form2 = new FormData();
+    form2.set('location_id', id!);
+    expect(await locationFromForm(db, form2)).toBe(id);
+    form2.set('location_id', 'loc_000000000000000000000000');
+    await expect(locationFromForm(db, form2)).rejects.toThrow(/does not exist/);
   });
 
   it('prevents cycles, self-parenting and case-insensitive duplicate siblings', async () => {
