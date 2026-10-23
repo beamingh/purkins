@@ -1,6 +1,6 @@
 /// <reference types="vitest/config" />
 import { getViteConfig } from 'astro/config';
-import CopyFailuresReporter from './test/support/copy-failures-reporter';
+import CopyFailuresReporter from './test/support/copy-failures-reporter.ts';
 import { resolveTheme } from './scripts/themes.mjs';
 import { themeCssPath, writeThemeArtifacts } from './scripts/theme-css.mjs';
 
