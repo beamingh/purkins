@@ -4,14 +4,15 @@
 repository is **not** a Payload CMS project. Payload and Next.js are
 discontinued and retained only as historical Git references.
 
-**Status (23 October 2026):** active work is on
-`feat/purkins-stock-cataloguing`, currently proposed in a **draft PR to
-`main`**. The root `main` branch is the intended integration target,
-not yet a tested/deployed storefront. **No branch is approved for
-production deployment or live stock migration.**
+**Status (23 October 2026):** Minshop and the Purkins private stock
+cataloguing implementation were merged into **`main`** through
+[PR #2](https://github.com/beamingh/purkins/pull/2). `main` is now the
+active development base; the earlier feature branches are historical.
+**This source merge was not a production deployment or approval to migrate
+live stock, enable MCP writes, or run remote database migrations.**
 
 - [Purkins project setup and safety guide](PURKINS.md)
-- [Active and superseded branch register](docs/BRANCH_STATUS.md)
+- [Integrated source and release-readiness checklist](docs/BRANCH_STATUS.md)
 - [Stock intake model and example stock handling](docs/purkins-stock-cataloguing.md)
 
 Owner-facing product creation starts as private inventory; buyer-facing
