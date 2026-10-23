@@ -22,7 +22,6 @@ interface Props {
   /** Rapid intake uses the existing safe draft-creation route with a next-item flow. */
   intakeDesk?: boolean;
   /** Saved private location paths offered to Admin users only. */
-  storageLocations?: string[];
   locationOptions?: LocationOption[];
   initialLocationId?: string | null;
   /** Optional form id, so out-of-tree inputs (e.g. the variants editor) can submit
@@ -45,7 +44,6 @@ const {
   selectedCategoryIds = [],
   showImage = true,
   intakeDesk = false,
-  storageLocations = [],
   locationOptions = [],
   initialLocationId = null,
   formId,
