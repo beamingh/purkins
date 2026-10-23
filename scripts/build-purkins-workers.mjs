@@ -29,8 +29,11 @@ const original = join(root, 'wrangler.jsonc');
 const backup = join(root, '.instances', 'split-build', 'wrangler.original.jsonc');
 const astro = join(root, 'node_modules', 'astro', 'bin', 'astro.mjs');
 if (!existsSync(astro)) throw new Error('Run npm ci first.');
-if (!existsSync(join(root, 'mcp', 'node_modules', 'agents'))) {
-  throw new Error('Admin+MCP build requires npm ci --prefix mcp.');
+// A single root "npm ci" installs the MCP workspace. npm may hoist its
+// dependencies to root node_modules or keep them under mcp/node_modules.
+if (!existsSync(join(root, 'node_modules', 'agents')) &&
+    !existsSync(join(root, 'mcp', 'node_modules', 'agents'))) {
+  throw new Error('Admin+MCP dependencies missing: run npm ci at the repository root.');
 }
 if (existsSync(backup)) {
   throw new Error('Unrecovered Wrangler backup exists: .instances/split-build/wrangler.original.jsonc');
