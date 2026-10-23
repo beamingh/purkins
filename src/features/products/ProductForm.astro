@@ -222,7 +222,6 @@ const inputClass =
             <input class={inputClass} type="number" inputmode="numeric" name="markup_percent" min="0" max="500" step="1"
               value={intake?.markup_percent ?? ''} placeholder="e.g. 35" />
           </label>
-        </div>
           </div>
         <div class="rounded-md bg-paper p-3 text-sm">
           Estimated landed cost: <strong data-intake-landed>{intakeLanded !== null ? `K${(intakeLanded / 100).toFixed(2)}` : 'Enter cost to calculate'}</strong>
