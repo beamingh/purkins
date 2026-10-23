@@ -18,6 +18,8 @@ interface Props {
   selectedCategoryIds?: number[];
   /** Show the single-image upload (true on create; edit uses the gallery). */
   showImage?: boolean;
+  /** Rapid intake uses the existing safe draft-creation route with a next-item flow. */
+  intakeDesk?: boolean;
   /** Optional form id, so out-of-tree inputs (e.g. the variants editor) can submit
       with this form via the HTML `form="..."` attribute. */
   formId?: string;
@@ -37,6 +39,7 @@ const {
   categoryOptions = [],
   selectedCategoryIds = [],
   showImage = true,
+  intakeDesk = false,
   formId,
   weightUnit = 'g',
   weightRequired = false,
@@ -64,6 +67,7 @@ const inputClass =
   id={formId}
   class="max-w-lg space-y-4"
   data-purkins-intake={intakeEnabled ? '' : undefined}
+  data-purkins-desk={intakeDesk ? '' : undefined}
 >
   {
     error && (
@@ -87,6 +91,12 @@ const inputClass =
   <div>
     <label class="block text-sm font-medium" for="name">Name</label>
     <input id="name" name="name" type="text" required value={product?.name ?? ''} class={inputClass} />
+    {intakeDesk && (
+      <div data-intake-duplicates hidden class="mt-2 rounded-md border border-line bg-paper px-3 py-2 text-xs">
+        <p class="font-semibold">Possible existing stock — check before creating a duplicate</p>
+        <ul data-intake-duplicate-list class="mt-1 space-y-1"></ul>
+      </div>
+    )}
   </div>
 
   <div>
@@ -153,8 +163,8 @@ const inputClass =
           </label>
           <label class="text-sm">Stock condition
             <select class={inputClass} name="condition_status">
-              <option value="complete" selected={!intake || (intake.condition_status ?? 'complete') === 'complete'}>Complete, new</option>
-              <option value="review" selected={intake?.condition_status === 'review'}>Needs checking</option>
+              <option value="complete" selected={(!intake && !intakeDesk) || (intake && (intake.condition_status ?? 'complete') === 'complete')}>Complete, new</option>
+              <option value="review" selected={(!intake && intakeDesk) || intake?.condition_status === 'review'}>Needs checking</option>
               <option value="incomplete" selected={intake?.condition_status === 'incomplete'}>Incomplete / missing pieces</option>
             </select>
           </label>
@@ -307,9 +317,20 @@ const inputClass =
   <input type="hidden" name="currency" value={defaultCurrency} />
 
   <div class="flex gap-3 pt-2">
-    <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
-      {submitLabel}
-    </button>
+    {intakeDesk ? (
+      <>
+        <button type="submit" name="after_create" value="next" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
+          Save private draft &amp; next
+        </button>
+        <button type="submit" class="rounded-md border border-line px-4 py-2 text-sm hover:bg-surface">
+          Save &amp; view list
+        </button>
+      </>
+    ) : (
+      <button type="submit" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
+        {submitLabel}
+      </button>
+    )}
     <a href="/admin/products" class="rounded-md border border-line px-5 py-2 hover:bg-surface">Cancel</a>
   </div>
 </form>
@@ -343,5 +364,86 @@ const inputClass =
       priceField.focus();
     });
     update();
+  }
+
+  // Keep only the shared physical location in this tab. Never put private
+  // location, supplier cost or internal notes in URLs or persistent storage.
+  const desk = document.querySelector<HTMLFormElement>('form[data-purkins-desk]');
+  if (desk) {
+    const locationField = desk.querySelector<HTMLInputElement>('input[name="storage_location"]');
+    const locationKey = 'purkins:stock-intake:location:v1';
+    if (locationField) {
+      try {
+        const prior = sessionStorage.getItem(locationKey);
+        if (prior && !locationField.value) locationField.value = prior;
+      } catch {
+        // Private browsing may disable sessionStorage: intake still functions.
+      }
+      locationField.addEventListener('input', () => {
+        try {
+          if (locationField.value) sessionStorage.setItem(locationKey, locationField.value);
+          else sessionStorage.removeItem(locationKey);
+        } catch {
+          // Optional convenience only.
+        }
+      });
+    }
+
+    const nameField = desk.querySelector<HTMLInputElement>('input[name="name"]');
+    const barcodeField = desk.querySelector<HTMLInputElement>('input[name="supplier_barcode"]');
+    const hints = desk.querySelector<HTMLElement>('[data-intake-duplicates]');
+    const list = desk.querySelector<HTMLElement>('[data-intake-duplicate-list]');
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let controller: AbortController | undefined;
+    async function checkDuplicates() {
+      if (!hints || !list) return;
+      const terms = [...new Set([barcodeField?.value.trim() ?? '', nameField?.value.trim() ?? ''])]
+        .filter((term) => term.length >= 3 && term.length <= 100);
+      controller?.abort();
+      hints.hidden = true;
+      list.replaceChildren();
+      if (!terms.length) return;
+      controller = new AbortController();
+      try {
+        const matches = await Promise.all(terms.map(async (term) => {
+          const target = new URL('/api/admin/stock-intake/duplicates', window.location.origin);
+          target.searchParams.set('q', term);
+          const response = await fetch(target, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+            signal: controller!.signal,
+          });
+          if (!response.ok) throw new Error('Duplicate lookup unavailable');
+          const data: { matches?: Array<{ id: string; name: string; sku: string | null }> } =
+            await response.json();
+          return Array.isArray(data.matches) ? data.matches : [];
+        }));
+        if (controller.signal.aborted) return;
+        const unique = new Map(matches.flat().filter((m) =>
+          typeof m.id === 'string' && m.id.startsWith('prod_') && typeof m.name === 'string',
+        ).map((m) => [m.id, m]));
+        for (const m of unique.values()) {
+          const li = document.createElement('li');
+          const a = document.createElement('a');
+          a.href = `/admin/products/${encodeURIComponent(m.id)}/edit`;
+          a.textContent = m.sku ? `${m.name} · ${m.sku}` : m.name;
+          a.className = 'underline hover:text-brand';
+          li.appendChild(a);
+          list.appendChild(li);
+        }
+        hints.hidden = unique.size === 0;
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') return;
+        // Network issues must never block the operator from recording a draft.
+        hints.hidden = true;
+      }
+    }
+    for (const field of [nameField, barcodeField]) {
+      field?.addEventListener('input', () => {
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => { void checkDuplicates(); }, 450);
+      });
+    }
   }
 </script>
