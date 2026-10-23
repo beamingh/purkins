@@ -6,6 +6,7 @@ import { listCategories } from '../features/categories/db';
 import { listPublishedPages } from '../features/pages/db';
 import { catalogPath } from '../features/settings/home';
 import { publicOrigin } from '../features/http/origin';
+import { isPrelaunchNoindex } from '../features/seo/prelaunch';
 
 export const prerender = false;
 
@@ -41,6 +42,13 @@ export function sitemapLocs(
 // Dynamic sitemap: storefront + every active product, category, and published page. Slugs are
 // URL-safe (a-z0-9-), so no XML escaping is needed.
 export const GET: APIRoute = async ({ url, locals }) => {
+  // Do not advertise product URLs while this same store is in prelaunch mode.
+  if (isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)) {
+    return new Response('Sitemap unavailable before launch.', {
+      status: 404,
+      headers: { 'cache-control': 'private, no-store' },
+    });
+  }
   const origin = publicOrigin(url.origin, env.CANONICAL_ORIGIN);
   const total = await countProducts(env.DB);
   const products = total > 0 ? await listProducts(env.DB, total, 0) : [];

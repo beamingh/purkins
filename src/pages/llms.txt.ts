@@ -7,6 +7,7 @@ import { listProducts, countProducts } from '../features/products/db';
 import { listCategories } from '../features/categories/db';
 import { listPublishedPages } from '../features/pages/db';
 import { publicOrigin } from '../features/http/origin';
+import { isPrelaunchNoindex } from '../features/seo/prelaunch';
 
 export const prerender = false;
 
@@ -23,6 +24,12 @@ const oneLine = (s: string | null, max = 100) => {
 // for LLMs/agents. Beyond the usual catalog, it documents the JSON checkout so an
 // agentic buyer can go from "what's for sale" to "place the order" without scraping.
 export const GET: APIRoute = async ({ url }) => {
+  if (isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)) {
+    return new Response('Agent catalog unavailable before launch.', {
+      status: 404,
+      headers: { 'cache-control': 'private, no-store' },
+    });
+  }
   const origin = publicOrigin(url.origin, env.CANONICAL_ORIGIN);
   const { storeName, currency } = getConfig();
 
