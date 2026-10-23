@@ -85,7 +85,12 @@ for (const [target, content] of [
 }
 mkdirSync(join(root, '.instances', 'split-build'), { recursive: true });
 writeThemeArtifacts();
-for (const target of ['public', 'admin']) prepareWorkerSource(root, target);
+for (const target of ['public', 'admin']) {
+  prepareWorkerSource(root, target);
+  // The Astro route-resolved hook regenerates this only after a successful
+  // source/manifest check. Never accept a stale file from an earlier build.
+  rmSync(join(root, '.instances', 'split-build', target, 'routes.json'), { force: true });
+}
 
 copyFileSync(original, backup, constants.COPYFILE_EXCL);
 try {
@@ -103,6 +108,8 @@ try {
     if (result.error || result.status !== 0) {
       throw new Error('Purkins ' + target + ' Worker build failed.');
     }
+    const routes = join(root, '.instances', 'split-build', target, 'routes.json');
+    if (!existsSync(routes)) throw new Error('Missing verified Astro route list for ' + target);
     const output = join(root, 'dist', target, 'server', 'wrangler.json');
     if (!existsSync(output)) throw new Error('Missing compiled ' + target + ' Worker config.');
     const built = JSON.parse(readFileSync(output, 'utf8'));
