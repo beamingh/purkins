@@ -39,6 +39,7 @@ import { CACHE_TAG } from '../../../../features/cache/tags';
 import { purgeCacheTags } from '../../../../features/cache/purge';
 import { parseIntakeFields } from '../../../../features/purkins/intake';
 import { getIntake, saveIntakeDraft, removeIntake } from '../../../../features/purkins/db';
+import { locationFromForm, assignIntakeLocation } from '../../../../features/purkins/locations';
 
 export const prerender = false;
 
@@ -152,6 +153,16 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   const badReference = await resolveVariantFormIds(form, env.DB, id);
   if (badReference) return fail(badReference);
 
+  // Resolve before changing the product; invalid/stale location IDs fail closed.
+  let selectedLocationId: string | null = null;
+  if (intake) {
+    try {
+      selectedLocationId = await locationFromForm(env.DB, form);
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : 'Invalid storage location.');
+    }
+  }
+
   // The uploaded key is NOT written to products.image_key here: that reference
   // would be unguarded, and the media row is deletable until something claims
   // it. The gallery claim below is guarded, and syncPrimaryImage then derives
@@ -198,6 +209,7 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   await updateProduct(env.DB, id, { ...parsed.data, active: intake ? 0 : parsed.data.active, image_key, slug });
   if (parsedIntake && 'data' in parsedIntake) {
     await saveIntakeDraft(env.DB, id, parsedIntake.data);
+    await assignIntakeLocation(env.DB, id, selectedLocationId);
   }
   if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) {
     await setProductFile(env.DB, id, await uploadDigitalFile(getFileStorage(), deliverable));

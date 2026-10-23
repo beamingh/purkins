@@ -5,6 +5,7 @@ import { getConfig, toMajorUnits, currencyDecimals } from '../../config';
 import { formatWeightValue, type WeightUnit } from '../shipping/weight';
 import { attachmentActive } from '../digitalDelivery/rollout.ts';
 import { landedCostCents, suggestedSellingPriceCents, type IntakeRecord } from '../purkins/intake';
+import type { LocationOption } from '../purkins/locations';
 
 interface Props {
   action: string;
@@ -21,7 +22,8 @@ interface Props {
   /** Rapid intake uses the existing safe draft-creation route with a next-item flow. */
   intakeDesk?: boolean;
   /** Saved private location paths offered to Admin users only. */
-  storageLocations?: string[];
+  locationOptions?: LocationOption[];
+  initialLocationId?: string | null;
   /** Optional form id, so out-of-tree inputs (e.g. the variants editor) can submit
       with this form via the HTML `form="..."` attribute. */
   formId?: string;
@@ -42,7 +44,8 @@ const {
   selectedCategoryIds = [],
   showImage = true,
   intakeDesk = false,
-  storageLocations = [],
+  locationOptions = [],
+  initialLocationId = null,
   formId,
   weightUnit = 'g',
   weightRequired = false,
@@ -173,22 +176,38 @@ const inputClass =
           <label class="text-sm">Age range
             <input class={inputClass} name="age_range" maxlength="60" value={intake?.age_range ?? ''} placeholder="Newborn" />
           </label>
-          <label class="text-sm">Storage location
-            <select class={inputClass} name="storage_location_existing" data-intake-existing-location>
-              <option value="" selected={!intake?.storage_location}>Choose a saved location (optional)</option>
-              {storageLocations.map((location) => (
-                <option value={location} selected={location.toLowerCase() === intake?.storage_location?.toLowerCase()}>{location}</option>
+          <label class="text-sm sm:col-span-2">Storage location (private)
+            <select class={inputClass} name="location_id" data-intake-existing-location>
+              <option value="" selected={!(intake?.location_id ?? initialLocationId)}>Unassigned — choose a location</option>
+              {locationOptions.map((location) => (
+                <option value={location.id} selected={location.id === (intake?.location_id ?? initialLocationId)}>{location.path}</option>
               ))}
             </select>
           </label>
           <details class="rounded-md border border-line bg-paper p-3 sm:col-span-2" data-intake-new-location>
-            <summary class="cursor-pointer text-sm font-medium text-brand">+ Create a new storage location</summary>
-            <label class="mt-3 block text-sm">
-              New location name
-              <input class={inputClass} name="storage_location_new" maxlength="100" placeholder="e.g. Grey Sack / Blue PEP Bag" />
-            </label>
-            <p class="mt-2 text-xs text-muted">Save this item to add the location to future selections. If filled, the new location overrides the selection above. Locations are private.</p>
+            <summary class="cursor-pointer text-sm font-medium text-brand">+ Create a new location or child container</summary>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="text-sm sm:col-span-2">New location name
+                <input class={inputClass} name="storage_location_new" maxlength="100" placeholder="e.g. Blue PEP Bag" />
+              </label>
+              <label class="text-sm">Type
+                <select class={inputClass} name="storage_location_kind">
+                  <option value="other">Other</option><option value="site">Site</option>
+                  <option value="room">Room</option><option value="shelf">Shelf</option>
+                  <option value="sack">Sack</option><option value="bag">Bag</option>
+                  <option value="bin">Bin</option>
+                </select>
+              </label>
+              <label class="text-sm">Inside (parent)
+                <select class={inputClass} name="storage_location_parent_id">
+                  <option value="">Top level</option>
+                  {locationOptions.map((location) => (<option value={location.id}>{location.path}</option>))}
+                </select>
+              </label>
+            </div>
+            <p class="mt-2 text-xs text-muted">A new location is saved with this item. Moving its parent later updates the displayed path of everything inside, without changing item references.</p>
           </details>
+          <p class="text-xs sm:col-span-2"><a href="/admin/locations" class="font-medium text-brand hover:underline">Manage locations and move sacks or bags &rarr;</a></p>
           <label class="text-sm">Items per sellable pack
             <input class={inputClass} type="number" name="pack_count" min="1" max="999" step="1"
               value={intake?.pack_count ?? ''} placeholder="1, 2, 3, 5…" />
@@ -401,7 +420,7 @@ const inputClass =
 
     // Explicit saved-or-new choices work even without JavaScript. When JS is
     // available, selecting one clears the other so no stale override surprises.
-    const savedLocation = form.querySelector('select[name="storage_location_existing"]') as unknown as HTMLSelectElement | null;
+    const savedLocation = form.querySelector('select[name="location_id"]') as unknown as HTMLSelectElement | null;
     const newLocation = form.querySelector<HTMLInputElement>('input[name="storage_location_new"]');
     const newLocationDetails = form.querySelector('details[data-intake-new-location]') as unknown as HTMLDetailsElement | null;
     savedLocation?.addEventListener('change', () => {
@@ -434,28 +453,27 @@ const inputClass =
       if (submitting) event.preventDefault();
       else submitting = true;
     });
-    const locationSelect = desk.querySelector('select[name="storage_location_existing"]') as unknown as HTMLSelectElement | null;
+    const locationSelect = desk.querySelector('select[name="location_id"]') as unknown as HTMLSelectElement | null;
     const newLocationInput = desk.querySelector<HTMLInputElement>('input[name="storage_location_new"]');
-    const newLocationPanel = desk.querySelector('details[data-intake-new-location]') as unknown as HTMLDetailsElement | null;
-    const locationKey = 'purkins:stock-intake:location:v1';
+    const locationKey = 'purkins:stock-intake:location-id:v2';
     try {
+      // Server-side saved-item selection takes precedence on Save & Next.
+      const serverSelection = locationSelect?.value;
       const prior = sessionStorage.getItem(locationKey);
-      if (prior && locationSelect && newLocationInput) {
-        if (Array.from(locationSelect.options).some((option) => option.value === prior)) {
-          locationSelect.value = prior;
-        } else {
-          newLocationInput.value = prior;
-          if (newLocationPanel) newLocationPanel.open = true;
-        }
+      if (serverSelection) sessionStorage.setItem(locationKey, serverSelection);
+      else if (prior && locationSelect && Array.from(locationSelect.options).some((option) => option.value === prior)) {
+        locationSelect.value = prior;
       }
     } catch {
       // Private browsing may disable sessionStorage; manual selection still works.
     }
     const rememberLocation = () => {
-      const value = newLocationInput?.value.trim() || locationSelect?.value || '';
+      // Only stable location IDs are remembered; new names are selected after
+      // the server creates their IDs and returns to the next intake page.
+      const value = locationSelect?.value || '';
       try {
         if (value) sessionStorage.setItem(locationKey, value);
-        else sessionStorage.removeItem(locationKey);
+        else if (!newLocationInput?.value.trim()) sessionStorage.removeItem(locationKey);
       } catch {
         // Optional convenience only.
       }

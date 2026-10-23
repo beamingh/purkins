@@ -42,17 +42,25 @@ Run it locally and check fresh/upgrade paths before any staging rollout.
 - **Original retail tag** (e.g. R69.99) is a reference, *not* purchase cost. Keep
   retail_tag_minor and purchase_cost_minor separate. Never infer exchange rate, overhead,
   purchase cost, markup or ZMW selling price from the supplier tag.
-- **Storage location** is a private path such as
-  `Grey Sack / Blue PEP Plastic Bag` or `Pick n Pay White Bag A`.
-  In Admin stock intake and product editing, choose an existing location
-  from the selector or expand **Create a new storage location** and type
-  a new name. The new location is stored with the item and appears in the
-  selector for subsequent items; no separate location-management table or
-  migration is needed for this first version. If both inputs are supplied,
-  the new name takes precedence. Blank selection is allowed while stock
-  is being sorted. On the Rapid Intake Desk, the last location is carried
-  across the next-item form in that browser tab. Paths never appear in
-  buyer-facing fields or redirects.
+- **Storage locations** are private, stable records (`loc_...`) with an optional
+  parent, such as `House → Bedroom → Grey Sack → Blue PEP Bag`. A room, sack,
+  bag, shelf or bin can contain child locations. Add locations in the protected
+  `/admin/locations` page or create a child inline from the intake form.
+  Choose a location by its full path, but save **its immutable ID**, not its
+  current display path. Moving Grey Sack changes the resolved path for every
+  nested bag and attached product without mass product updates; creating
+  self/descendant cycles or duplicate sibling names is blocked.
+- **Backward-compatible migration** `0043_purkins_location_tree.sql`
+  creates `purkins_locations`, adds a private `location_id` reference to
+  `purkins_intake` and backfills old free-text names as independent root
+  nodes. Existing slash-delimited labels are not automatically parsed into
+  containers because their structure cannot be inferred reliably. The
+  original text column remains as a legacy fallback; the Admin derives live
+  paths via the hierarchy. Old MCP string-based intake is supported as a
+  one-node root reference for now.
+- **Multiple stock locations per size** are *not yet supported*: this version
+  stores one primary location per intake/product. A future per-variant stock
+  placement ledger will separately track quantities at several sites.
 - **Unknown counts**: use zero stock and condition_status=review, and record
   'Quantity not counted' in notes. Zero here is a safe placeholder, not a confirmed count.
 - **Incomplete or questionable packs**: condition_status=incomplete/review, describe
@@ -100,7 +108,7 @@ stock active or retain approval through edits. New Admin products remain private
 
 ## Deployment and limitations
 
-Apply migrations 0040, 0041 and 0042 to the same D1 bound to both Workers before
+Apply migrations 0040, 0041, 0042 and 0043 to the same D1 bound to both Workers before
 deploying either updated Worker. Production changes require owner approval:
 no inventory was imported by this feature, no live D1 was touched.
 

@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import { assignIntakeLocation, resolveLegacyLocation } from './locations';
 import {
   normalizeSupplierBarcode,
   generateItemSku,
@@ -6,6 +7,15 @@ import {
   type IntakeFields,
   type IntakeRecord,
 } from './intake';
+
+/** Read paths through the live location tree. The legacy text snapshot is only a fallback.
+ * Moving a sack automatically changes all child paths without touching product rows. */
+const LOCATION_CTE = `WITH RECURSIVE location_paths(id, path) AS (
+  SELECT id, name FROM purkins_locations WHERE parent_id IS NULL
+  UNION ALL
+  SELECT child.id, location_paths.path || ' / ' || child.name
+  FROM purkins_locations child JOIN location_paths ON child.parent_id = location_paths.id
+)`;
 
 /**
  * Existing private storage paths, to power the Admin intake selector.
@@ -38,8 +48,16 @@ export async function listStorageLocations(
  * do not invite a partner until role-level permissions are implemented.
  */
 export async function getIntake(db: D1Database, productId: number): Promise<IntakeRecord | null> {
-  return db.prepare('SELECT * FROM purkins_intake WHERE product_id = ?')
-    .bind(productId).first<IntakeRecord>();
+  // SELECT i.* already includes the legacy storage_location column. Use a
+  // distinct SQL alias: duplicate output names can otherwise hide the new path.
+  const row = await db.prepare(
+    LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS current_location
+      FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
+      WHERE i.product_id=?`,
+  ).bind(productId).first<IntakeRecord & { current_location: string | null }>();
+  if (!row) return null;
+  const { current_location, ...intake } = row;
+  return { ...intake, storage_location: current_location };
 }
 
 export async function getIntakesForProducts(
@@ -53,9 +71,14 @@ export async function getIntakesForProducts(
     const batch = productIds.slice(i, i + 100);
     const placeholder = batch.map(() => '?').join(',');
     const { results } = await db.prepare(
-      `SELECT * FROM purkins_intake WHERE product_id IN (${placeholder})`,
-    ).bind(...batch).all<IntakeRecord>();
-    for (const row of results ?? []) output.set(row.product_id, row);
+      LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS current_location
+        FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
+        WHERE i.product_id IN (${placeholder})`,
+    ).bind(...batch).all<IntakeRecord & { current_location: string | null }>();
+    for (const row of results ?? []) {
+      const { current_location, ...intake } = row;
+      output.set(row.product_id, { ...intake, storage_location: current_location });
+    }
   }
   return output;
 }
@@ -82,6 +105,10 @@ export async function insertIntake(
     fields.condition_status ?? 'complete', fields.internal_notes ?? null,
     fields.pricing_mode ?? 'cost_based',
   ).run();
+  if (fields.storage_location) {
+    const locationId = await resolveLegacyLocation(db, fields.storage_location);
+    await assignIntakeLocation(db, productId, locationId);
+  }
 }
 
 /** Saving an intake item always revokes approval. Update product.active=0 first. */
@@ -90,16 +117,33 @@ export async function saveIntakeDraft(
   productId: number,
   fields: IntakeFields,
 ): Promise<void> {
+  // Legacy text-based editors and MCP callers can change storage_location.
+  // Previously the text changed but location_id kept pointing at the old sack,
+  // so getIntake() still displayed the old path. Keep BOTH columns consistent.
+  // A separate Admin ID picker may assign a chosen child after this draft save.
+  const previous = await getIntake(db, productId);
+  if (!previous) throw new Error('Purkins intake item not found.');
+
+  let nextLocationId: string | null;
+  if (fields.storage_location === previous.storage_location && previous.location_id) {
+    // No location change: retain the stable ID (and its live hierarchy).
+    nextLocationId = previous.location_id;
+  } else {
+    // An empty text location explicitly unassigns the item. A changed
+    // nonempty legacy label becomes a root node, never a guessed hierarchy.
+    nextLocationId = await resolveLegacyLocation(db, fields.storage_location);
+  }
+
   await db.prepare(
     `UPDATE purkins_intake
-      SET size_label=?, colour=?, age_range=?, storage_location=?, purchase_currency=?,
+      SET size_label=?, colour=?, age_range=?, storage_location=?, location_id=?, purchase_currency=?,
           purchase_cost_minor=?, zar_to_zmw=?, overhead_zwm_cents=?, markup_percent=?,
           brand=?, supplier_barcode=?, retail_tag_minor=?, retail_tag_currency=?,
           pack_count=?, condition_status=?, internal_notes=?, pricing_mode=?,
           status='draft', updated_at=datetime('now')
       WHERE product_id=?`,
   ).bind(
-    fields.size_label, fields.colour, fields.age_range, fields.storage_location,
+    fields.size_label, fields.colour, fields.age_range, fields.storage_location, nextLocationId,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
     fields.overhead_zwm_cents, fields.markup_percent,
     fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,

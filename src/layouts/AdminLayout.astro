@@ -12,6 +12,7 @@ import '../styles/admin.css';
 type Section =
   | 'dashboard'
   | 'products'
+  | 'locations'
   | 'orders'
   | 'customers'
   | 'categories'
@@ -47,6 +48,7 @@ const inventoryExceptionCount = await countUnresolvedInventoryExceptions(env.DB)
 const nav: { key: Section; label: string; href: string }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/admin' },
   { key: 'products', label: 'Products', href: '/admin/products' },
+  { key: 'locations', label: 'Stock locations', href: '/admin/locations' },
   { key: 'orders', label: 'Orders', href: '/admin/orders' },
   { key: 'customers', label: 'Customers', href: '/admin/customers' },
   { key: 'categories', label: 'Categories', href: '/admin/categories' },

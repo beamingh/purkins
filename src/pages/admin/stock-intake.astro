@@ -1,5 +1,5 @@
 ---
-import { listStorageLocations } from '../../features/purkins/db';
+import { listLocationTree } from '../../features/purkins/locations';
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import ProductForm from '../../features/products/ProductForm.astro';
@@ -9,15 +9,15 @@ import { shippingFor } from '../../features/shipping/effective';
 import { parsePublicId } from '../../features/ids/publicId';
 
 const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
-const storageLocations = await listStorageLocations(env.DB);
+const locationOptions = await listLocationTree(env.DB);
 const error = Astro.url.searchParams.get('error');
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
 const created = parsePublicId(Astro.url.searchParams.get('created') ?? '', 'product');
 const savedItem = created ? await env.DB.prepare(
-  'SELECT p.public_id AS id, p.name, i.sku FROM products p ' +
+  'SELECT p.public_id AS id, p.name, i.sku, i.location_id FROM products p ' +
   'JOIN purkins_intake i ON i.product_id=p.id WHERE p.public_id=? AND p.active=0',
-).bind(created).first<{id: string; name: string; sku: string}>() : null;
+).bind(created).first<{id: string; name: string; sku: string; location_id: string | null}>() : null;
 const saved = Astro.url.searchParams.get('saved') === '1';
 // Recent private drafts help an operator recover a saved item without entering
 // a barcode or navigating across the full product list.
@@ -60,8 +60,9 @@ const { results: recentDrafts } = await env.DB.prepare(
       action="/api/admin/products"
       submitLabel="Save private draft"
       intakeDesk={true}
+      initialLocationId={savedItem?.location_id ?? null}
       categoryOptions={categoryOptions}
-      storageLocations={storageLocations}
+      locationOptions={locationOptions}
       error={error}
       weightUnit={weightUnit}
       weightRequired={weightRequired}

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { splitPurkinsMigrationSql } from './migration-test-sql';
 import { Miniflare } from 'miniflare';
 import type { D1Database } from '@cloudflare/workers-types';
 import { createProduct, getProduct, listProducts, updateProduct } from '../products/db';
@@ -7,7 +8,8 @@ import { parseProductForm } from '../products/form';
 import { reserveInventory, getActiveReservationItems } from '../orders/reservations';
 import { recordPaidOrder } from '../orders/db';
 import { parseIntakeFields, generateItemSku } from './intake';
-import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
+import { approveIntake, getIntake, getIntakesForProducts, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
+import { createLocation, moveLocation, assignIntakeLocation, listLocationTree, locationFromForm } from './locations';
 
 /* Isolated in-memory D1; no Wrangler state, remote D1, or real payments.
  * Executes the actual Purkins migration plus Minshop product/order functions.
@@ -38,14 +40,13 @@ describe('Purkins stock intake through demo settlement', () => {
     for (const sql of schema) await db.exec(sql);
     // D1's exec() treats comment-only fragments as empty statements. Run each
     // real statement separately so the migration is exercised unchanged.
-    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql']) {
+    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
-      const statements = migrationSql
-        .replace(/^\s*--.*$/gm, '')
-        .split(';')
-        .map((statement: string) => statement.trim())
-        .filter(Boolean);
-      for (const statement of statements) await db.prepare(statement).run();
+      // D1 test adapter executes one statement at a time. Keep the CREATE
+      // TRIGGER block (with its internal semicolon) as a single statement.
+      for (const statement of splitPurkinsMigrationSql(migrationSql)) {
+        await db.prepare(statement).run();
+      }
     }
   }, 30_000);
 
@@ -120,6 +121,99 @@ describe('Purkins stock intake through demo settlement', () => {
     expect(await approveIntake(db, id)).toMatch(/positive selling price for every active/);
     await db.prepare("UPDATE product_variants SET price_cents=14500 WHERE product_id=?").bind(id).run();
     expect(await approveIntake(db, id)).toBeNull();
+  });
+
+  it('moves a containing sack and dynamically resolves the child bag path for stock', async () => {
+    const house = await createLocation(db, 'House', 'site', null);
+    const room = await createLocation(db, 'Bedroom', 'room', house);
+    const storeroom = await createLocation(db, 'Storeroom', 'room', house);
+    const sack = await createLocation(db, 'Grey Sack', 'sack', room);
+    const bag = await createLocation(db, 'Blue PEP Bag', 'bag', sack);
+    const { id } = await createDraft('Tree-Test Bibs');
+    await assignIntakeLocation(db, id, bag);
+    const before = await getIntake(db, id);
+    expect(before?.location_id).toBe(bag);
+    expect(before?.storage_location).toBe('House / Bedroom / Grey Sack / Blue PEP Bag');
+    await moveLocation(db, sack, storeroom);
+    const after = await getIntake(db, id);
+    expect(after?.location_id).toBe(bag);
+    expect(after?.storage_location).toBe('House / Storeroom / Grey Sack / Blue PEP Bag');
+    expect((await getIntakesForProducts(db, [id])).get(id)?.storage_location)
+      .toBe('House / Storeroom / Grey Sack / Blue PEP Bag');
+    expect((await getProduct(db, id))).not.toHaveProperty('location_id');
+    expect((await listLocationTree(db)).find((l) => l.id === bag)?.depth).toBe(3);
+  });
+
+  it('creates child stock locations directly from Admin form inputs', async () => {
+    const sack = await createLocation(db, 'Intake Form Sack', 'sack', null);
+    const form = new FormData();
+    form.set('location_id', '');
+    form.set('storage_location_new', 'New Blue Bag');
+    form.set('storage_location_parent_id', sack);
+    form.set('storage_location_kind', 'bag');
+    const id = await locationFromForm(db, form);
+    expect(id).toMatch(/^loc_[0-9a-f]{24}$/);
+    const bag = (await listLocationTree(db)).find((l) => l.id === id);
+    expect(bag).toMatchObject({ parent_id: sack, kind: 'bag', path: 'Intake Form Sack / New Blue Bag' });
+    const form2 = new FormData();
+    form2.set('location_id', id!);
+    expect(await locationFromForm(db, form2)).toBe(id);
+    form2.set('location_id', 'loc_000000000000000000000000');
+    await expect(locationFromForm(db, form2)).rejects.toThrow(/does not exist/);
+  });
+
+  it('prevents cycles, self-parenting and case-insensitive duplicate siblings', async () => {
+    const top = await createLocation(db, 'Cycle Root', 'room', null);
+    const sack = await createLocation(db, 'Cycle Sack', 'sack', top);
+    const bag = await createLocation(db, 'Cycle Bag', 'bag', sack);
+    await expect(moveLocation(db, sack, bag)).rejects.toThrow(/descendant/);
+    await expect(moveLocation(db, top, top)).rejects.toThrow(/itself/);
+    await expect(createLocation(db, 'cycle sack', 'sack', top)).rejects.toThrow(/already exists/);
+    await expect(createLocation(db, 'cycle root', 'room', null)).rejects.toThrow(/already exists/);
+    // Database trigger also protects against another writer bypassing the service.
+    await expect(db.prepare('UPDATE purkins_locations SET parent_id=? WHERE id=?')
+      .bind(bag, top).run()).rejects.toThrow();
+    expect((await listLocationTree(db)).find((l) => l.id === top)?.parent_id).toBeNull();
+  });
+
+  it('updates the location ID when legacy draft text changes, and allows unassigning', async () => {
+    const { id, fields } = await createDraft('Legacy Text Move Romper');
+    const original = await getIntake(db, id);
+    expect(original?.storage_location).toBe('Sack A');
+    expect(original?.location_id).toMatch(/^loc_[0-9a-f]{24}$/);
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: 'New Red Sack' });
+    const moved = await getIntake(db, id);
+    expect(moved?.storage_location).toBe('New Red Sack');
+    expect(moved?.location_id).not.toBe(original?.location_id);
+    expect((await listLocationTree(db)).find((l) => l.id === moved?.location_id)?.path)
+      .toBe('New Red Sack');
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: null });
+    const unassigned = await getIntake(db, id);
+    expect(unassigned?.location_id).toBeNull();
+    expect(unassigned?.storage_location).toBeNull();
+    expect((await getProduct(db, id))).not.toHaveProperty('storage_location');
+  });
+
+  it('preserves the stable nested location on metadata-only edits, even after a parent moves', async () => {
+    const left = await createLocation(db, 'Edit Source Room', 'room', null);
+    const right = await createLocation(db, 'Edit Destination Room', 'room', null);
+    const container = await createLocation(db, 'Edit Sack', 'sack', left);
+    const bag = await createLocation(db, 'Edit Blue Bag', 'bag', container);
+    const { id, fields } = await createDraft('Nested Metadata Edit Vest');
+    await assignIntakeLocation(db, id, bag);
+    await moveLocation(db, container, right);
+    const current = await getIntake(db, id);
+    expect(current?.storage_location).toBe('Edit Destination Room / Edit Sack / Edit Blue Bag');
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: current!.storage_location, colour: 'Blue' });
+    const updated = await getIntake(db, id);
+    expect(updated?.location_id).toBe(bag);
+    expect(updated?.storage_location).toBe(current?.storage_location);
+    expect(updated?.colour).toBe('Blue');
+    // A live hierarchy must not be duplicated as a root text path.
+    expect((await listLocationTree(db)).filter((loc) => loc.name === current?.storage_location)).toHaveLength(0);
   });
 
   it('offers existing private stock locations and newly saved ones for subsequent intake', async () => {

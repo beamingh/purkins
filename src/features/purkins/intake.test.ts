@@ -47,6 +47,15 @@ describe('Purkins private intake', () => {
     if (!('data' in parsed)) throw new Error(parsed.error);
     expect(parsed.data.storage_location).toBe('White Bag A / Folded Vests');
   });
+  it('leaves new Admin location IDs to the authoritative route instead of fabricating root paths', () => {
+    const parsed = parseIntakeFields(form({
+      location_id: '',
+      storage_location_new: 'Blue PEP Bag',
+      storage_location_parent_id: 'loc_1234567890abcdef12345678',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.storage_location).toBeNull();
+  });
   it('keeps legacy/MCP storage paths and permits an unspecified location', () => {
     const legacy = parseIntakeFields(form({ storage_location: 'White Sack / Blue Bag' }));
     const empty = parseIntakeFields(form({

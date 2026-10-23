@@ -26,6 +26,7 @@ import { purgeCacheTags } from '../../../features/cache/purge';
 import { parseIntakeFields } from '../../../features/purkins/intake';
 import { insertIntake, removeIntake } from '../../../features/purkins/db';
 import { intakeCreateErrorUrl, intakeCreateSuccessUrl } from '../../../features/purkins/intakeDesk';
+import { locationFromForm, assignIntakeLocation } from '../../../features/purkins/locations';
 
 export const prerender = false;
 
@@ -74,9 +75,12 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const productId = await createProduct(env.DB, { ...parsed.data, active: 0, image_key: null, slug });
   try {
     await insertIntake(env.DB, productId, intake.data);
+    const locationId = await locationFromForm(env.DB, form);
+    if (locationId) await assignIntakeLocation(env.DB, productId, locationId);
   } catch (error) {
+    await removeIntake(env.DB, productId);
     await deleteProduct(env.DB, productId);
-    throw error;
+    return redirect(fail(error instanceof Error ? error.message : 'Invalid storage location.'), 303);
   }
   if (attachmentActive() && deliverable instanceof File && deliverable.size > 0) {
     await setProductFile(env.DB, productId, await uploadDigitalFile(getFileStorage(), deliverable));
