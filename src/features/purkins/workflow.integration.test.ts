@@ -176,6 +176,46 @@ describe('Purkins stock intake through demo settlement', () => {
     expect((await listLocationTree(db)).find((l) => l.id === top)?.parent_id).toBeNull();
   });
 
+  it('updates the location ID when legacy draft text changes, and allows unassigning', async () => {
+    const { id, fields } = await createDraft('Legacy Text Move Romper');
+    const original = await getIntake(db, id);
+    expect(original?.storage_location).toBe('Sack A');
+    expect(original?.location_id).toMatch(/^loc_[0-9a-f]{24}$/);
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: 'New Red Sack' });
+    const moved = await getIntake(db, id);
+    expect(moved?.storage_location).toBe('New Red Sack');
+    expect(moved?.location_id).not.toBe(original?.location_id);
+    expect((await listLocationTree(db)).find((l) => l.id === moved?.location_id)?.path)
+      .toBe('New Red Sack');
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: null });
+    const unassigned = await getIntake(db, id);
+    expect(unassigned?.location_id).toBeNull();
+    expect(unassigned?.storage_location).toBeNull();
+    expect((await getProduct(db, id))).not.toHaveProperty('storage_location');
+  });
+
+  it('preserves the stable nested location on metadata-only edits, even after a parent moves', async () => {
+    const left = await createLocation(db, 'Edit Source Room', 'room', null);
+    const right = await createLocation(db, 'Edit Destination Room', 'room', null);
+    const container = await createLocation(db, 'Edit Sack', 'sack', left);
+    const bag = await createLocation(db, 'Edit Blue Bag', 'bag', container);
+    const { id, fields } = await createDraft('Nested Metadata Edit Vest');
+    await assignIntakeLocation(db, id, bag);
+    await moveLocation(db, container, right);
+    const current = await getIntake(db, id);
+    expect(current?.storage_location).toBe('Edit Destination Room / Edit Sack / Edit Blue Bag');
+
+    await saveIntakeDraft(db, id, { ...fields, storage_location: current!.storage_location, colour: 'Blue' });
+    const updated = await getIntake(db, id);
+    expect(updated?.location_id).toBe(bag);
+    expect(updated?.storage_location).toBe(current?.storage_location);
+    expect(updated?.colour).toBe('Blue');
+    // A live hierarchy must not be duplicated as a root text path.
+    expect((await listLocationTree(db)).filter((loc) => loc.name === current?.storage_location)).toHaveLength(0);
+  });
+
   it('offers existing private stock locations and newly saved ones for subsequent intake', async () => {
     const { id, fields } = await createDraft('Location Picker Test Vest');
     await saveIntakeDraft(db, id, { ...fields, storage_location: 'Grey Sack / Blue PEP Bag' });
