@@ -8,6 +8,7 @@ import { reserveInventory, getActiveReservationItems } from '../orders/reservati
 import { recordPaidOrder } from '../orders/db';
 import { parseIntakeFields, generateItemSku } from './intake';
 import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
+import { createLocation, moveLocation, assignIntakeLocation, listLocationTree } from './locations';
 
 /* Isolated in-memory D1; no Wrangler state, remote D1, or real payments.
  * Executes the actual Purkins migration plus Minshop product/order functions.
@@ -38,7 +39,7 @@ describe('Purkins stock intake through demo settlement', () => {
     for (const sql of schema) await db.exec(sql);
     // D1's exec() treats comment-only fragments as empty statements. Run each
     // real statement separately so the migration is exercised unchanged.
-    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql']) {
+    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
       const statements = migrationSql
         .replace(/^\s*--.*$/gm, '')
@@ -120,6 +121,39 @@ describe('Purkins stock intake through demo settlement', () => {
     expect(await approveIntake(db, id)).toMatch(/positive selling price for every active/);
     await db.prepare("UPDATE product_variants SET price_cents=14500 WHERE product_id=?").bind(id).run();
     expect(await approveIntake(db, id)).toBeNull();
+  });
+
+  it('moves a containing sack and dynamically resolves the child bag path for stock', async () => {
+    const house = await createLocation(db, 'House', 'site', null);
+    const room = await createLocation(db, 'Bedroom', 'room', house);
+    const storeroom = await createLocation(db, 'Storeroom', 'room', house);
+    const sack = await createLocation(db, 'Grey Sack', 'sack', room);
+    const bag = await createLocation(db, 'Blue PEP Bag', 'bag', sack);
+    const { id } = await createDraft('Tree-Test Bibs');
+    await assignIntakeLocation(db, id, bag);
+    const before = await getIntake(db, id);
+    expect(before?.location_id).toBe(bag);
+    expect(before?.storage_location).toBe('House / Bedroom / Grey Sack / Blue PEP Bag');
+    await moveLocation(db, sack, storeroom);
+    const after = await getIntake(db, id);
+    expect(after?.location_id).toBe(bag);
+    expect(after?.storage_location).toBe('House / Storeroom / Grey Sack / Blue PEP Bag');
+    expect((await getProduct(db, id))).not.toHaveProperty('location_id');
+    expect((await listLocationTree(db)).find((l) => l.id === bag)?.depth).toBe(3);
+  });
+
+  it('prevents cycles, self-parenting and case-insensitive duplicate siblings', async () => {
+    const top = await createLocation(db, 'Cycle Root', 'room', null);
+    const sack = await createLocation(db, 'Cycle Sack', 'sack', top);
+    const bag = await createLocation(db, 'Cycle Bag', 'bag', sack);
+    await expect(moveLocation(db, sack, bag)).rejects.toThrow(/descendant/);
+    await expect(moveLocation(db, top, top)).rejects.toThrow(/itself/);
+    await expect(createLocation(db, 'cycle sack', 'sack', top)).rejects.toThrow(/already exists/);
+    await expect(createLocation(db, 'cycle root', 'room', null)).rejects.toThrow(/already exists/);
+    // Database trigger also protects against another writer bypassing the service.
+    await expect(db.prepare('UPDATE purkins_locations SET parent_id=? WHERE id=?')
+      .bind(bag, top).run()).rejects.toThrow();
+    expect((await listLocationTree(db)).find((l) => l.id === top)?.parent_id).toBeNull();
   });
 
   it('offers existing private stock locations and newly saved ones for subsequent intake', async () => {
