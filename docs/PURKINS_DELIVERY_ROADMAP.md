@@ -11,7 +11,7 @@ that goal.
 - **PR #3: feat/rapid-stock-intake-desk → main** — photo-first
   Save & Next, manual/cost pricing, duplicate hints and reusable legacy
   storage selector. Await final checks and merge.
-- **feat/purkins-hierarchical-locations → feat/rapid-stock-intake-desk** —
+- **PR #4: feat/purkins-hierarchical-locations → feat/rapid-stock-intake-desk** —
   stacked branch with location tree, backfill, Admin location manager and
   location-id stock intake. Merge PR #3 first; retarget/rebase the location
   PR onto `main` when #3 is merged. Do **not** ship or apply migrations
