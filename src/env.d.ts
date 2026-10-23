@@ -46,10 +46,14 @@ declare namespace App {
 // Supply its narrow Env shape to the root project without adding all generated
 // mcp worker types to Astro's root TypeScript program.
 interface Env extends Cloudflare.Env {
-  MCP_TOKEN: string;
-  STOREFRONT_URL: string;
+  // MCP is hosted only by the Admin Worker. These are optional in the shared
+  // global environment so the PUBLIC Worker is not forced to bind private
+  // operator credentials or a Durable Object. The MCP handler fails closed
+  // when MCP_TOKEN is not configured.
+  MCP_TOKEN?: string;
+  STOREFRONT_URL?: string;
   MCP_RATE_LIMITER?: import('@cloudflare/workers-types').RateLimit;
-  STORE_MCP: DurableObjectNamespace;
+  STORE_MCP?: DurableObjectNamespace;
   PURKINS_MCP_WRITES_ENABLED?: string;
 }
 
