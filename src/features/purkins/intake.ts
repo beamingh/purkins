@@ -69,6 +69,10 @@ function optionalText(form: FormData, name: string, maxLength: number): string |
  * Names remain private free-text paths (e.g. Grey Sack / Blue PEP Bag).
  */
 function storageLocationFromForm(form: FormData): string | null {
+  // New Admin forms use stable location IDs and explicit child creation.
+  // The Admin route resolves those inputs; do not create a duplicate legacy
+  // root from the new child name while inserting a stock draft.
+  if (form.has('location_id')) return null;
   if (!form.has('storage_location_existing') && !form.has('storage_location_new')) {
     return optionalText(form, 'storage_location', 100);
   }
