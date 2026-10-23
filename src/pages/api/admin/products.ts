@@ -25,14 +25,15 @@ import { CACHE_TAG } from '../../../features/cache/tags';
 import { purgeCacheTags } from '../../../features/cache/purge';
 import { parseIntakeFields } from '../../../features/purkins/intake';
 import { insertIntake, removeIntake } from '../../../features/purkins/db';
+import { intakeCreateErrorUrl, intakeCreateSuccessUrl } from '../../../features/purkins/intakeDesk';
 
 export const prerender = false;
-
-const fail = (msg: string) => `/admin/products/new?error=${encodeURIComponent(msg)}`;
 
 // POST /api/admin/products — create a product (with optional image), then redirect.
 export const POST: APIRoute = async ({ request, redirect, locals }) => {
   const form = await request.formData();
+  const isIntakeDesk = form.get('after_create') === 'next';
+  const fail = (message: string) => intakeCreateErrorUrl(message, isIntakeDesk);
   // The store's display unit, plus whether a blank weight would make this product
   // unsellable (every enabled zone prices by weight). Both come from settings the
   // request already loaded.
@@ -115,5 +116,5 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     CACHE_TAG.catalog,
     ...(created?.public_id ? [CACHE_TAG.product(created.public_id)] : []),
   ]);
-  return redirect('/admin/products', 303);
+  return redirect(intakeCreateSuccessUrl(isIntakeDesk, created?.public_id), 303);
 };
