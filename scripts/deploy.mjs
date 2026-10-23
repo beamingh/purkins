@@ -20,6 +20,18 @@ const stampPath = resolve(root, 'dist/theme.json');
 const theme = resolveTheme(root);
 console.log(`Deploying theme: ${theme.id} (from ${theme.source})`);
 
+// Purkins' permanent deployment is TWO independently routed Workers. Generic
+// deployment would publish the monolithic Astro /admin tree into the public
+// Worker and bypass the mandatory split and boundary checks. Preflight-only is
+// still allowed for non-mutating diagnostics; other themes are unchanged.
+if (theme.id === 'purkins' && !preflightOnly) {
+  console.error(
+    'Purkins monolithic deployment blocked. Use npm run build:workers and the ' +
+    'gated npm run purkins:cloudflare workflow for public + Admin/MCP Workers.',
+  );
+  process.exit(1);
+}
+
 
 function run(command, args) {
   const result = spawnSync(command, args, {
