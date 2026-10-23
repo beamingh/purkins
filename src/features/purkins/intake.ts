@@ -30,6 +30,8 @@ export interface IntakeFields {
 }
 
 export interface IntakeRecord extends IntakeFields {
+  /** Immutable private location ref; path is dynamically resolved on read. */
+  location_id?: string | null;
   pricing_mode: PricingMode;
   product_id: number;
   sku: string;
