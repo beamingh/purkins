@@ -20,6 +20,9 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Single Purkins deployment: turn this to "false" when the SAME store launches.
+	// No separate staging Worker/D1/R2 or migration of inventory is needed.
+	"vars": { "PRELAUNCH_NOINDEX": "true" },
 	// Recurring jobs. Everything minshop defers was previously driven by incoming
 	// traffic (the notification sweep rides on live settlements; expired inventory
 	// holds are released by the next shopper's reservation), so a quiet store
