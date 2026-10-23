@@ -163,7 +163,7 @@ const inputClass =
           </label>
           <label class="text-sm">Stock condition
             <select class={inputClass} name="condition_status">
-              <option value="complete" selected={(!intake && !intakeDesk) || (intake && (intake.condition_status ?? 'complete') === 'complete')}>Complete, new</option>
+              <option value="complete" selected={!intake ? !intakeDesk : (intake.condition_status ?? 'complete') === 'complete'}>Complete, new</option>
               <option value="review" selected={(!intake && intakeDesk) || intake?.condition_status === 'review'}>Needs checking</option>
               <option value="incomplete" selected={intake?.condition_status === 'incomplete'}>Incomplete / missing pieces</option>
             </select>
