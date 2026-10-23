@@ -54,6 +54,7 @@ const price = product
 const intakeLanded = intake ? landedCostCents(intake) : null;
 const intakeSuggested = intake ? suggestedSellingPriceCents(intake) : null;
 const intakeEnabled = product === null || intake !== null;
+const selectedPricingMode = intake?.pricing_mode ?? (intakeDesk ? 'manual' : 'cost_based');
 // Input increment matches the currency's precision: 0.01 (USD), 1 (JPY), 0.001 (BHD).
 const priceStep = priceDecimals > 0 ? (10 ** -priceDecimals).toFixed(priceDecimals) : '1';
 const inputClass =
@@ -122,7 +123,7 @@ const inputClass =
 
   <div class="grid grid-cols-2 gap-4">
     <div>
-      <label class="block text-sm font-medium" for="price">Price ({defaultCurrency.toUpperCase()})</label>
+      <label class="block text-sm font-medium" for="price">Selling price ({defaultCurrency.toUpperCase()})</label>
       <input id="price" name="price" type="number" step={priceStep} min="0" required value={price} class={inputClass} />
     </div>
     <div>
@@ -135,8 +136,8 @@ const inputClass =
   {
     intakeEnabled && (
       <fieldset class="rounded-lg border border-line bg-surface p-4 space-y-3">
-        <legend class="px-2 text-sm font-semibold">Purkins stock intake &amp; costing</legend>
-        <p class="text-xs text-muted">New products are private drafts. This cost information is accessible to the current admin login only; do not share that login with a partner until separate roles are implemented.</p>
+        <legend class="px-2 text-sm font-semibold">Purkins stock intake</legend>
+        <p class="text-xs text-muted">New products are private drafts. Private stock and cost details are accessible to the current admin login only; do not share that login with a partner until separate roles are implemented.</p>
         {intake && <p class="text-sm">Item code: <strong>{intake.sku}</strong> · Price review: <strong>{intake.status === 'approved' ? 'Approved' : 'Draft'}</strong></p>}
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="text-sm">Brand
@@ -183,6 +184,22 @@ const inputClass =
             <textarea class={inputClass} name="internal_notes" maxlength="2000" rows="3"
               placeholder="Bundle contents, missing pieces, any uncertain details…">{intake?.internal_notes ?? ''}</textarea>
           </label>
+        </div>
+        <div class="border-t border-line pt-4 space-y-2">
+          <label class="block text-sm font-semibold" for="pricing_mode">How do you want to set the selling price?</label>
+          <select id="pricing_mode" class={inputClass} name="pricing_mode" data-intake-pricing-mode>
+            <option value="manual" selected={selectedPricingMode === 'manual'}>Manual price — enter selling price directly</option>
+            <option value="cost_based" selected={selectedPricingMode === 'cost_based'}>Cost-based — calculate from purchase cost and markup</option>
+          </select>
+          <p data-intake-manual-help class="text-xs text-muted" hidden={selectedPricingMode !== 'manual'}>
+            Enter the selling price in kwacha above. Purchase cost, exchange rate,
+            sourcing overhead and markup are optional. Without cost data, margin and
+            cost recovery are unknown. Publishing still requires your approval, a
+            product photo and stock condition marked complete.
+          </p>
+        </div>
+        <div data-intake-cost-fields hidden={selectedPricingMode === 'manual'} class="space-y-3">
+          <div class="grid gap-3 sm:grid-cols-2">
           <label class="text-sm">Purchase currency
             <select class={inputClass} name="purchase_currency">
               <option value="ZMW" selected={!intake || intake.purchase_currency === 'ZMW'}>ZMW (kwacha)</option>
@@ -206,6 +223,7 @@ const inputClass =
               value={intake?.markup_percent ?? ''} placeholder="e.g. 35" />
           </label>
         </div>
+          </div>
         <div class="rounded-md bg-paper p-3 text-sm">
           Estimated landed cost: <strong data-intake-landed>{intakeLanded !== null ? `K${(intakeLanded / 100).toFixed(2)}` : 'Enter cost to calculate'}</strong>
           {' · '}
@@ -215,7 +233,9 @@ const inputClass =
             Use suggested selling price
           </button>
         </div>
-        <p class="text-xs text-muted">The selling price at the top of the form remains the price shoppers pay. Saving any edit revokes an earlier approval and unpublishes the item; review again to publish.</p>
+        <p class="text-xs text-muted">Use the suggested selling price only when the inputs are known.</p>
+        </div>
+        <p class="text-xs text-muted">The selling price at the top of the form is what shoppers pay. Saving any edit revokes earlier approval and unpublishes the item until you approve again.</p>
       </fieldset>
     )
   }
@@ -343,9 +363,15 @@ const inputClass =
     const suggestedOutput = form.querySelector<HTMLElement>('[data-intake-suggested]');
     const useButton = form.querySelector<HTMLButtonElement>('[data-intake-use-price]');
     const priceField = form.querySelector<HTMLInputElement>('input[name="price"]');
+    const pricingMode = form.querySelector<HTMLSelectElement>('[data-intake-pricing-mode]');
+    const costFields = form.querySelector<HTMLElement>('[data-intake-cost-fields]');
+    const manualHelp = form.querySelector<HTMLElement>('[data-intake-manual-help]');
     let suggestion: number | null = null;
 
     function update() {
+      const manual = pricingMode?.value === 'manual';
+      if (costFields) costFields.hidden = manual;
+      if (manualHelp) manualHelp.hidden = !manual;
       const parsed = parseIntakeFields(new FormData(form));
       const landed = 'data' in parsed ? landedCostCents(parsed.data) : null;
       suggestion = 'data' in parsed ? suggestedSellingPriceCents(parsed.data) : null;
