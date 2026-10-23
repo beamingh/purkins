@@ -42,8 +42,17 @@ Run it locally and check fresh/upgrade paths before any staging rollout.
 - **Original retail tag** (e.g. R69.99) is a reference, *not* purchase cost. Keep
   retail_tag_minor and purchase_cost_minor separate. Never infer exchange rate, overhead,
   purchase cost, markup or ZMW selling price from the supplier tag.
-- **Storage location** is a private free-text path such as
+- **Storage location** is a private path such as
   `Grey Sack / Blue PEP Plastic Bag` or `Pick n Pay White Bag A`.
+  In Admin stock intake and product editing, choose an existing location
+  from the selector or expand **Create a new storage location** and type
+  a new name. The new location is stored with the item and appears in the
+  selector for subsequent items; no separate location-management table or
+  migration is needed for this first version. If both inputs are supplied,
+  the new name takes precedence. Blank selection is allowed while stock
+  is being sorted. On the Rapid Intake Desk, the last location is carried
+  across the next-item form in that browser tab. Paths never appear in
+  buyer-facing fields or redirects.
 - **Unknown counts**: use zero stock and condition_status=review, and record
   'Quantity not counted' in notes. Zero here is a safe placeholder, not a confirmed count.
 - **Incomplete or questionable packs**: condition_status=incomplete/review, describe
