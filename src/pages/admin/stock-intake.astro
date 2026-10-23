@@ -1,0 +1,85 @@
+---
+import { listStorageLocations } from '../../features/purkins/db';
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import ProductForm from '../../features/products/ProductForm.astro';
+import { listCategories, buildTree, flattenTree } from '../../features/categories/db';
+import { zonesRequireWeight } from '../../features/shipping/calculator';
+import { shippingFor } from '../../features/shipping/effective';
+import { parsePublicId } from '../../features/ids/publicId';
+
+const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
+const storageLocations = await listStorageLocations(env.DB);
+const error = Astro.url.searchParams.get('error');
+const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
+const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
+const created = parsePublicId(Astro.url.searchParams.get('created') ?? '', 'product');
+const savedItem = created ? await env.DB.prepare(
+  'SELECT p.public_id AS id, p.name, i.sku FROM products p ' +
+  'JOIN purkins_intake i ON i.product_id=p.id WHERE p.public_id=? AND p.active=0',
+).bind(created).first<{id: string; name: string; sku: string}>() : null;
+const saved = Astro.url.searchParams.get('saved') === '1';
+// Recent private drafts help an operator recover a saved item without entering
+// a barcode or navigating across the full product list.
+const { results: recentDrafts } = await env.DB.prepare(
+  `SELECT p.public_id AS id, p.name, i.sku, i.condition_status
+     FROM products p JOIN purkins_intake i ON i.product_id=p.id
+    WHERE i.status='draft' AND p.active=0
+    ORDER BY p.id DESC LIMIT 8`,
+).all<{id: string; name: string; sku: string; condition_status: string}>();
+---
+
+<AdminLayout title="Rapid stock intake" active="products">
+  <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <p class="text-xs uppercase tracking-widest text-muted">Purkins / Private inventory</p>
+      <h1 class="mt-2 font-serif text-3xl tracking-tight">Rapid Stock Intake</h1>
+    </div>
+    <a href="/admin/products" class="rounded-md border border-line px-4 py-2 text-sm hover:bg-surface">View all stock</a>
+  </div>
+  <p class="mb-5 max-w-2xl text-sm text-muted">
+    Photograph an item, record what you know, and save it as an unpublished draft.
+    Keep the storage location for the next item in this browser tab. You can leave cost,
+    barcode and count details unfinished and return to them later.
+  </p>
+
+  {saved && (
+    <div role="status" class="mb-5 rounded-lg border border-line bg-surface px-4 py-3 text-sm">
+      <strong>Private draft saved.</strong>
+      {savedItem ? (
+        <span> {savedItem.name} ({savedItem.sku}) · <a class="underline hover:text-brand" href={`/admin/products/${savedItem.id}/edit`}>Edit this item</a></span>
+      ) : (
+        <span> Your next entry is ready.</span>
+      )}
+    </div>
+  )}
+
+  <section aria-label="Intake desk" class="rounded-xl border border-line bg-white/60 p-4 sm:p-6">
+    <p class="mb-5 text-xs text-muted">If the quantity is unknown, leave stock at zero and mark the item “Needs checking.” A pack of three bibs is one sellable pack, not three stock units.</p>
+    <ProductForm
+      action="/api/admin/products"
+      submitLabel="Save private draft"
+      intakeDesk={true}
+      categoryOptions={categoryOptions}
+      storageLocations={storageLocations}
+      error={error}
+      weightUnit={weightUnit}
+      weightRequired={weightRequired}
+    />
+  </section>
+
+  {(recentDrafts ?? []).length > 0 && (
+    <section class="mt-8" aria-labelledby="intake-recent-heading">
+      <h2 id="intake-recent-heading" class="font-serif text-xl">Recent private drafts</h2>
+      <p class="mt-1 mb-3 text-xs text-muted">These products are not visible to shoppers. Open a draft to add more details or review its price.</p>
+      <ul class="divide-y divide-line rounded-lg border border-line bg-white/60">
+        {(recentDrafts ?? []).filter((d) => d.id?.startsWith('prod_')).map((d) => (
+          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+            <span>{d.name} <small class="ml-2 text-muted">{d.sku}</small></span>
+            <a href={`/admin/products/${d.id}/edit`} class="font-medium text-brand hover:underline">Edit draft &rarr;</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
+</AdminLayout>

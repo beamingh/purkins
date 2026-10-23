@@ -63,12 +63,20 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
 <AdminLayout title="Products" active="products">
   <div class="mb-8 flex items-center justify-between">
     <h1 class="font-serif text-3xl tracking-tight">Products</h1>
-    <a
-      href="/admin/products/new"
-      class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
-    >
-      Add stock item
-    </a>
+    <div class="flex flex-wrap gap-2">
+      <a
+        href="/admin/stock-intake"
+        class="rounded-md bg-brand px-4 py-2 text-xs font-medium uppercase tracking-wider text-white hover:bg-brand-hover"
+      >
+        Rapid stock intake
+      </a>
+      <a
+        href="/admin/products/new"
+        class="rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider hover:bg-surface"
+      >
+        Full product form
+      </a>
+    </div>
   </div>
 
   <FilterBar

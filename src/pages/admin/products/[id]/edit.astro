@@ -1,4 +1,5 @@
 ---
+import { listStorageLocations } from '../../../../features/purkins/db';
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import MediaPicker from '../../../../features/media/MediaPicker.astro';
@@ -31,6 +32,7 @@ const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
 const selectedCategoryIds = (await categoriesForProduct(env.DB, product.id)).map((c) => c.id);
 const images = await listProductImages(env.DB, product.id);
 const intake = await getIntake(env.DB, product.id);
+const storageLocations = intake ? await listStorageLocations(env.DB, intake.storage_location) : [];
 const error = Astro.url.searchParams.get('error');
 
 // Variants + extras (show all, including any inactive, so the admin sees everything).
@@ -80,9 +82,13 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
       {intake.status === 'draft' && (
         <>
-          <p class="mt-1 text-xs text-muted">Save your photos, costs and selling price before approval. Publishing requires a photo, a positive price and recovery of estimated landed cost.</p>
+          <p class="mt-1 text-xs text-muted">
+            {intake.pricing_mode === 'manual'
+              ? 'Manual price selected: purchase cost is optional, so cost recovery may be unknown. Confirm the item is complete, attach a photo and save a positive selling price before publication.'
+              : 'Cost-based pricing: save purchase cost, any required exchange rate, selling price and a photo. Publication enforces the estimated landed-cost floor.'}
+          </p>
           <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
-            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">Approve selling price &amp; publish</button>
+            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
           </form>
         </>
       )}
@@ -94,6 +100,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     product={product}
     intake={intake}
     categoryOptions={categoryOptions}
+    storageLocations={storageLocations}
     selectedCategoryIds={selectedCategoryIds}
     error={error}
     showImage={false}

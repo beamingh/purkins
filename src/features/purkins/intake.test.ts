@@ -31,6 +31,38 @@ describe('Purkins private intake', () => {
       expect(parsed.data.size_label).toBe('6-9 months');
     }
   });
+  it('selects an existing stock location without requiring a new name', () => {
+    const parsed = parseIntakeFields(form({
+      storage_location_existing: 'Grey Sack / Blue PEP Bag',
+      storage_location_new: '',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.storage_location).toBe('Grey Sack / Blue PEP Bag');
+  });
+  it('creates a new stock location and gives it priority over an old selection', () => {
+    const parsed = parseIntakeFields(form({
+      storage_location_existing: 'Grey Sack',
+      storage_location_new: 'White Bag A / Folded Vests',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.storage_location).toBe('White Bag A / Folded Vests');
+  });
+  it('keeps legacy/MCP storage paths and permits an unspecified location', () => {
+    const legacy = parseIntakeFields(form({ storage_location: 'White Sack / Blue Bag' }));
+    const empty = parseIntakeFields(form({
+      storage_location_existing: '', storage_location_new: '',
+    }));
+    if (!('data' in legacy)) throw new Error(legacy.error);
+    if (!('data' in empty)) throw new Error(empty.error);
+    expect(legacy.data.storage_location).toBe('White Sack / Blue Bag');
+    expect(empty.data.storage_location).toBeNull();
+  });
+  it('rejects new storage-location labels longer than 100 characters', () => {
+    expect(parseIntakeFields(form({
+      storage_location_existing: 'Grey Sack',
+      storage_location_new: 'X'.repeat(101),
+    }))).toHaveProperty('error');
+  });
   it('does not invent purchase cost, markup, or exchange rate', () => {
     const parsed = parseIntakeFields(form({ purchase_currency: 'ZMW' }));
     expect('data' in parsed).toBe(true);
@@ -38,6 +70,29 @@ describe('Purkins private intake', () => {
       expect(landedCostCents(parsed.data)).toBeNull();
       expect(suggestedSellingPriceCents(parsed.data)).toBeNull();
     }
+  });
+  it('supports direct manual selling price without purchase cost or exchange-rate inputs', () => {
+    const parsed = parseIntakeFields(form({ pricing_mode: 'manual', purchase_currency: 'ZAR' }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.pricing_mode).toBe('manual');
+    expect(parsed.data.purchase_cost_minor).toBeNull();
+    expect(parsed.data.zar_to_zmw).toBeNull();
+    expect(landedCostCents(parsed.data)).toBeNull();
+    expect(suggestedSellingPriceCents(parsed.data)).toBeNull();
+  });
+  it('keeps legacy inputs cost-based and rejects invalid pricing modes', () => {
+    const parsed = parseIntakeFields(form({}));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.pricing_mode).toBe('cost_based');
+    expect(parseIntakeFields(form({ pricing_mode: 'free_for_all' }))).toHaveProperty('error');
+  });
+  it('allows known rand purchase cost to remain recorded during manual pricing without inventing an FX rate', () => {
+    const parsed = parseIntakeFields(form({
+      pricing_mode: 'manual', purchase_currency: 'ZAR', purchase_cost: '50.00',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.purchase_cost_minor).toBe(5000);
+    expect(landedCostCents(parsed.data)).toBeNull();
   });
   it('rejects rand cost without an exchange rate', () => {
     expect(parseIntakeFields(form({purchase_currency:'ZAR',purchase_cost:'50'})))

@@ -25,6 +25,7 @@ const reply = (data: unknown) => ({
 
 const money = z.number().int().min(0).max(99_999_999_999);
 const detailsSchema = z.object({
+  pricing_mode: z.enum(['manual', 'cost_based']).optional(),
   brand: z.string().max(100).nullable().optional(),
   supplier_barcode: z.string().max(80).nullable().optional(),
   size_label: z.string().max(60).nullable().optional(),
@@ -57,7 +58,7 @@ function parseDetails(input: DetailsInput): IntakeFields {
   const f = new FormData();
   for (const key of ['brand', 'supplier_barcode', 'size_label', 'colour',
     'age_range', 'storage_location', 'condition_status', 'internal_notes',
-    'purchase_currency', 'retail_tag_currency'] as const) {
+    'purchase_currency', 'retail_tag_currency', 'pricing_mode'] as const) {
     const value = input[key];
     if (value != null) f.set(key, value);
   }
@@ -171,7 +172,7 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
   if (!allowWrites) return;
 
   server.registerTool('create_purkins_stock', {
-    description: 'Create PRIVATE, unpublished Purkins stock (including multiple sizes); never publish or infer selling price, costs or conversion. Each pack is one sellable stock unit.',
+    description: 'Create PRIVATE, unpublished Purkins stock (including multiple sizes). Manual selling-price mode can be explicitly selected without purchase-cost details; never infer costs or conversion. Each pack is one sellable stock unit.',
     inputSchema: {
       name: z.string().trim().min(1).max(200),
       description: z.string().max(5000).optional(),

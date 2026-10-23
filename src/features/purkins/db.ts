@@ -8,6 +8,31 @@ import {
 } from './intake';
 
 /**
+ * Existing private storage paths, to power the Admin intake selector.
+ * A new path is recorded with an item and appears in future selections:
+ * no separate master-data table or public endpoint is needed.
+ */
+export async function listStorageLocations(
+  db: D1Database,
+  selectedLocation: string | null = null,
+): Promise<string[]> {
+  const { results } = await db.prepare(
+    `SELECT MIN(TRIM(storage_location)) AS location
+       FROM purkins_intake
+      WHERE storage_location IS NOT NULL AND TRIM(storage_location) <> ''
+      GROUP BY TRIM(storage_location) COLLATE NOCASE
+      ORDER BY location COLLATE NOCASE
+      LIMIT 200`,
+  ).all<{ location: string }>();
+  const values = (results ?? []).map((row) => row.location);
+  if (selectedLocation && !values.some((location) => location.toLowerCase() === selectedLocation.toLowerCase())) {
+    values.push(selectedLocation);
+    values.sort((a, b) => a.localeCompare(b));
+  }
+  return values;
+}
+
+/**
  * Owner-side intake only. Do NOT join this table in storefront/public routes.
  * The current Minshop admin has one shared credential, not per-user roles;
  * do not invite a partner until role-level permissions are implemented.
@@ -46,8 +71,8 @@ export async function insertIntake(
       (product_id, sku, size_label, colour, age_range, storage_location,
        purchase_currency, purchase_cost_minor, zar_to_zmw, overhead_zwm_cents,
        markup_percent, brand, supplier_barcode, retail_tag_minor, retail_tag_currency,
-       pack_count, condition_status, internal_notes, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+       pack_count, condition_status, internal_notes, pricing_mode, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
   ).bind(
     productId, sku, fields.size_label, fields.colour, fields.age_range, fields.storage_location,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
@@ -55,6 +80,7 @@ export async function insertIntake(
     fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
     fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
     fields.condition_status ?? 'complete', fields.internal_notes ?? null,
+    fields.pricing_mode ?? 'cost_based',
   ).run();
 }
 
@@ -69,7 +95,7 @@ export async function saveIntakeDraft(
       SET size_label=?, colour=?, age_range=?, storage_location=?, purchase_currency=?,
           purchase_cost_minor=?, zar_to_zmw=?, overhead_zwm_cents=?, markup_percent=?,
           brand=?, supplier_barcode=?, retail_tag_minor=?, retail_tag_currency=?,
-          pack_count=?, condition_status=?, internal_notes=?,
+          pack_count=?, condition_status=?, internal_notes=?, pricing_mode=?,
           status='draft', updated_at=datetime('now')
       WHERE product_id=?`,
   ).bind(
@@ -78,7 +104,8 @@ export async function saveIntakeDraft(
     fields.overhead_zwm_cents, fields.markup_percent,
     fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
     fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
-    fields.condition_status ?? 'complete', fields.internal_notes ?? null, productId,
+    fields.condition_status ?? 'complete', fields.internal_notes ?? null,
+    fields.pricing_mode ?? 'cost_based', productId,
   ).run();
 }
 
@@ -100,11 +127,18 @@ export async function approveIntake(
   if ((intake.condition_status ?? 'complete') !== 'complete') {
     return 'Review incomplete or unchecked stock before publishing.';
   }
-  if (intake.purchase_cost_minor === null) return 'Enter the purchase cost before approving.';
+  const manual = intake.pricing_mode === 'manual';
+  if (!manual && intake.purchase_cost_minor === null) {
+    return 'Enter the purchase cost before approving, or select manual pricing.';
+  }
   const landed = landedCostCents(intake);
-  if (landed === null) return 'A conversion rate is needed to calculate landed cost.';
+  if (!manual && landed === null) return 'A conversion rate is needed to calculate landed cost.';
   if (product.price_cents <= 0) return 'Set a positive selling price before approving.';
-  if (product.price_cents < landed) return 'Selling price cannot be below the estimated landed cost.';
+  // If usable cost is known, never silently approve an under-cost manual price.
+  // Without usable cost, manual approval is explicit but cost recovery is unverified.
+  if (landed !== null && product.price_cents < landed) {
+    return 'Selling price cannot be below the estimated landed cost.';
+  }
   if (!product.image_key) return 'Add a product photograph before publishing.';
 
   // Purchasers can choose a variant price instead of the parent price. A
@@ -112,7 +146,10 @@ export async function approveIntake(
   const { results: variants } = await db.prepare(
     'SELECT price_cents FROM product_variants WHERE product_id=? AND active=1',
   ).bind(productId).all<{ price_cents: number }>();
-  if ((variants ?? []).some((variant) => variant.price_cents < landed)) {
+  if ((variants ?? []).some((variant) => variant.price_cents <= 0)) {
+    return 'Set a positive selling price for every active size or colour variant.';
+  }
+  if (landed !== null && (variants ?? []).some((variant) => variant.price_cents < landed)) {
     return 'An active variant price is below the estimated landed cost.';
   }
 

@@ -4,6 +4,29 @@ Purkins stock stays unpublished until an owner explicitly approves it. The gener
 MCP product writes are draft-only in this fork. Buyer MCP tools never receive purchase
 costs, supplier barcodes, storage locations or internal condition notes.
 
+## Selling-price entry modes
+
+Choose the pricing method **per product** in the Admin form (near the selling-price field):
+
+- **Manual price (default on Rapid Stock Intake):** enter the selling price in ZMW
+  directly. Purchase cost, exchange rate, sourcing overhead and markup are not
+  prerequisites. Cost recovery and margin are **unknown** when purchase-cost
+  details are missing; do not present a fabricated profit number.
+- **Cost-based pricing (default for existing/older products):** enter purchase cost
+  and any ZAR exchange rate and overhead. Suggested selling price uses the
+  entered markup over landed cost. Approval requires a calculable landed cost.
+
+Both modes create **private drafts**, not immediately published listings.
+Publishing requires an explicit owner approval, positive parent and active
+variant prices, a product photo and complete condition. If calculable landed
+cost is recorded even in manual mode, below-cost publication is refused.
+An older record remains cost-based unless the owner explicitly changes it.
+Changing modes or prices on an existing product revokes earlier approval.
+
+Schema migration `0042_purkins_manual_pricing.sql` adds the private
+`pricing_mode` column with `cost_based` as its backward-compatible default.
+Run it locally and check fresh/upgrade paths before any staging rollout.
+
 ## How to encode physically received stock
 
 - **One product** represents one sellable item or bundle design (e.g. *Grey melange babygrow*).
@@ -19,8 +42,17 @@ costs, supplier barcodes, storage locations or internal condition notes.
 - **Original retail tag** (e.g. R69.99) is a reference, *not* purchase cost. Keep
   retail_tag_minor and purchase_cost_minor separate. Never infer exchange rate, overhead,
   purchase cost, markup or ZMW selling price from the supplier tag.
-- **Storage location** is a private free-text path such as
+- **Storage location** is a private path such as
   `Grey Sack / Blue PEP Plastic Bag` or `Pick n Pay White Bag A`.
+  In Admin stock intake and product editing, choose an existing location
+  from the selector or expand **Create a new storage location** and type
+  a new name. The new location is stored with the item and appears in the
+  selector for subsequent items; no separate location-management table or
+  migration is needed for this first version. If both inputs are supplied,
+  the new name takes precedence. Blank selection is allowed while stock
+  is being sorted. On the Rapid Intake Desk, the last location is carried
+  across the next-item form in that browser tab. Paths never appear in
+  buyer-facing fields or redirects.
 - **Unknown counts**: use zero stock and condition_status=review, and record
   'Quantity not counted' in notes. Zero here is a safe placeholder, not a confirmed count.
 - **Incomplete or questionable packs**: condition_status=incomplete/review, describe
@@ -68,7 +100,7 @@ stock active or retain approval through edits. New Admin products remain private
 
 ## Deployment and limitations
 
-Apply migrations 0040 and 0041 to the same D1 bound to both Workers before
+Apply migrations 0040, 0041 and 0042 to the same D1 bound to both Workers before
 deploying either updated Worker. Production changes require owner approval:
 no inventory was imported by this feature, no live D1 was touched.
 

@@ -4,7 +4,7 @@ import { approveIntake } from './db';
 import type { IntakeRecord } from './intake';
 
 const intake: IntakeRecord = {
-  product_id: 4, sku: 'PUR-000004', size_label: '3-6 months',
+  product_id: 4, sku: 'PUR-000004', pricing_mode: 'cost_based', size_label: '3-6 months',
   colour: 'cream', age_range: '3-6 months', storage_location: 'Sack B',
   purchase_currency: 'ZMW', purchase_cost_minor: 9000,
   zar_to_zmw: null, overhead_zwm_cents: 1000, markup_percent: 40,
