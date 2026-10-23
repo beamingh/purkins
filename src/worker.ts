@@ -51,7 +51,17 @@ async function runScheduledSweeps(): Promise<void> {
 }
 
 export default {
-  fetch: handle,
+  fetch(request, env, ctx) {
+    const path = new URL(request.url).pathname;
+    // Defense in depth: even a misbuilt public release must not serve private
+    // routes. The split Astro build also removes their route files entirely.
+    if (path === '/admin' || path.startsWith('/admin/') ||
+        path === '/api/admin' || path.startsWith('/api/admin/') ||
+        path === '/mcp' || path.startsWith('/mcp/')) {
+      return new Response('Not found.', { status: 404 });
+    }
+    return handle(request, env, ctx);
+  },
 
   // Each sweep catches its own errors, so one failing job never strands the
   // others. waitUntil keeps the invocation alive for the whole pass.
