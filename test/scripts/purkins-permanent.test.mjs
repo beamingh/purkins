@@ -49,6 +49,24 @@ describe('Permanent Purkins provisioning safety', () => {
     expect(assertApiList(apiPage([{ name: 'purkins' }]), 'd1')).toHaveLength(1);
   });
 
+  it('normalizes the actual Cloudflare Workers scripts response and detects a collision', () => {
+    // The live Cloudflare GET /workers/scripts API exposes IDs rather than
+    // "name", unlike D1 and R2. The preflight must not mistake this for a
+    // missing/empty Worker inventory.
+    const scripts = assertApiList(apiPage([
+      { id: 'seezambia', routes: [] },
+      { id: 'purkins-storefront', routes: [] },
+    ]), 'workers');
+    expect(scripts).toEqual([
+      { name: 'seezambia' },
+      { name: 'purkins-storefront' },
+    ]);
+    expect(detectCollisions({ dbs: [], buckets: [], workers: scripts }))
+      .toEqual(['Worker: purkins-storefront']);
+    expect(() => assertApiList(apiPage([{ routes: [] }]), 'workers'))
+      .toThrow(/name missing/);
+  });
+
   it('renders a permanent *unrouted* noindex storefront and separate read-only MCP worker', () => {
     const dbId = '00000000-1234-4000-8000-123456789abc';
     const output = renderPermanentConfigs(
