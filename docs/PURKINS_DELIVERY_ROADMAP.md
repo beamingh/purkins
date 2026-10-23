@@ -26,7 +26,7 @@ that goal.
 | P0 | Rapid Stock Intake | Photo-first draft, Save & Next, manual ZMW price, duplicate hints, variant/pack awareness | PR #3 merged; local checks green; UI smoke test pending |
 | P0 | Hierarchical locations | Stable `loc_...` IDs; rooms/sacks/bags; add child, move container, no ancestry cycles; moving parent updates private stock path | PR #4 merged; local checks green; UI smoke test pending |
 | P0 | **Single-environment Cloudflare prelaunch** | One permanent Worker + D1 + R2, Windows-safe provisioning, prelaunch noindex, secured Admin, promotion without data movement | Prelaunch indexing merged; provisioner proposed; no remote mutations |
-| P0 | **MCP read-only integration** | Deployed separate Durable Object-backed MCP Worker; reject invalid token; distinguish operator-private vs buyer-public tools; writes OFF | Source implemented; live verification pending |
+| P0 | **Admin + MCP isolation** | Separate public/Admin Astro bundles, protected operator MCP on the Admin Worker, same D1/R2; writes OFF | Two-Worker build branch under test; no Cloudflare deployment |
 | P1 | **MCP controlled writes** | Scoped operator permissions, audit log, idempotent draft creates, concurrency checks, revocation and read/write boundary tests before enabling | Not implemented / writes OFF |
 | P1 | **Batch stock intake** | Add multiple sizes and quantities/photo groups at once, camera barcode scanning + manual fallback, validation/recovery on interrupted sessions, CSV import/export | Not implemented |
 | P1 | **Multi-location stock ledger** | Allocate SKU/variant quantity to several containers, transfers and stocktake adjustments, prevent double-counting during checkout | Not implemented; location tree is prerequisite |
@@ -61,11 +61,13 @@ that goal.
    `npm run mcp:check`.
 2. Local Admin browser smoke test of actual intake and parent-child location
    movement. Confirm initial setup and session protections.
-3. Implement a PowerShell-friendly, Node-based first deployment that checks
-   for existing Cloudflare resource names, provisions the **permanent** store
-   D1/R2/Worker exactly once, sets secrets and guards first-run Admin.
-4. Validate live noindex responses, migrate the D1 through 0043, add a small
-   batch of actual products and test media and drafts on the permanent store.
-5. Connect MCP read-only to the same D1. Only later enable audited writes.
+3. Verify split Worker build `npm run build:workers` and the permanent
+   Node provisioning workflow. It prepares **two Workers** with a shared
+   permanent D1/R2 installation and no staging copy. Gate public Admin routes
+   behind owner authentication, and keep operator MCP writes disabled.
+4. Validate noindex on both Workers, migrate the single D1 through 0043,
+   and test real stock image/media workflows on the protected Admin host.
+5. Test operator MCP on the Admin Worker against the same D1. Only later
+   enable audited writes; public buyer MCP can remain disabled initially.
    Prioritize batch size intake, location stock ledger, costing and Zambia
    checkout so the storefront can start making sales.

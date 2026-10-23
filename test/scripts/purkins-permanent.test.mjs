@@ -19,7 +19,7 @@ describe('Permanent Purkins provisioning safety', () => {
       db: 'purkins-storefront-db',
       images: 'purkins-storefront-images',
       files: 'purkins-storefront-files',
-      mcpWorker: 'purkins-storefront-mcp',
+      adminWorker: 'purkins-admin',
     });
     expect(Object.values(TARGET)).not.toContain('purkins');
     expect(Object.values(TARGET)).not.toContain('purkins-media');
@@ -34,10 +34,10 @@ describe('Permanent Purkins provisioning safety', () => {
     expect(detectCollisions({
       dbs: [{ name: 'PURKINS-STOREFRONT-DB' }],
       buckets: [{ name: 'purkins-storefront-files' }],
-      workers: [{ name: 'purkins-storefront-mcp' }],
+      workers: [{ name: 'purkins-admin' }],
     })).toEqual([
       'D1: purkins-storefront-db', 'R2: purkins-storefront-files',
-      'Worker: purkins-storefront-mcp',
+      'Worker: purkins-admin',
     ]);
   });
 
@@ -71,7 +71,7 @@ describe('Permanent Purkins provisioning safety', () => {
     const dbId = '00000000-1234-4000-8000-123456789abc';
     const output = renderPermanentConfigs(
       template('wrangler.template.jsonc'),
-      template('mcp/wrangler.template.jsonc'),
+      template('wrangler.admin.template.jsonc'),
       dbId,
     );
     expect(output.storefront).toContain('"workers_dev": false');
@@ -80,15 +80,15 @@ describe('Permanent Purkins provisioning safety', () => {
     expect(output.storefront).toContain('"database_name": "purkins-storefront-db"');
     expect(output.storefront).toContain('"database_id": "' + dbId + '"');
     expect(output.storefront).toContain('"bucket_name": "purkins-storefront-files"');
-    expect(output.mcp).toContain('"name": "purkins-storefront-mcp"');
-    expect(output.mcp).toContain('"PURKINS_MCP_WRITES_ENABLED": "false"');
-    expect(output.mcp).toContain('"workers_dev": false');
-    expect(output.mcp).not.toMatch(/__[A-Z_]+__/);
+    expect(output.admin).toContain('"name": "purkins-admin"');
+    expect(output.admin).toContain('"PURKINS_MCP_WRITES_ENABLED": "false"');
+    expect(output.admin).toContain('"workers_dev": false');
+    expect(output.admin).not.toMatch(/__[A-Z_]+__/);
   });
 
   it('rejects malformed IDs or templates that would expose or index stock', () => {
     const s = template('wrangler.template.jsonc');
-    const m = template('mcp/wrangler.template.jsonc');
+    const m = template('wrangler.admin.template.jsonc');
     expect(() => renderPermanentConfigs(s, m, 'garbage')).toThrow(/UUID/);
     expect(() => renderPermanentConfigs(s.replace('"PRELAUNCH_NOINDEX": "true"', '"PRELAUNCH_NOINDEX": "false"'), m, '00000000-1234-4000-8000-123456789abc'))
       .toThrow(/noindex/);

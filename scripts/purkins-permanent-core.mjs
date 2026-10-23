@@ -4,7 +4,7 @@
  */
 export const TARGET = Object.freeze({
   worker: 'purkins-storefront',
-  mcpWorker: 'purkins-storefront-mcp',
+  adminWorker: 'purkins-admin',
   db: 'purkins-storefront-db',
   images: 'purkins-storefront-images',
   files: 'purkins-storefront-files',
@@ -57,7 +57,7 @@ export function detectCollisions({ dbs, buckets, workers }) {
   const groups = [
     ['D1', dbs, [TARGET.db]],
     ['R2', buckets, [TARGET.images, TARGET.files]],
-    ['Worker', workers, [TARGET.worker, TARGET.mcpWorker]],
+    ['Worker', workers, [TARGET.worker, TARGET.adminWorker]],
   ];
   for (const [kind, rows, targets] of groups) {
     const names = new Set(rows.map((item) => item.name.toLowerCase()));
@@ -66,10 +66,11 @@ export function detectCollisions({ dbs, buckets, workers }) {
   return found;
 }
 
-export function renderPermanentConfigs(storeTemplate, mcpTemplate, id) {
+export function renderPermanentConfigs(storeTemplate, adminTemplate, id) {
   if (!assertUuid(id)) throw new Error('Invalid permanent D1 UUID.');
   function replacePlaceholders(input) {
     const text = input
+      .replaceAll('__ADMIN_NAME__', TARGET.adminWorker)
       .replaceAll('__NAME__', TARGET.worker)
       .replaceAll('__DB_NAME__', TARGET.db)
       .replaceAll('__DB_ID__', id)
@@ -79,7 +80,7 @@ export function renderPermanentConfigs(storeTemplate, mcpTemplate, id) {
     return text;
   }
   let storefront = replacePlaceholders(storeTemplate);
-  let mcp = replacePlaceholders(mcpTemplate);
+  let admin = replacePlaceholders(adminTemplate);
   if (!storefront.includes('"PRELAUNCH_NOINDEX": "true"')) {
     throw new Error('Prelaunch noindex missing from permanent template.');
   }
@@ -91,6 +92,10 @@ export function renderPermanentConfigs(storeTemplate, mcpTemplate, id) {
     return text.replace(marker, marker + '\n  "workers_dev": false,\n  "preview_urls": false,');
   }
   storefront = makeUnrouted(storefront, './src/worker.ts');
-  mcp = makeUnrouted(mcp, 'src/index.ts');
-  return { storefront, mcp };
+  admin = makeUnrouted(admin, './src/admin-worker.ts');
+  if (!admin.includes('"PURKINS_MCP_WRITES_ENABLED": "false"') ||
+      !admin.includes('"PRELAUNCH_NOINDEX": "true"')) {
+    throw new Error('Admin MCP must remain read-only and noindexed during prelaunch.');
+  }
+  return { storefront, admin };
 }

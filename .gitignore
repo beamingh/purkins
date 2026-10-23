@@ -26,6 +26,7 @@ wrangler.jsonc.bak
 /mcp/wrangler.jsonc
 # One permanent Purkins instance configuration, generated locally; never commit IDs/state.
 /wrangler.purkins.permanent.jsonc
+/wrangler.admin.permanent.jsonc
 
 # Environment & local overrides
 .env

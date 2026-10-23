@@ -1,18 +1,19 @@
 # Purkins: one live environment, prelaunch → production
 
 **Decision (23 October 2026): do not create separate staging/development and
-production Cloudflare stacks.** Deploy a single durable Purkins storefront in
-prelaunch mode, then promote *that same* Worker and its database/storage.
+production Cloudflare stacks.** Run **two permanent Workers** for different
+trust boundaries (customer storefront and owner Admin+MCP), sharing the same
+single D1/R2 installation. Promote those Workers without migrating stock.
 
 ## One permanent resource set
 
 | Component | Permanent target name | Notes |
 | --- | --- | --- |
-| Storefront Worker | `purkins-storefront` | Same Worker after production launch |
+| Public Worker | `purkins-storefront` | Customer pages, cart, checkout, webhooks, public APIs |
 | D1 database | `purkins-storefront-db` | Stock, settings, orders; never reset to launch |
 | Product images | `purkins-storefront-images` | R2, same objects and binding |
 | Private files | `purkins-storefront-files` | R2, never enable public r2.dev |
-| MCP Worker | `purkins-storefront-mcp` | Separate Worker by architecture, same D1; writes off initially |
+| Admin + MCP Worker | `purkins-admin` | Owner UI + API + authenticated operator MCP; writes off initially |
 
 Existing account resources `purkins` (D1) and `purkins-media` (R2)
 have unverified origins. **Do not attach to, migrate, overwrite or delete
@@ -77,8 +78,8 @@ This creates exactly one permanent D1 and two private R2 buckets. It does not
 create a staging copy, run remote migrations, deploy or modify Access.
 Generated local configs are gitignored:
 
-- `wrangler.purkins.permanent.jsonc` — permanent storefront Worker
-- `mcp/wrangler.jsonc` — permanent read-only MCP Worker
+- `wrangler.purkins.permanent.jsonc` — permanent public storefront Worker
+- `wrangler.admin.permanent.jsonc` — permanent Admin + authenticated MCP Worker
 - `.instances/purkins-permanent.json` — local creation metadata
 
 If only some API requests succeed, **STOP** and inspect Cloudflare resources.
@@ -88,19 +89,23 @@ infrastructure and refuses rerunning first-time creation blindly.
 After resource creation (these steps are deliberately independent):
 
 ```powershell
+npm run build:workers
 npm run purkins:cloudflare -- build
 npm run purkins:cloudflare -- migrate --confirm=MIGRATE-PURKINS-FOREVER
 npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
 ```
 
+The root npm workspace installs MCP alongside Astro through a single `npm ci`.
 The build swaps in the generated configuration only temporarily, then restores
 the committed `wrangler.jsonc`, even on a normal build failure. It refuses
 to run if that file has uncommitted edits or an unrecovered backup.
 
-The migration action runs **all** numbered migrations against the permanent
-D1 and records completion locally; deploy refuses to proceed if they haven't
-been applied. The first Worker deployment is deliberately **unrouted**:
+The migration action runs **all** numbered migrations against the one permanent
+D1 and records completion locally; deployment is refused until they succeed.
+Both route-filtered Workers initially deploy **unrouted**:
 `workers_dev=false`, `preview_urls=false`. No public URL is enabled.
+The public build omits Admin routes; the Admin build omits checkout, order
+status, product catalog and payment webhooks. Both retain image access.
 
 **Do not enable a public Worker URL or attach a domain yet.** Before doing so,
 set long-lived random `AUTH_SECRET` and `SECRETS_KEK` in the permanent
@@ -140,9 +145,13 @@ config blindly or delete any D1/R2 resource as a recovery shortcut.
 6. Add a few actual Purkins stock items as private drafts and test images,
    variants, bulk/pack count, price review and location movements. No demo
    inventory seeding into long-lived stock unless intentionally requested.
-7. If/when needed, deploy the separate MCP Worker connected to this SAME D1,
-   use a dedicated MCP bearer token, test private/public boundaries and retain
-   `PURKINS_MCP_WRITES_ENABLED=false` until audited write controls ship.
+7. Operator MCP is hosted **inside the Admin Worker**, sharing its D1 binding.
+   Supply a dedicated MCP bearer secret, test session authentication and private
+   data boundaries, and retain `PURKINS_MCP_WRITES_ENABLED=false` until audited
+   write controls ship. Anonymous buyer MCP is **not** hosted on the Admin Worker;
+   future buyer agents should use the public JSON API or a separately reviewed
+   public MCP route. The existing DO-backed MCP handler is reused initially;
+   migration to Cloudflare's stateless handler is a later compatibility-tested step.
 
 These steps have **not** been run on remote Cloudflare infrastructure.
 

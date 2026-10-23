@@ -25,6 +25,7 @@
     "db:seed": "wrangler d1 execute DB --local --file=./seed.sql",
     "provision:cf": "bash scripts/provision-cf.sh",
     "purkins:cloudflare": "node scripts/purkins-permanent.mjs",
+    "build:workers": "node scripts/build-purkins-workers.mjs",
     "provision:local": "node scripts/provision-local.mjs",
     "destroy:cf": "bash scripts/destroy-cf.sh",
     "destroy:local": "bash scripts/destroy-local.sh",
@@ -63,5 +64,8 @@
       "undici": "^7.29.0",
       "sharp": "^0.35.5"
     }
-  }
+  },
+  "workspaces": [
+    "mcp"
+  ]
 }

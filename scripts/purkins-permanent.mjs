@@ -19,10 +19,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, constants,
-} from 'node:fs';
-import { resolve, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   TARGET, parseAccounts, detectCollisions, renderPermanentConfigs,
@@ -32,10 +30,9 @@ import {
 const root = fileURLToPath(new URL('../', import.meta.url));
 const instanceDir = join(root, '.instances');
 const stateFile = join(instanceDir, 'purkins-permanent.json');
-const original = join(root, 'wrangler.jsonc');
 const generated = join(root, 'wrangler.purkins.permanent.jsonc');
 const backup = join(instanceDir, 'wrangler.original.backup.jsonc');
-const mcpGenerated = join(root, 'mcp', 'wrangler.jsonc');
+const adminGenerated = join(root, 'wrangler.admin.permanent.jsonc');
 const expected = {
   create: 'CREATE-PURKINS-FOREVER',
   migrate: 'MIGRATE-PURKINS-FOREVER',
@@ -73,16 +70,16 @@ function ensureSafeLocal() {
 function readState() {
   if (!existsSync(stateFile)) fail('No provisioned permanent instance. Run plan, then create first.');
   const state = JSON.parse(readFileSync(stateFile, 'utf8'));
-  if (state.worker !== TARGET.worker || state.db !== TARGET.db || !assertUuid(state.dbId)) {
+  if (state.worker !== TARGET.worker || state.adminWorker !== TARGET.adminWorker || state.db !== TARGET.db || !assertUuid(state.dbId)) {
     fail('Saved permanent instance metadata is incomplete or mismatched.');
   }
-  if (!existsSync(generated) || !existsSync(mcpGenerated)) {
+  if (!existsSync(generated) || !existsSync(adminGenerated)) {
     fail('Missing permanent Wrangler config. Do not use generic wrangler.jsonc.');
   }
   // Never run a remote migration against an edited/mis-pointed config:
   // the legacy purkins D1 may already contain unrelated data.
   const storefront = readFileSync(generated, 'utf8');
-  const operator = readFileSync(mcpGenerated, 'utf8');
+  const operator = readFileSync(adminGenerated, 'utf8');
   for (const [label, config, expectedParts] of [
     ['storefront', storefront, [
       '"name": "' + TARGET.worker + '"',
@@ -92,11 +89,14 @@ function readState() {
       '"bucket_name": "' + TARGET.files + '"',
       '"PRELAUNCH_NOINDEX": "true"', '"workers_dev": false', '"preview_urls": false',
     ]],
-    ['MCP', operator, [
-      '"name": "' + TARGET.mcpWorker + '"',
+    ['Admin+MCP', operator, [
+      '"name": "' + TARGET.adminWorker + '"',
       '"database_name": "' + TARGET.db + '"',
       '"database_id": "' + state.dbId + '"',
       '"PURKINS_MCP_WRITES_ENABLED": "false"',
+      '"PRELAUNCH_NOINDEX": "true"',
+      '"bucket_name": "' + TARGET.images + '"',
+      '"bucket_name": "' + TARGET.files + '"',
       '"workers_dev": false', '"preview_urls": false',
     ]],
   ]) {
@@ -170,7 +170,7 @@ async function preflight() {
 async function create() {
   requireConfirmation('create');
   ensureSafeLocal();
-  if (existsSync(stateFile) || existsSync(generated) || existsSync(mcpGenerated)) {
+  if (existsSync(stateFile) || existsSync(generated) || existsSync(adminGenerated)) {
     fail('Provisioning metadata/config already exists. Never run first-time creation twice.');
   }
   const { api, account, collisions } = await preflight();
@@ -185,48 +185,44 @@ async function create() {
   await api('POST', path + '/r2/buckets', { name: TARGET.files });
 
   const src = readFileSync(join(root, 'wrangler.template.jsonc'), 'utf8');
-  const mcp = readFileSync(join(root, 'mcp', 'wrangler.template.jsonc'), 'utf8');
-  const configs = renderPermanentConfigs(src, mcp, id);
+  const admin = readFileSync(join(root, 'wrangler.admin.template.jsonc'), 'utf8');
+  const configs = renderPermanentConfigs(src, admin, id);
   assertSecretsNotInConfig(configs.storefront);
   mkdirSync(instanceDir, { recursive: true });
   // 'wx' refuses accidental overwrites, including stale unrelated state.
   writeFileSync(generated, configs.storefront, { flag: 'wx', mode: 0o600 });
-  writeFileSync(mcpGenerated, configs.mcp, { flag: 'wx', mode: 0o600 });
+  writeFileSync(adminGenerated, configs.admin, { flag: 'wx', mode: 0o600 });
   writeFileSync(stateFile, JSON.stringify({
-    worker: TARGET.worker, mcpWorker: TARGET.mcpWorker,
+    worker: TARGET.worker, adminWorker: TARGET.adminWorker,
     db: TARGET.db, dbId: id, images: TARGET.images, files: TARGET.files,
     accountId: account.id, accountName: account.name,
     createdAt: new Date().toISOString(), marker: randomUUID(),
   }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
   console.log('Permanent resources created; configurations saved locally and gitignored.');
-  console.log('NO Worker deployed, NO remote migrations, NO Access or secrets configured.');
+  console.log('NO Workers deployed, NO remote migrations, NO Access or secrets configured.');
 }
 function buildForPermanent() {
   ensureSafeLocal();
-  readState();
-  // Astro consumes the canonical wrangler.jsonc during build. Temporarily use
-  // the generated permanent config, restoring the tracked config in finally.
-  const diff = spawnSync('git', ['diff', '--quiet', '--', 'wrangler.jsonc'], { cwd: root });
-  const staged = spawnSync('git', ['diff', '--cached', '--quiet', '--', 'wrangler.jsonc'], { cwd: root });
-  if (diff.status !== 0 || staged.status !== 0) {
-    fail('wrangler.jsonc has local/staged changes; commit or revert them before building.');
+  const state = readState();
+  // Builds *both* route-filtered Astro bundles, swapping/restoring the tracked
+  // config safely. Never deploy the old monolithic `dist/server/wrangler.json`.
+  const runner = join(root, 'scripts', 'build-purkins-workers.mjs');
+  const result = spawnSync(process.execPath, [runner, '--permanent'], {
+    cwd: root, stdio: 'inherit', env: process.env,
+  });
+  if (result.error || result.status !== 0) {
+    fail('The two-Worker build failed; no remote change was made.');
   }
-  copyFileSync(original, backup, constants.COPYFILE_EXCL); // never overwrite another pending recovery.
-  try {
-    copyFileSync(generated, original);
-    runLocal('astro', ['build']);
-  } finally {
-    copyFileSync(backup, original);
-    rmSync(backup, { force: true });
+  for (const [label, name] of [['public', TARGET.worker], ['admin', TARGET.adminWorker]]) {
+    const output = join(root, 'dist', label, 'server', 'wrangler.json');
+    if (!existsSync(output)) fail('Missing ' + label + ' compiled Worker configuration.');
+    const cfg = JSON.parse(readFileSync(output, 'utf8'));
+    if (cfg.name !== name || cfg.workers_dev !== false ||
+        cfg.preview_urls !== false || cfg.d1_databases?.[0]?.database_id !== state.dbId) {
+      fail('Unsafe generated ' + label + ' Worker binding or route settings.');
+    }
   }
-  const output = join(root, 'dist', 'server', 'wrangler.json');
-  if (!existsSync(output)) fail('Astro output missing dist/server/wrangler.json');
-  const cfg = JSON.parse(readFileSync(output, 'utf8'));
-  if (cfg.name !== TARGET.worker || cfg.workers_dev !== false || cfg.preview_urls !== false) {
-    fail('Generated Worker is not the isolated, unrouted permanent Purkins Worker.');
-  }
-  if (cfg.d1_databases?.[0]?.database_id !== readState().dbId) fail('Built D1 binding does not match permanent resource.');
-  console.log('Permanent Purkins build verified; tracked wrangler.jsonc restored.');
+  console.log('Public and Admin+MCP bundles verified against the single permanent D1.');
 }
 function remoteMigrate() {
   requireConfirmation('migrate');
@@ -245,9 +241,11 @@ function deployUnrouted() {
   const state = readState();
   if (state.migrationsApplied !== true) fail('Remote Purkins migrations must complete before deploying. Run migrate first.');
   buildForPermanent();
-  console.log('Deploying with workers_dev=false and preview_urls=false (unrouted).');
-  runLocal('wrangler', ['deploy', '--config', join(root, 'dist', 'server', 'wrangler.json')]);
-  console.log('Deployed UNROUTED. Configure secrets and Access before any public URL.');
+  console.log('Deploying BOTH Workers with workers_dev=false and preview_urls=false.');
+  for (const target of ['public', 'admin']) {
+    runLocal('wrangler', ['deploy', '--config', join(root, 'dist', target, 'server', 'wrangler.json')]);
+  }
+  console.log('Both Workers deployed UNROUTED. Configure Admin secrets and Access before public URLs.');
 }
 
 try {
