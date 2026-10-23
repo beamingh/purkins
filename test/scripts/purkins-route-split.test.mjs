@@ -16,6 +16,16 @@ describe('Purkins route-level Worker isolation', () => {
     expect(config).toContain("join(stampDir, 'theme.json')");
   });
 
+  it('keeps MCP-only bindings optional for the shared public Worker environment', () => {
+    const declaration = readFileSync(new URL('../../src/env.d.ts', import.meta.url), 'utf8');
+    const optionalMcpBindings = ['MCP_TOKEN?', 'STOREFRONT_URL?', 'STORE_MCP?'];
+    for (const binding of optionalMcpBindings) {
+      expect(declaration).toContain(binding);
+    }
+    expect(declaration).not.toMatch(/\\bMCP_TOKEN:\\s*string/);
+    expect(declaration).not.toMatch(/\\bSTORE_MCP:\\s*DurableObjectNamespace/);
+  });
+
   it('never bundles private management endpoints into the public Worker', () => {
     for (const path of [
       'admin', 'admin/stock-intake.astro', 'admin/locations.astro',
