@@ -20,7 +20,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync,
+  existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, constants,
 } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -186,7 +186,7 @@ function buildForPermanent() {
   if (diff.status !== 0 || staged.status !== 0) {
     fail('wrangler.jsonc has local/staged changes; commit or revert them before building.');
   }
-  copyFileSync(original, backup, 0); // reserved backup path, never overwrite.
+  copyFileSync(original, backup, constants.COPYFILE_EXCL); // never overwrite another pending recovery.
   try {
     copyFileSync(generated, original);
     runLocal('astro', ['build']);
@@ -209,11 +209,16 @@ function remoteMigrate() {
   readState();
   console.log('Applying migrations to PERMANENT Purkins D1, not any other database.');
   runLocal('wrangler', ['d1', 'migrations', 'apply', 'DB', '--remote', '--config', generated]);
+  const state = readState();
+  writeFileSync(stateFile, JSON.stringify({
+    ...state, migrationsApplied: true, migratedAt: new Date().toISOString(),
+  }, null, 2) + '\n', { mode: 0o600 });
 }
 function deployUnrouted() {
   requireConfirmation('deploy');
   ensureSafeLocal();
-  readState();
+  const state = readState();
+  if (state.migrationsApplied !== true) fail('Remote Purkins migrations must complete before deploying. Run migrate first.');
   buildForPermanent();
   console.log('Deploying with workers_dev=false and preview_urls=false (unrouted).');
   runLocal('wrangler', ['deploy', '--config', join(root, 'dist', 'server', 'wrangler.json')]);
