@@ -25,7 +25,7 @@ that goal.
 | --- | --- | --- | --- |
 | P0 | Rapid Stock Intake | Photo-first draft, Save & Next, manual ZMW price, duplicate hints, variant/pack awareness | PR #3 merged; local checks green; UI smoke test pending |
 | P0 | Hierarchical locations | Stable `loc_...` IDs; rooms/sacks/bags; add child, move container, no ancestry cycles; moving parent updates private stock path | PR #4 merged; local checks green; UI smoke test pending |
-| P0 | **Single-environment Cloudflare prelaunch** | One permanent Worker + D1 + R2, Windows-safe provisioning, prelaunch noindex, secured Admin, promotion without data movement | Prelaunch indexing branch prepared; no remote mutations |
+| P0 | **Single-environment Cloudflare prelaunch** | One permanent Worker + D1 + R2, Windows-safe provisioning, prelaunch noindex, secured Admin, promotion without data movement | Prelaunch indexing merged; provisioner proposed; no remote mutations |
 | P0 | **MCP read-only integration** | Deployed separate Durable Object-backed MCP Worker; reject invalid token; distinguish operator-private vs buyer-public tools; writes OFF | Source implemented; live verification pending |
 | P1 | **MCP controlled writes** | Scoped operator permissions, audit log, idempotent draft creates, concurrency checks, revocation and read/write boundary tests before enabling | Not implemented / writes OFF |
 | P1 | **Batch stock intake** | Add multiple sizes and quantities/photo groups at once, camera barcode scanning + manual fallback, validation/recovery on interrupted sessions, CSV import/export | Not implemented |

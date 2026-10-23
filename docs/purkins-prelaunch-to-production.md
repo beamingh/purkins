@@ -44,6 +44,81 @@ guidance requires crawlers to see the tag; `robots.txt: Disallow: /` is not
 a substitute. Use both indexing controls and authorization for their
 separate purposes.
 
+## Windows-safe permanent provisioning commands
+
+The **permanent** install uses `scripts/purkins-permanent.mjs`, with no Bash,
+OpenSSL or Git-tracked Cloudflare IDs. These commands always operate on the
+**new** names `purkins-storefront*`. The legacy `purkins` D1 and
+`purkins-media` bucket must not be adopted or modified.
+
+From `C:\GitHub\purkins` after merging the provisioning PR:
+
+```powershell
+git switch main
+git pull --ff-only origin main
+npm ci
+npm run purkins:cloudflare
+```
+
+With no arguments, the command performs a read-only Cloudflare API preflight,
+checking all relevant Worker, R2 and D1 names and refusing incomplete listings.
+It authenticates through the installed Wrangler login without printing tokens.
+With multiple Cloudflare accounts, set `CLOUDFLARE_ACCOUNT_ID` in your own
+PowerShell session to select the intended account. Do not share authentication
+tokens. Inspect the results before continuing.
+
+Creating permanent cloud resources is a **separate, explicit decision**:
+
+```powershell
+npm run purkins:cloudflare -- create --confirm=CREATE-PURKINS-FOREVER
+```
+
+This creates exactly one permanent D1 and two private R2 buckets. It does not
+create a staging copy, run remote migrations, deploy or modify Access.
+Generated local configs are gitignored:
+
+- `wrangler.purkins.permanent.jsonc` — permanent storefront Worker
+- `mcp/wrangler.jsonc` — permanent read-only MCP Worker
+- `.instances/purkins-permanent.json` — local creation metadata
+
+If only some API requests succeed, **STOP** and inspect Cloudflare resources.
+The tool deliberately never deletes or repurposes partially created
+infrastructure and refuses rerunning first-time creation blindly.
+
+After resource creation (these steps are deliberately independent):
+
+```powershell
+npm run purkins:cloudflare -- build
+npm run purkins:cloudflare -- migrate --confirm=MIGRATE-PURKINS-FOREVER
+npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
+```
+
+The build swaps in the generated configuration only temporarily, then restores
+the committed `wrangler.jsonc`, even on a normal build failure. It refuses
+to run if that file has uncommitted edits or an unrecovered backup.
+
+The migration action runs **all** numbered migrations against the permanent
+D1 and records completion locally; deploy refuses to proceed if they haven't
+been applied. The first Worker deployment is deliberately **unrouted**:
+`workers_dev=false`, `preview_urls=false`. No public URL is enabled.
+
+**Do not enable a public Worker URL or attach a domain yet.** Before doing so,
+set long-lived random `AUTH_SECRET` and `SECRETS_KEK` in the permanent
+Worker (once; never casually rotate the encryption key), configure
+Cloudflare Access or an equivalent secure first-run owner-only onboarding
+flow, and independently check `/admin/*` and `/api/admin/*` gating. The
+current script intentionally does **not** create/open a public endpoint or
+turn on live payments. The owner-only access and first-run secret setup remain
+a release gate.
+
+### Recovery caution
+
+If the Node process is killed forcibly during the temporary config swap,
+the reserved backup at `.instances/wrangler.original.backup.jsonc` stays
+behind. The script refuses further operations until it is manually inspected
+and the tracked `wrangler.jsonc` restored. Never overwrite your committed
+config blindly or delete any D1/R2 resource as a recovery shortcut.
+
 ## First deployment workflow (no separate staging)
 
 1. From Windows PowerShell, use `main` after merging and verifying the
@@ -51,11 +126,11 @@ separate purposes.
    `npm run theme:check`, `npm run mcp:check`.
 2. Smoke test local D1 migration 0043: child bag, parent move, correct dynamic
    location paths and Admin stock form.
-3. Use/implement a **Windows-safe Node.js** provisioning command that checks
-   for name collisions, then creates only the chosen permanent D1/R2 resources
-   and renders instance-specific Wrangler config. The generic
+3. Use the Windows-safe Node.js provisioning workflow above. It performs
+   complete read-only resource-name checks and creates D1/R2 only behind an
+   explicit confirmation, never copying stock from staging. The generic
    `scripts/provision-cf.sh` requires Bash/OpenSSL and automatically deploys;
-   do **not** run it from PowerShell. Never commit generated configs/secrets.
+   **do not run it from PowerShell**. Never commit generated configs/secrets.
 4. Ensure safe, owner-only access before exposing Admin's first-run setup
    wizard. Configure fresh `AUTH_SECRET` and `SECRETS_KEK`. Validate
    unauthenticated Admin pages and mutation API endpoints are blocked.

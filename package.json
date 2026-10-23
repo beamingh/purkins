@@ -24,6 +24,7 @@
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:seed": "wrangler d1 execute DB --local --file=./seed.sql",
     "provision:cf": "bash scripts/provision-cf.sh",
+    "purkins:cloudflare": "node scripts/purkins-permanent.mjs",
     "provision:local": "node scripts/provision-local.mjs",
     "destroy:cf": "bash scripts/destroy-cf.sh",
     "destroy:local": "bash scripts/destroy-local.sh",
