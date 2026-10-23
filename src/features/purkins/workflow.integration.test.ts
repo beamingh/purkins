@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { splitPurkinsMigrationSql } from './migration-test-sql';
 import { Miniflare } from 'miniflare';
 import type { D1Database } from '@cloudflare/workers-types';
 import { createProduct, getProduct, listProducts, updateProduct } from '../products/db';
@@ -41,9 +42,11 @@ describe('Purkins stock intake through demo settlement', () => {
     // real statement separately so the migration is exercised unchanged.
     for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
-      // Run the full cleaned SQL script: migration 0043 includes a SQLite
-      // trigger whose body contains semicolons (unsafe to split on ';').
-      await db.exec(migrationSql.replace(/^\s*--.*$/gm, '').trim());
+      // D1 test adapter executes one statement at a time. Keep the CREATE
+      // TRIGGER block (with its internal semicolon) as a single statement.
+      for (const statement of splitPurkinsMigrationSql(migrationSql)) {
+        await db.prepare(statement).run();
+      }
     }
   }, 30_000);
 
