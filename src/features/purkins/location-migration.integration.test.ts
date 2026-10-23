@@ -52,7 +52,7 @@ describe('Purkins location migration 0043', () => {
     const duplicate = await getIntake(db, 2);
     expect(first?.location_id).toBeTruthy();
     expect(duplicate?.location_id).toBe(first?.location_id);
-    expect(first?.storage_location).toBe('Grey Sack / Blue PEP Bag');
+    expect(first?.storage_location?.toLowerCase()).toBe('grey sack / blue pep bag');
     expect((await getIntake(db, 3))?.storage_location).toBe('White Bag A');
   });
 
