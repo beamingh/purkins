@@ -79,6 +79,31 @@ function readState() {
   if (!existsSync(generated) || !existsSync(mcpGenerated)) {
     fail('Missing permanent Wrangler config. Do not use generic wrangler.jsonc.');
   }
+  // Never run a remote migration against an edited/mis-pointed config:
+  // the legacy purkins D1 may already contain unrelated data.
+  const storefront = readFileSync(generated, 'utf8');
+  const operator = readFileSync(mcpGenerated, 'utf8');
+  for (const [label, config, expectedParts] of [
+    ['storefront', storefront, [
+      '"name": "' + TARGET.worker + '"',
+      '"database_name": "' + TARGET.db + '"',
+      '"database_id": "' + state.dbId + '"',
+      '"bucket_name": "' + TARGET.images + '"',
+      '"bucket_name": "' + TARGET.files + '"',
+      '"PRELAUNCH_NOINDEX": "true"', '"workers_dev": false', '"preview_urls": false',
+    ]],
+    ['MCP', operator, [
+      '"name": "' + TARGET.mcpWorker + '"',
+      '"database_name": "' + TARGET.db + '"',
+      '"database_id": "' + state.dbId + '"',
+      '"PURKINS_MCP_WRITES_ENABLED": "false"',
+      '"workers_dev": false', '"preview_urls": false',
+    ]],
+  ]) {
+    if (expectedParts.some((part) => !config.includes(part))) {
+      fail('Permanent ' + label + ' config does not match created resources or has unsafe public settings.');
+    }
+  }
   return state;
 }
 function assertSecretsNotInConfig(text) {
