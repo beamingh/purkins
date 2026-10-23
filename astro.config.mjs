@@ -1,5 +1,6 @@
 import { writeFileSync as writeSplitRouteFile, mkdirSync as mkdirSplitRouteDirectory } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 import tailwindcss from '@tailwindcss/vite';
@@ -27,11 +28,13 @@ const workerTarget = process.env.PURKINS_WORKER_TARGET;
 if (workerTarget && !['public', 'admin'].includes(workerTarget)) {
   throw new Error('Invalid PURKINS_WORKER_TARGET (expected public or admin).');
 }
+// Astro's config schema expects filesystem path STRINGS, not URL objects.
+// fileURLToPath also handles Windows drive letters and encoded path segments.
 const splitSrc = workerTarget
-  ? new URL(`./.instances/split-build/${workerTarget}/src/`, import.meta.url)
+  ? fileURLToPath(new URL(`./.instances/split-build/${workerTarget}/src/`, import.meta.url))
   : undefined;
 const splitOutput = workerTarget
-  ? new URL(`./dist/${workerTarget}/`, import.meta.url)
+  ? fileURLToPath(new URL(`./dist/${workerTarget}/`, import.meta.url))
   : undefined;
 
 // Stamp every build with the theme it was compiled for. The deploy scripts
@@ -43,10 +46,10 @@ const themeStamp = {
   hooks: {
     'astro:build:done': async () => {
       const { writeFileSync, mkdirSync } = await import('node:fs');
-      const stampDir = splitOutput ?? new URL('./dist/', import.meta.url);
+      const stampDir = splitOutput ?? fileURLToPath(new URL('./dist/', import.meta.url));
       mkdirSync(stampDir, { recursive: true });
       writeFileSync(
-        new URL('./theme.json', stampDir),
+        join(stampDir, 'theme.json'),
         `${JSON.stringify({ theme: theme.id }, null, 2)}\n`,
       );
     },
