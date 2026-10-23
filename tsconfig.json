@@ -9,7 +9,8 @@
   ],
   "exclude": [
     "dist",
-    "mcp"
+    "mcp",
+    ".instances"
   ],
   "compilerOptions": {
     "types": [
