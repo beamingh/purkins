@@ -1,43 +1,47 @@
 /**
- * Split Purkins test migration scripts for the Miniflare D1 test adapter.
+ * Split Purkins migration scripts into executable D1 test statements.
  *
- * Unlike Wrangler migration application, D1Database.exec() in this adapter
- * expects a single SQL statement. Simple semicolon splitting also breaks
- * CREATE TRIGGER ... BEGIN ...; END; in migration 0043.
+ * Miniflare D1's exec()/prepare() are single-statement interfaces. Naively
+ * splitting on every semicolon breaks CREATE TRIGGER ... BEGIN ...; END;.
  *
- * Purkins migrations use line comments and have no semicolons inside SQL
- * string literals. A trigger terminates only at an END; on its own line.
- * This deliberately small parser is test-only, not a general SQL parser.
+ * This helper is intentionally scoped to our checked-in migration syntax:
+ * standalone SQL statements, full-line '--' comments and triggers whose
+ * closing END; is on its own line. Not a general-purpose SQL parser.
  */
 export function splitPurkinsMigrationSql(source: string): string[] {
-  const cleaned = source.replace(/^\s*--[^\n]*(?:\r?\n|$)/gm, '');
   const statements: string[] = [];
   let pending = '';
-  let trigger = false;
+  let inTrigger = false;
 
-  for (const line of cleaned.split(/\r?\n/)) {
-    if (!trigger && /^\s*CREATE\s+TRIGGER\b/i.test(line)) trigger = true;
+  for (const line of source.split(/\r?\n/)) {
+    // Do not match \s* across lines while stripping comments: doing so can
+    // join an index and the next CREATE TRIGGER into the same line.
+    if (/^\s*--/.test(line)) continue;
+
+    if (!inTrigger && !pending.trim() && /^\s*CREATE\s+TRIGGER\b/i.test(line)) {
+      inTrigger = true;
+    }
     pending += line + '\n';
 
-    if (trigger) {
+    if (inTrigger) {
       if (/^\s*END\s*;\s*$/i.test(line)) {
-        const statement = pending.trim().replace(/;\s*$/, '');
-        statements.push(statement);
+        // SQLite requires the final semicolon in a CREATE TRIGGER statement.
+        statements.push(pending.trim());
         pending = '';
-        trigger = false;
+        inTrigger = false;
       }
       continue;
     }
 
-    let end: number;
-    while ((end = pending.indexOf(';')) >= 0) {
-      const statement = pending.slice(0, end).trim();
+    let separator: number;
+    while ((separator = pending.indexOf(';')) !== -1) {
+      const statement = pending.slice(0, separator).trim();
       if (statement) statements.push(statement);
-      pending = pending.slice(end + 1);
+      pending = pending.slice(separator + 1);
     }
   }
 
-  if (trigger || pending.trim()) {
+  if (inTrigger || pending.trim()) {
     throw new Error('Unterminated Purkins migration SQL statement.');
   }
   return statements;
