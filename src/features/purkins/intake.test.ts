@@ -39,6 +39,29 @@ describe('Purkins private intake', () => {
       expect(suggestedSellingPriceCents(parsed.data)).toBeNull();
     }
   });
+  it('supports direct manual selling price without purchase cost or exchange-rate inputs', () => {
+    const parsed = parseIntakeFields(form({ pricing_mode: 'manual', purchase_currency: 'ZAR' }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.pricing_mode).toBe('manual');
+    expect(parsed.data.purchase_cost_minor).toBeNull();
+    expect(parsed.data.zar_to_zmw).toBeNull();
+    expect(landedCostCents(parsed.data)).toBeNull();
+    expect(suggestedSellingPriceCents(parsed.data)).toBeNull();
+  });
+  it('keeps legacy inputs cost-based and rejects invalid pricing modes', () => {
+    const parsed = parseIntakeFields(form({}));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.pricing_mode).toBe('cost_based');
+    expect(parseIntakeFields(form({ pricing_mode: 'free_for_all' }))).toHaveProperty('error');
+  });
+  it('allows known rand purchase cost to remain recorded during manual pricing without inventing an FX rate', () => {
+    const parsed = parseIntakeFields(form({
+      pricing_mode: 'manual', purchase_currency: 'ZAR', purchase_cost: '50.00',
+    }));
+    if (!('data' in parsed)) throw new Error(parsed.error);
+    expect(parsed.data.purchase_cost_minor).toBe(5000);
+    expect(landedCostCents(parsed.data)).toBeNull();
+  });
   it('rejects rand cost without an exchange rate', () => {
     expect(parseIntakeFields(form({purchase_currency:'ZAR',purchase_cost:'50'})))
       .toMatchObject({error:expect.stringContaining('rate')});
