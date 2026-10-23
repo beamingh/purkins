@@ -364,16 +364,16 @@ const inputClass =
     const suggestedOutput = form.querySelector<HTMLElement>('[data-intake-suggested]');
     const useButton = form.querySelector<HTMLButtonElement>('[data-intake-use-price]');
     const priceField = form.querySelector<HTMLInputElement>('input[name="price"]');
-    const pricingMode = form.querySelector<HTMLSelectElement>('[data-intake-pricing-mode]');
     const costFields = form.querySelector<HTMLElement>('[data-intake-cost-fields]');
     const manualHelp = form.querySelector<HTMLElement>('[data-intake-manual-help]');
     let suggestion: number | null = null;
 
     function update() {
-      const manual = pricingMode?.value === 'manual';
+      const values = new FormData(form);
+      const manual = values.get('pricing_mode') === 'manual';
       if (costFields) costFields.hidden = manual;
       if (manualHelp) manualHelp.hidden = !manual;
-      const parsed = parseIntakeFields(new FormData(form));
+      const parsed = parseIntakeFields(values);
       const landed = 'data' in parsed ? landedCostCents(parsed.data) : null;
       suggestion = 'data' in parsed ? suggestedSellingPriceCents(parsed.data) : null;
       if (landedOutput) landedOutput.textContent =
