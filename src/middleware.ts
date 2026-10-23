@@ -27,6 +27,7 @@ import {
 import { addCacheTags, responseCacheTags } from './features/cache/tags';
 import { normalizeSearchQuery } from './features/search/query';
 import { isForbiddenFormOrigin } from './features/auth/formOrigin';
+import { isPrelaunchNoindex, PRELAUNCH_ROBOTS_HEADER } from './features/seo/prelaunch';
 
 /**
  * Admin auth gate. Protects BOTH the admin UI (`/admin/*`) and the admin API
@@ -282,8 +283,11 @@ const SECURITY_HEADERS: Record<string, string> = {
 /** Add the security headers, rebuilding when the response's headers are immutable
  *  (e.g. a Response.redirect to a payment provider, or a Cache API hit). */
 function withSecurityHeaders(res: Response): Response {
+  const headers = isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)
+    ? { ...SECURITY_HEADERS, 'x-robots-tag': PRELAUNCH_ROBOTS_HEADER }
+    : SECURITY_HEADERS;
   try {
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) res.headers.set(k, v);
+    for (const [k, v] of Object.entries(headers)) res.headers.set(k, v);
     return res;
   } catch {
     const rebuilt = new Response(res.body, {
@@ -291,7 +295,7 @@ function withSecurityHeaders(res: Response): Response {
       statusText: res.statusText,
       headers: new Headers(res.headers),
     });
-    for (const [k, v] of Object.entries(SECURITY_HEADERS)) rebuilt.headers.set(k, v);
+    for (const [k, v] of Object.entries(headers)) rebuilt.headers.set(k, v);
     return rebuilt;
   }
 }
