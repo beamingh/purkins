@@ -1,0 +1,90 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { listLocationTree, locationIdValid } from '../../features/purkins/locations';
+
+const nodes = await listLocationTree(env.DB);
+const error = Astro.url.searchParams.get('error');
+const saved = Astro.url.searchParams.get('saved') === '1';
+const desiredParent = Astro.url.searchParams.get('parent') ?? '';
+const defaultParent = locationIdValid(desiredParent) && nodes.some((n) => n.id === desiredParent)
+  ? desiredParent : '';
+---
+
+<AdminLayout title="Stock locations" active="products">
+  <a class="text-sm text-muted hover:text-brand" href="/admin/stock-intake">&larr; Back to Rapid Stock Intake</a>
+  <h1 class="mt-3 font-serif text-3xl">Stock locations</h1>
+  <p class="mt-2 mb-6 text-sm text-muted">
+    Organize physical rooms, sacks, plastic bags and shelves. A container keeps its ID when
+    moved, so all items inside it automatically appear at its new location.
+    These paths are visible only in the Admin and authorized operator tools.
+  </p>
+  {error && <p role="alert" class="mb-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+  {saved && <p role="status" class="mb-5 rounded-md border border-line bg-surface p-3 text-sm">Location saved.</p>}
+
+  <div class="grid gap-6 lg:grid-cols-2">
+    <form action="/api/admin/locations" method="POST" class="rounded-lg border border-line bg-white/60 p-4 space-y-4">
+      <input type="hidden" name="_action" value="create" />
+      <h2 class="font-serif text-xl">Create a location</h2>
+      <label class="block text-sm">Name
+        <input name="name" required maxlength="100" placeholder="e.g. Blue PEP Bag"
+          class="mt-1 w-full rounded-md border border-line px-3 py-2" />
+      </label>
+      <label class="block text-sm">Type
+        <select name="kind" class="mt-1 w-full rounded-md border border-line px-3 py-2">
+          <option value="other">Other</option><option value="site">Site</option>
+          <option value="room">Room</option><option value="sack">Sack</option>
+          <option value="bag">Bag</option><option value="shelf">Shelf</option>
+          <option value="bin">Bin</option>
+        </select>
+      </label>
+      <label class="block text-sm">Inside (parent)
+        <select name="parent_id" class="mt-1 w-full rounded-md border border-line px-3 py-2">
+          <option value="">Top-level location</option>
+          {nodes.map((node) => (
+            <option value={node.id} selected={node.id === defaultParent}>{node.path}</option>
+          ))}
+        </select>
+      </label>
+      <button type="submit" class="rounded-md bg-brand px-5 py-2 text-sm font-medium text-on-brand">Create location</button>
+    </form>
+    <form action="/api/admin/locations" method="POST" class="rounded-lg border border-line bg-white/60 p-4 space-y-4">
+      <input type="hidden" name="_action" value="move" />
+      <h2 class="font-serif text-xl">Move a location</h2>
+      <p class="text-xs text-muted">Move an entire sack or bag without editing its child containers or their products. Moving a location into itself or any of its descendants is blocked.</p>
+      <label class="block text-sm">Location to move
+        <select name="location_id" required class="mt-1 w-full rounded-md border border-line px-3 py-2">
+          <option value="">Choose location</option>
+          {nodes.map((node) => (<option value={node.id}>{node.path}</option>))}
+        </select>
+      </label>
+      <label class="block text-sm">New parent
+        <select name="parent_id" class="mt-1 w-full rounded-md border border-line px-3 py-2">
+          <option value="">Top level</option>
+          {nodes.map((node) => (<option value={node.id}>{node.path}</option>))}
+        </select>
+      </label>
+      <button type="submit" class="rounded-md border border-line px-5 py-2 text-sm font-medium hover:bg-surface">Move location</button>
+    </form>
+  </div>
+
+  <section class="mt-8" aria-labelledby="location-tree">
+    <h2 id="location-tree" class="font-serif text-xl">Location tree ({nodes.length})</h2>
+    {nodes.length === 0 ? (
+      <p class="mt-3 text-sm text-muted">No locations yet. Create the physical room or sack where your stock is stored.</p>
+    ) : (
+      <ul class="mt-3 divide-y divide-line rounded-lg border border-line bg-white/60">
+        {nodes.map((node) => (
+          <li class="flex items-center justify-between gap-3 p-3 text-sm">
+            <div class="min-w-0">
+              <div class="font-medium break-words">{node.path}</div>
+              <small class="text-muted">{node.kind}</small>
+            </div>
+            <a class="shrink-0 text-xs font-medium text-brand hover:underline"
+              href={`/admin/locations?parent=${encodeURIComponent(node.id)}`}>+ Child</a>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</AdminLayout>
