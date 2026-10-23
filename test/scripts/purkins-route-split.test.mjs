@@ -5,6 +5,17 @@ import { join } from 'node:path';
 import { routeBelongsToWorker, prepareWorkerSource } from '../../scripts/purkins-route-split.mjs';
 
 describe('Purkins route-level Worker isolation', () => {
+  it('passes Windows-safe filesystem strings, not URL objects, to Astro srcDir/outDir', () => {
+    const config = readFileSync(new URL('../../astro.config.mjs', import.meta.url), 'utf8');
+    expect(config).toContain('fileURLToPath(new URL(`./.instances/split-build/');
+    expect(config).toContain('fileURLToPath(new URL(`./dist/');
+    expect(config).toContain('srcDir: splitSrc');
+    expect(config).toContain('outDir: splitOutput');
+    // The theme stamp must also use a filesystem path after srcDir/outDir
+    // are changed from URL objects to strings.
+    expect(config).toContain("join(stampDir, 'theme.json')");
+  });
+
   it('never bundles private management endpoints into the public Worker', () => {
     for (const path of [
       'admin', 'admin/stock-intake.astro', 'admin/locations.astro',
