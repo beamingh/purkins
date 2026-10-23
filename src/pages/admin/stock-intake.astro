@@ -17,6 +17,14 @@ const savedItem = created ? await env.DB.prepare(
   'JOIN purkins_intake i ON i.product_id=p.id WHERE p.public_id=? AND p.active=0',
 ).bind(created).first<{id: string; name: string; sku: string}>() : null;
 const saved = Astro.url.searchParams.get('saved') === '1';
+// Recent private drafts help an operator recover a saved item without entering
+// a barcode or navigating across the full product list.
+const { results: recentDrafts } = await env.DB.prepare(
+  `SELECT p.public_id AS id, p.name, i.sku, i.condition_status
+     FROM products p JOIN purkins_intake i ON i.product_id=p.id
+    WHERE i.status='draft' AND p.active=0
+    ORDER BY p.id DESC LIMIT 8`,
+).all<{id: string; name: string; sku: string; condition_status: string}>();
 ---
 
 <AdminLayout title="Rapid stock intake" active="products">
@@ -56,4 +64,19 @@ const saved = Astro.url.searchParams.get('saved') === '1';
       weightRequired={weightRequired}
     />
   </section>
+
+  {(recentDrafts ?? []).length > 0 && (
+    <section class="mt-8" aria-labelledby="intake-recent-heading">
+      <h2 id="intake-recent-heading" class="font-serif text-xl">Recent private drafts</h2>
+      <p class="mt-1 mb-3 text-xs text-muted">These products are not visible to shoppers. Open a draft to add more details or review its price.</p>
+      <ul class="divide-y divide-line rounded-lg border border-line bg-white/60">
+        {(recentDrafts ?? []).filter((d) => d.id?.startsWith('prod_')).map((d) => (
+          <li class="flex flex-wrap items-center justify-between gap-2 px-4 py-3 text-sm">
+            <span>{d.name} <small class="ml-2 text-muted">{d.sku}</small></span>
+            <a href={`/admin/products/${d.id}/edit`} class="font-medium text-brand hover:underline">Edit draft &rarr;</a>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )}
 </AdminLayout>
