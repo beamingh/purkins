@@ -1,3 +1,5 @@
+import { writeFileSync as writeSplitRouteFile, mkdirSync as mkdirSplitRouteDirectory } from 'node:fs';
+import { join } from 'node:path';
 import { defineConfig } from 'astro/config';
 import cloudflare from '@astrojs/cloudflare';
 import tailwindcss from '@tailwindcss/vite';
@@ -51,11 +53,41 @@ const themeStamp = {
   },
 };
 
+// Validate the *resolved* Astro route manifest, not just the source copy.
+// A wrong srcDir, plugin-injected route, or accidentally included checkout/API
+// is a hard build failure instead of a security regression at deployment.
+const splitRouteBoundary = {
+  name: 'purkins:worker-route-boundary',
+  hooks: {
+    'astro:routes:resolved': ({ routes }) => {
+      if (!workerTarget) return;
+      const paths = routes.filter((r) => r.origin === 'project').map((r) => r.pattern);
+      const hasAdmin = (p) => p === '/admin' || p.startsWith('/admin/') ||
+        p === '/api/admin' || p.startsWith('/api/admin/');
+      const adminShared = (p) => p === '/404' || p === '/images' ||
+        p.startsWith('/images/') || p === '/api/health';
+      const bad = paths.filter((p) => workerTarget === 'public'
+        ? hasAdmin(p)
+        : !hasAdmin(p) && !adminShared(p));
+      if (bad.length > 0) {
+        throw new Error('Purkins ' + workerTarget + ' build crossed route boundary: ' + bad.join(', '));
+      }
+      if (workerTarget === 'admin' && !paths.some((p) => p === '/admin') ||
+          workerTarget === 'public' && !paths.some((p) => p === '/api/checkout')) {
+        throw new Error('Purkins ' + workerTarget + ' Worker lost its expected routes.');
+      }
+      const output = join(process.cwd(), '.instances', 'split-build', workerTarget);
+      mkdirSplitRouteDirectory(output, { recursive: true });
+      writeSplitRouteFile(join(output, 'routes.json'), JSON.stringify(paths.sort(), null, 2) + '\n');
+    },
+  },
+};
+
 export default defineConfig({
   ...(splitSrc ? { srcDir: splitSrc } : {}),
   ...(splitOutput ? { outDir: splitOutput } : {}),
   output: 'server',
-  integrations: [themeStamp],
+  integrations: [themeStamp, splitRouteBoundary],
   // Replaced by the equivalent middleware guard so the bearer-capability
   // /pay/otk_… form can support clients that omit Origin without weakening
   // cookie-authenticated Admin/account forms.
