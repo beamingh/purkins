@@ -1,4 +1,5 @@
 ---
+import { listStorageLocations } from '../../../../features/purkins/db';
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../../../layouts/AdminLayout.astro';
 import MediaPicker from '../../../../features/media/MediaPicker.astro';
@@ -31,6 +32,7 @@ const categoryOptions = flattenTree(buildTree(await listCategories(env.DB)));
 const selectedCategoryIds = (await categoriesForProduct(env.DB, product.id)).map((c) => c.id);
 const images = await listProductImages(env.DB, product.id);
 const intake = await getIntake(env.DB, product.id);
+const storageLocations = intake ? await listStorageLocations(env.DB, intake.storage_location) : [];
 const error = Astro.url.searchParams.get('error');
 
 // Variants + extras (show all, including any inactive, so the admin sees everything).
@@ -98,6 +100,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     product={product}
     intake={intake}
     categoryOptions={categoryOptions}
+    storageLocations={storageLocations}
     selectedCategoryIds={selectedCategoryIds}
     error={error}
     showImage={false}
