@@ -38,7 +38,7 @@ describe('Purkins stock intake through demo settlement', () => {
     for (const sql of schema) await db.exec(sql);
     // D1's exec() treats comment-only fragments as empty statements. Run each
     // real statement separately so the migration is exercised unchanged.
-    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql']) {
+    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
       const statements = migrationSql
         .replace(/^\s*--.*$/gm, '')
@@ -81,6 +81,46 @@ describe('Purkins stock intake through demo settlement', () => {
     (await db.prepare('SELECT stock FROM products WHERE id=?').bind(id).first<{ stock: number }>())?.stock;
   const item = (id: number, qty = 1, variantId?: number) =>
     ({ productId: id, variantId, name: 'Purkins test romper', priceCents: 15000, quantity: qty });
+
+  it('supports manual selling prices without purchase cost, while keeping drafts private until approval', async () => {
+    const { id, fields } = await createDraft('Manual Price Cream Babygrow');
+    const manuallyPriced = { ...fields, pricing_mode: 'manual' as const,
+      purchase_cost_minor: null, zar_to_zmw: null, markup_percent: null,
+      overhead_zwm_cents: 0, condition_status: 'complete' as const,
+    };
+    await saveIntakeDraft(db, id, manuallyPriced);
+    expect((await getIntake(db, id))?.pricing_mode).toBe('manual');
+    expect((await getIntake(db, id))?.purchase_cost_minor).toBeNull();
+    expect((await listProducts(db, 100)).some((p) => p.id === id)).toBe(false);
+    expect(await approveIntake(db, id)).toMatch(/photograph/);
+    await db.prepare("UPDATE products SET image_key='media/manual.webp' WHERE id=?").bind(id).run();
+    expect(await approveIntake(db, id)).toBeNull();
+    expect((await listProducts(db, 100)).some((p) => p.id === id)).toBe(true);
+  });
+
+  it('keeps cost-based approval blocked when cost is missing and protects manual known costs', async () => {
+    const { id, fields } = await createDraft('Mixed Price Safety Romper');
+    await db.prepare("UPDATE products SET image_key='media/safety.webp' WHERE id=?").bind(id).run();
+    await saveIntakeDraft(db, id, { ...fields, purchase_cost_minor: null });
+    expect(await approveIntake(db, id)).toMatch(/purchase cost/);
+    await saveIntakeDraft(db, id, { ...fields, pricing_mode: 'manual', purchase_cost_minor: 16000 });
+    expect(await approveIntake(db, id)).toMatch(/below the estimated landed cost/);
+    await saveIntakeDraft(db, id, { ...fields, pricing_mode: 'manual', purchase_cost_minor: null,
+      condition_status: 'review' });
+    expect(await approveIntake(db, id)).toMatch(/incomplete or unchecked/);
+  });
+
+  it('rejects zero-priced active size variants even with manual pricing and unknown costs', async () => {
+    const { id, fields } = await createDraft('Manual Variant Price Romper');
+    await saveIntakeDraft(db, id, { ...fields, pricing_mode: 'manual', purchase_cost_minor: null });
+    await db.prepare("UPDATE products SET image_key='media/manual-size.webp' WHERE id=?").bind(id).run();
+    await db.prepare(
+      "INSERT INTO product_variants (product_id, label, price_cents, stock, active) VALUES (?, '3-6m', 0, 1, 1)",
+    ).bind(id).run();
+    expect(await approveIntake(db, id)).toMatch(/positive selling price for every active/);
+    await db.prepare("UPDATE product_variants SET price_cents=14500 WHERE product_id=?").bind(id).run();
+    expect(await approveIntake(db, id)).toBeNull();
+  });
 
   it('records each size barcode privately and blocks an incomplete pack from publication', async () => {
     const { id } = await createDraft('Tagged Incomplete Pack');
