@@ -39,10 +39,17 @@ export function assertApiList(page, kind) {
   if (kind === 'r2' && (page.result?.cursor || page.result?.continuation_token)) {
     throw new Error('Cloudflare R2 list has more pages. Refusing incomplete inventory.');
   }
-  if (!rows.every((item) => typeof item.name === 'string')) {
+  // The Workers API's GET /workers/scripts returns Worker names as
+  // result[].id, while D1 and R2 expose result[].name. Normalize to a
+  // common name before checking collisions or approving any resource creation.
+  // Fail closed if the API changes to an unknown shape.
+  const normalized = kind === 'workers'
+    ? rows.map((item) => ({ name: item.id ?? item.name }))
+    : rows;
+  if (!normalized.every((item) => typeof item.name === 'string' && item.name.length > 0)) {
     throw new Error('Cloudflare ' + kind + ' resource name missing.');
   }
-  return rows;
+  return normalized;
 }
 
 export function detectCollisions({ dbs, buckets, workers }) {
