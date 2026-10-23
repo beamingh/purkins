@@ -1,4 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import { assignIntakeLocation, resolveLegacyLocation } from './locations';
 import {
   normalizeSupplierBarcode,
   generateItemSku,
@@ -6,6 +7,15 @@ import {
   type IntakeFields,
   type IntakeRecord,
 } from './intake';
+
+/** Read paths through the live location tree. The legacy text snapshot is only a fallback.
+ * Moving a sack automatically changes all child paths without touching product rows. */
+const LOCATION_CTE = `WITH RECURSIVE location_paths(id, path) AS (
+  SELECT id, name FROM purkins_locations WHERE parent_id IS NULL
+  UNION ALL
+  SELECT child.id, location_paths.path || ' / ' || child.name
+  FROM purkins_locations child JOIN location_paths ON child.parent_id = location_paths.id
+)`;
 
 /**
  * Existing private storage paths, to power the Admin intake selector.
@@ -38,8 +48,11 @@ export async function listStorageLocations(
  * do not invite a partner until role-level permissions are implemented.
  */
 export async function getIntake(db: D1Database, productId: number): Promise<IntakeRecord | null> {
-  return db.prepare('SELECT * FROM purkins_intake WHERE product_id = ?')
-    .bind(productId).first<IntakeRecord>();
+  return db.prepare(
+    LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS storage_location
+      FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
+      WHERE i.product_id=?`,
+  ).bind(productId).first<IntakeRecord>();
 }
 
 export async function getIntakesForProducts(
@@ -53,7 +66,9 @@ export async function getIntakesForProducts(
     const batch = productIds.slice(i, i + 100);
     const placeholder = batch.map(() => '?').join(',');
     const { results } = await db.prepare(
-      `SELECT * FROM purkins_intake WHERE product_id IN (${placeholder})`,
+      LOCATION_CTE + ` SELECT i.*, COALESCE(lp.path, i.storage_location) AS storage_location
+        FROM purkins_intake i LEFT JOIN location_paths lp ON lp.id=i.location_id
+        WHERE i.product_id IN (${placeholder})`,
     ).bind(...batch).all<IntakeRecord>();
     for (const row of results ?? []) output.set(row.product_id, row);
   }
@@ -82,6 +97,10 @@ export async function insertIntake(
     fields.condition_status ?? 'complete', fields.internal_notes ?? null,
     fields.pricing_mode ?? 'cost_based',
   ).run();
+  if (fields.storage_location) {
+    const locationId = await resolveLegacyLocation(db, fields.storage_location);
+    await assignIntakeLocation(db, productId, locationId);
+  }
 }
 
 /** Saving an intake item always revokes approval. Update product.active=0 first. */
