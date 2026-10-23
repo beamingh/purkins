@@ -1,46 +1,72 @@
-# Purkins branch status and integration policy
+# Purkins source integration and release status
 
-**Updated: 23 October 2026.** Purkins' chosen implementation is **Minshop on Astro,
-Cloudflare Workers, D1 and R2**. **Payload CMS and Next.js are discontinued.**
-The GitHub `main` branch is the intended integration source of truth, **not yet**
-the operational storefront. Current development is on
-`feat/purkins-stock-cataloguing`.
+**Updated: 23 October 2026.** The selected implementation is **Minshop on Astro,
+Cloudflare Workers, D1 and R2**. Payload CMS / Next.js is discontinued.
 
-| Branch | Status | Direction |
+**PR [#2](https://github.com/beamingh/purkins/pull/2) merged into `main`**
+at commit `22474c9e47a40f4e9244bfa673daec7c61354688`.
+**Source integration is complete; production rollout is not approved.**
+No remote migrations, deployments, live stock publication or inventory imports
+were performed as part of the merge.
+
+## Branch register
+
+| Branch | Current status | Policy |
 | --- | --- | --- |
-| `main` | INTEGRATION TARGET | Currently a minimal repository baseline; accept reviewed, tested Minshop changes via PR |
-| `feat/purkins-stock-cataloguing` | ACTIVE / REVIEW REQUIRED | Contains Minshop foundation + private stock intake + barcode, sizes and MCP changes; candidate for integration into `main` |
-| `feat/purkins-inventory` | SUPERSEDED (ancestor) | Its commits are included in the active branch; do not develop or merge separately |
-| `feat/minshop-foundation` | SUPERSEDED (ancestor) | Its commits are included in the active branch; do not develop or merge separately |
-| `feat/payload-foundation` | DISCONTINUED / HISTORICAL | Separate Next.js/Payload implementation; do not merge, deploy or continue development; PR #1 closed unmerged |
+| `main` | **ACTIVE / INTEGRATED SOURCE** | Only active development base going forward; not a production-approved release |
+| `feat/purkins-stock-cataloguing` | **MERGED / HISTORICAL** | PR #2 was merged into `main`; do not maintain or merge it again |
+| `feat/purkins-inventory` | **SUPERSEDED / HISTORICAL** | Ancestor already included in merged work; do not merge separately |
+| `feat/minshop-foundation` | **SUPERSEDED / HISTORICAL** | Ancestor already included in merged work; do not merge separately |
+| `feat/payload-foundation` | **DISCONTINUED / HISTORICAL** | Abandoned Next.js/Payload implementation; PR #1 closed unmerged; never deploy or merge |
 
-**Do not delete history or blindly merge old branches.** Old branch pointers are
-retained until the active branch has been reviewed, validated, and integrated.
-Status-only documentation commits on superseded branches must not be used as a
-reason to cherry-pick old implementation files into the active branch.
+Branch pointers remain intact as references. Do not cherry-pick obsolete
+implementations back into `main`. New work should branch from `main`.
 
-## What must happen before the active code is merged
+## Source integration verification
 
-- [x] Local developer reported `npm test`: **87 files, 954 tests passed** after the dependency upgrades; email-outbox mocks and the Vitest config import were then tidied and need a final focused rerun.
-- [x] Local developer reported `npm run check`: zero errors, zero warnings (two harmless hints).
-- [x] Local developer reported `npm run build`: Astro production build succeeded.
-- [x] Local developer reported `npm run theme:check`: `storefront boundary: ok`.
-- [x] Local developer reported `npm run mcp:check` after dependency upgrades: TypeScript passed and Wrangler **4.152.0** dry run succeeded (3,103.17 KiB upload / 584.09 KiB gzip), with `PURKINS_MCP_WRITES_ENABLED=false`; no Worker deployed.
-- [ ] **Commit updated dependency manifests + lockfiles.** Developer's local production audits show **zero vulnerabilities** for storefront and MCP, with updated dependencies installed from lockfiles; `npm run mcp:check` and `npm test` also passed after the upgrades. Those four changed package files remain **uncommitted locally** and are not yet part of PR #2. Commit/push only those four files, then recheck audits and tests on the committed PR head. No `--force` was used.
-- [ ] Apply migrations 0040 and 0041 to **isolated local D1** and confirm clean and upgrade paths, not remote D1.
-- [ ] Verify stock workflow through Admin, including sizes, per-size barcodes, draft state, incomplete stock, and accurate pack counts.
-- [ ] Exercise private operator MCP tools against a local test DB, including auth denial, cost privacy, data validation, repeated/concurrent writes, and approval revocation.
-- [ ] Review the generic Minshop MCP tools for any bypass of Purkins publication/costing rules.
-- [ ] Confirm MCP authentication, narrowly scoped operator rights, audit logging, idempotency, and race safety for high-impact stock writes. **Do not deploy MCP writes while these gates remain incomplete.**
-- [ ] Explicitly confirm all GitHub Actions workflows remain manual-only; no CI step performs production deployment.
-- [ ] Review requested changes and merge through the feature PR when validation is complete.
+- [x] Local `npm test` after dependency upgrade and test-fixture cleanup:
+  **87 files / 954 tests passed**, including stock workflow D1 integration tests
+- [x] Local `npm run check`: **0 errors, 0 warnings**, two unused-variable hints
+- [x] Local `npm run build`: Astro Worker build completed
+- [x] Local `npm run theme:check`: storefront boundary OK
+- [x] Local `npm run mcp:check` after dependency upgrade: TypeScript and
+  Wrangler **4.152.0 dry run** passed, **no deployment**, write flag `false`
+- [x] Local `npm audit --omit=dev` and `npm audit --prefix mcp --omit=dev`:
+  **0 reported production vulnerabilities** after dependency updates
+- [x] Dependency manifests and lockfiles committed and pushed as `2f6c2ca`
+- [x] Checked GitHub workflow `.github/workflows/checks.yml` is
+  **manual `workflow_dispatch` only**, with no deployment steps
+- [x] PR #2 merged into `main` (no production-side effects)
 
-## Project boundary
+These are recorded *local test results*, not a claim of complete production
+acceptance. The manual GitHub Actions workflow has not been reported as run.
 
-The retired Payload branch is **not** an alternate implementation to merge or
-a backlog of features to port. Future Purkins functionality belongs in the chosen
-Minshop architecture. Never reuse any Payload-era D1/R2 or SeeZambia resources
-without a separate inventory and explicit approval.
+## Release blockers / next operational work
 
-This registry is a coordination aid. It does not itself run tests, migrate D1,
-publish inventory, deploy workers, or authorize a merge.
+- [ ] Apply migrations `0040_purkins_intake.sql` and
+  `0041_purkins_cataloguing.sql` to an **isolated local D1 database**,
+  validating both clean setup and upgrade scenarios; don't touch remote D1
+- [ ] Smoke-test actual Admin workflow and UI: photo-first intake,
+  unique item and variant identity, sizes/colours, supplier barcodes, original
+  retail tags, package counts, incomplete garments, private storage locations,
+  suggested pricing and explicit owner publication approval
+- [ ] Test private MCP operator authentication/denial, redaction of purchase
+  cost and internal location, generic tool bypass prevention, approval revocation
+  and draft-only creation against a disposable local D1 fixture
+- [ ] Implement and verify narrowly scoped MCP write authorization, audit logs,
+  idempotency, retry safety and concurrent stock-edit controls
+- [ ] Validate local payment methods, shipping/pickup, image delivery, inventory
+  reservations, order email and the actual checkout journey
+- [ ] Review production Cloudflare resource binding, credentials, domain and
+  release plan. Only deploy or run remote migrations with separate approval
+
+**MCP write tools must stay disabled:** the tracked template defaults to
+`PURKINS_MCP_WRITES_ENABLED=false`. Do not enable until the write-security
+items above are proved.
+
+## Architectural boundary
+
+The abandoned Payload branch is reference history, not an alternative
+implementation or a feature backlog to port. Do not reuse any Payload-era
+or SeeZambia Cloudflare database/bucket/resources for Purkins without explicit
+resource review and approval.
