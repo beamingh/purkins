@@ -36,6 +36,23 @@ describe('Purkins inventory route and form safety wiring', () => {
     expect(form).toContain('data-intake-use-price');
   });
 
+  it('offers saved locations and creates new paths in authenticated Admin forms only', () => {
+    const form = source('../products/ProductForm.astro');
+    const desk = source('../../pages/admin/stock-intake.astro');
+    const fresh = source('../../pages/admin/products/new.astro');
+    const edit = source('../../pages/admin/products/[id]/edit.astro');
+    const locations = source('./db.ts');
+    expect(form).toContain('name="storage_location_existing"');
+    expect(form).toContain('name="storage_location_new"');
+    expect(form).toContain('data-intake-new-location');
+    for (const page of [desk, fresh, edit]) {
+      expect(page).toContain('listStorageLocations(');
+      expect(page).toContain('storageLocations={storageLocations}');
+    }
+    expect(locations).toContain('FROM purkins_intake');
+    expect(locations).toContain('GROUP BY TRIM(storage_location) COLLATE NOCASE');
+  });
+
   it('keeps the private intake table out of customer-facing listing queries', () => {
     const productDb = source('../products/db.ts');
     const catalog = source('../storefront/catalog.ts');
