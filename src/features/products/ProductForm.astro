@@ -407,11 +407,11 @@ const inputClass =
       controller = currentController;
       try {
         const matches = await Promise.all(terms.map(async (term) => {
-          const target = new URL('/api/admin/stock-intake/duplicates', window.location.origin);
-          target.searchParams.set('q', term);
-          const response = await fetch(target, {
+          const response = await fetch('/api/admin/stock-intake/duplicates', {
+            method: 'POST',
             credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ q: term }),
             cache: 'no-store',
             signal: currentController.signal,
           });
