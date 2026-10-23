@@ -44,6 +44,7 @@ describe('Purkins route-level Worker isolation', () => {
       'features/purkins/db.ts',
     ];
     try {
+      writeFileSync(join(temp, 'seed-demo.sql'), '-- sample seed for test only');
       for (const file of mockFiles) {
         const full = join(temp, 'src', file);
         mkdirSync(full.slice(0, full.lastIndexOf(requireSeparator())), { recursive: true });
@@ -60,6 +61,8 @@ describe('Purkins route-level Worker isolation', () => {
       expect(existsSync(join(adminRoot, 'pages', 'api', 'admin', 'products.ts'))).toBe(true);
       expect(existsSync(join(adminRoot, 'pages', 'images', '[...key].ts'))).toBe(true);
       expect(existsSync(join(adminRoot, 'features', 'purkins', 'db.ts'))).toBe(true);
+      expect(existsSync(join(temp, '.instances', 'split-build', 'admin', 'seed-demo.sql'))).toBe(true);
+      expect(existsSync(join(temp, '.instances', 'split-build', 'public', 'seed-demo.sql'))).toBe(true);
     } finally {
       rmSync(temp, { recursive: true, force: true });
     }
