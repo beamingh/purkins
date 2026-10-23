@@ -7,7 +7,7 @@ import { parseProductForm } from '../products/form';
 import { reserveInventory, getActiveReservationItems } from '../orders/reservations';
 import { recordPaidOrder } from '../orders/db';
 import { parseIntakeFields, generateItemSku } from './intake';
-import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode } from './db';
+import { approveIntake, getIntake, insertIntake, saveIntakeDraft, getVariantSupplierBarcodes, setVariantSupplierBarcode, listStorageLocations } from './db';
 
 /* Isolated in-memory D1; no Wrangler state, remote D1, or real payments.
  * Executes the actual Purkins migration plus Minshop product/order functions.
@@ -120,6 +120,20 @@ describe('Purkins stock intake through demo settlement', () => {
     expect(await approveIntake(db, id)).toMatch(/positive selling price for every active/);
     await db.prepare("UPDATE product_variants SET price_cents=14500 WHERE product_id=?").bind(id).run();
     expect(await approveIntake(db, id)).toBeNull();
+  });
+
+  it('offers existing private stock locations and newly saved ones for subsequent intake', async () => {
+    const { id, fields } = await createDraft('Location Picker Test Vest');
+    await saveIntakeDraft(db, id, { ...fields, storage_location: 'Grey Sack / Blue PEP Bag' });
+    const choices = await listStorageLocations(db);
+    expect(choices).toContain('Grey Sack / Blue PEP Bag');
+    // Existing selected locations must remain available even when not among
+    // the first 200 suggestions (e.g. when editing old stock).
+    expect(await listStorageLocations(db, 'Archived Sack / Loose Items'))
+      .toContain('Archived Sack / Loose Items');
+    const saved = await getIntake(db, id);
+    expect(saved?.storage_location).toBe('Grey Sack / Blue PEP Bag');
+    expect((await getProduct(db, id))).not.toHaveProperty('storage_location');
   });
 
   it('records each size barcode privately and blocks an incomplete pack from publication', async () => {
