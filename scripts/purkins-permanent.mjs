@@ -19,10 +19,8 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import {
-  existsSync, mkdirSync, readFileSync, writeFileSync, copyFileSync, rmSync, constants,
-} from 'node:fs';
-import { resolve, join } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   TARGET, parseAccounts, detectCollisions, renderPermanentConfigs,
@@ -32,7 +30,6 @@ import {
 const root = fileURLToPath(new URL('../', import.meta.url));
 const instanceDir = join(root, '.instances');
 const stateFile = join(instanceDir, 'purkins-permanent.json');
-const original = join(root, 'wrangler.jsonc');
 const generated = join(root, 'wrangler.purkins.permanent.jsonc');
 const backup = join(instanceDir, 'wrangler.original.backup.jsonc');
 const adminGenerated = join(root, 'wrangler.admin.permanent.jsonc');
