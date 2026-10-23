@@ -42,15 +42,20 @@ describe('Purkins inventory route and form safety wiring', () => {
     const fresh = source('../../pages/admin/products/new.astro');
     const edit = source('../../pages/admin/products/[id]/edit.astro');
     const locations = source('./db.ts');
-    expect(form).toContain('name="storage_location_existing"');
+    expect(form).toContain('name="location_id"');
     expect(form).toContain('name="storage_location_new"');
+    expect(form).toContain('name="storage_location_parent_id"');
     expect(form).toContain('data-intake-new-location');
     for (const page of [desk, fresh, edit]) {
-      expect(page).toContain('listStorageLocations(');
-      expect(page).toContain('storageLocations={storageLocations}');
+      expect(page).toContain('listLocationTree(');
+      expect(page).toContain('locationOptions={locationOptions}');
     }
     expect(locations).toContain('FROM purkins_intake');
-    expect(locations).toContain('GROUP BY TRIM(storage_location) COLLATE NOCASE');
+    const tree = source('./locations.ts');
+    const migration = source('../../../migrations/0043_purkins_location_tree.sql');
+    expect(tree).toContain('assignIntakeLocation(');
+    expect(tree).toContain('Cannot move a location inside its descendant.');
+    expect(migration).toContain('purkins_locations_no_cycle');
   });
 
   it('keeps the private intake table out of customer-facing listing queries', () => {
