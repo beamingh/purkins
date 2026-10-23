@@ -8,7 +8,7 @@
  * Public-only: customer pages, cart, checkout, payments, webhooks, public JSON.
  * Admin-only: /admin, /api/admin, plus shared image/health endpoints.
  */
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const adminRoute = (r) => r === 'admin' || r.startsWith('admin/') ||
@@ -41,6 +41,12 @@ export function prepareWorkerSource(root, target) {
       return routeBelongsToWorker(target, rel.slice('pages/'.length));
     },
   });
+  // src/features/seed/demo.ts imports ../../../seed-demo.sql?raw from the
+  // repository root. Preserve that relative dependency inside the generated
+  // per-Worker project root without duplicating or modifying real inventory.
+  const demoSeed = join(root, 'seed-demo.sql');
+  if (!existsSync(demoSeed)) throw new Error('Missing seed-demo.sql needed for Astro build.');
+  copyFileSync(demoSeed, join(root, '.instances', 'split-build', target, 'seed-demo.sql'));
   // Astro's resolved route manifest must be checked again after each build.
   return destination;
 }
