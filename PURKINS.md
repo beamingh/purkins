@@ -1,9 +1,9 @@
 # Purkins — Minshop foundation
 
-> **Branch status (23 October 2026): ACTIVE / NOT YET READY TO MERGE.** This is the current Minshop/Astro stock and MCP feature branch. `main` is the eventual integration target. Complete the manual tests, security review, and local D1 checks in `docs/BRANCH_STATUS.md` before merging. No production deployment is authorized.
+> **Branch status (23 October 2026): INTEGRATED INTO `main` / NOT PRODUCTION-READY.** Minshop/Astro, private stock/catalogue and MCP changes were merged through [PR #2](https://github.com/beamingh/purkins/pull/2). Use `main` for new work. See `docs/BRANCH_STATUS.md` for outstanding local testing and release gates; no production deployment is authorized.
 > **Architecture:** Minshop + Astro/Cloudflare Workers/D1/R2. Payload CMS is discontinued.
 
-**Integration candidate:** `feat/purkins-stock-cataloguing` (draft PR into `main`). Originally bootstrapped from `feat/minshop-foundation`.
+**Historical origin:** `feat/purkins-stock-cataloguing` was merged into `main`. Its ancestors `feat/purkins-inventory` and `feat/minshop-foundation` are superseded.
 
 **Upstream:** [ddyy/minshop](https://github.com/ddyy/minshop), MIT license, imported from commit `c964bf746926ae039a97d69720eee26fb97ba06f` (18 Oct 2026). The Minshop import is now followed by the Purkins inventory and catalogue changes. **The result is not yet a validated production release**.
 
@@ -30,14 +30,14 @@ In PowerShell, from your existing repository `C:\GitHub\purkins`:
 
 ```powershell
 git fetch origin
-git switch feat/purkins-stock-cataloguing
-git pull --ff-only origin feat/purkins-stock-cataloguing
+git switch main
+git pull --ff-only origin main
 npm ci
 npm run theme:check
 npm run test:storefront-contract
 ```
 
-`npm ci` will download a separate Astro dependency set. Avoid installing the MCP subproject until we are ready to test it.
+`npm ci` will download a separate Astro dependency set. For the separate MCP Worker, install its locked dependencies with `npm ci --prefix mcp`, then run `npm run mcp:check` (local-only typecheck and Wrangler dry run; no deployment).
 
 Local provisioning is now **cross-platform Node.js** and runs directly in PowerShell; Git Bash, WSL and OpenSSL are unnecessary:
 
@@ -52,29 +52,29 @@ Never commit `.dev.vars`. The local setup generates its own secrets.
 
 ## Production safety
 
-**Nothing on this branch is deployed.** Do not run `npm run deploy`, `npm run provision:cf`, `npm run db:migrate:remote`, or `npm run mcp:deploy` without a separate review and the owner's express approval. Cloudflare bindings/buckets and the domain must be provisioned afresh or deliberately mapped after audit.
+**Merging into `main` did not deploy any Worker or migrate any database.** Do not run `npm run deploy`, `npm run provision:cf`, `npm run db:migrate:remote`, or `npm run mcp:deploy` without a separate review and the owner's express approval. Cloudflare bindings/buckets and the domain must be provisioned afresh or deliberately mapped after audit.
 
 GitHub CI remains **workflow_dispatch only**. Nothing runs automatically on push or PR.
 
 ## Important gaps before launch
 
-1. Move the existing owner-vs-pricing-partner workflow from the Payload design to Minshop's auth/authorization; never expose cost prices to the partner.
+1. Design proper owner/partner authorization and private cost-field access within Minshop before sharing Admin or granting MCP write access; the discontinued Payload implementation is not a feature source.
 2. Validate product variants (size/colour), photo-first intake, storage locations and per-item identity for one-off baby clothes.
 3. Integrate and verify local Zambian payments, pickup/delivery, and stock reservation policies. Minshop's built-in providers do **not** mean Airtel/MTN Money is supported out of the box.
 4. Scope MCP token permissions and audit logs, and keep all write capabilities disabled until tested.
 5. Confirm import consistency, run local test/build and inspect the storefront in Windows before provisioning any live infrastructure.
 
-Keep the previous `feat/payload-foundation` branch unchanged as a recovery/reference branch. Do not merge or delete it during this evaluation.
+Keep `feat/payload-foundation` as discontinued history only. It must not be merged, deployed, or used to reintroduce the retired stack.
 
-## Purkins inventory feature branch
+## Purkins private inventory (integrated into `main`)
 
-The `feat/purkins-inventory` branch adds an additive D1 migration
+The superseded `feat/purkins-inventory` branch originally introduced the additive D1 migration
 (`0040_purkins_intake.sql`) and a private costing table.
 
 - New items start **inactive/unpublished**, with an auto-generated `PUR-000001`-style
   product code. Their size, colour, age range, and physical storage location are
-  recorded at intake; per-size/per-colour purchasable variant inventory still
-  needs a later phase.
+  recorded at intake. The catalogue includes linked variants and supplier
+  barcodes; these still require manual Admin smoke tests before launch.
 - Enter purchase cost in ZMW or ZAR. If ZAR, **enter the actual exchange rate
   in kwacha per rand** used for costing; no rate is guessed. A per-item overhead
   allocation covers travel/transport/lodging. The suggested selling price uses
@@ -99,8 +99,8 @@ The `feat/purkins-inventory` branch adds an additive D1 migration
 Starting with a working local Minshop checkout and dependencies:
 
 ```powershell
-git -c http.version=HTTP/1.1 fetch --no-tags origin refs/heads/feat/purkins-inventory:refs/remotes/origin/feat/purkins-inventory
-git switch --track -c feat/purkins-inventory origin/feat/purkins-inventory
+git switch main
+git pull --ff-only origin main
 npm run test:purkins
 npm run theme:check
 npm run check
@@ -112,8 +112,8 @@ npm run preview
 `npm run db:migrate` applies committed migrations to **local D1 only**;
 it preserves the existing `.wrangler/state` catalog and Admin setup.
 The database migration requires stopping the running local preview first.
-No remote migrations, cloud resource changes or production deployments
-are included in this branch.
+Do not run remote migrations or Cloudflare deployments as part of local
+verification. These require a separate release review.
 
 ### Deferred work
 
@@ -140,5 +140,7 @@ The D1 workflow suite uses **ephemeral in-memory Miniflare state** and applies
 uploaded image key; it does not test R2 upload, browser controls, or the
 entire checkout HTTP flow. Those remain separate launch-blocking checks.
 
-Tests were committed but must pass on a real Node 24 install before merging.
-The GitHub workflow remains manual-only and does not deploy.
+The full local suite passed **954 tests in 87 files** after the dependency
+upgrades; MCP typecheck/dry run also passed. This does **not** replace
+browser-based Admin checks or release validation. The GitHub workflow remains
+manual-only and does not deploy.
