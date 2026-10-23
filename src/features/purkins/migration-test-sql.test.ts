@@ -18,9 +18,31 @@ describe('Purkins test migration SQL segmentation', () => {
     const trigger = statements.filter((sql) => sql.startsWith('CREATE TRIGGER'));
     expect(trigger).toHaveLength(1);
     expect(trigger[0]).toContain('SELECT RAISE(ABORT');
-    expect(trigger[0]).toContain('END');
     expect(trigger[0]).toContain('   );');
+    // Dropping the trailing semicolon after END produces SQLITE_ERROR:
+    // incomplete input when db.prepare() compiles a CREATE TRIGGER.
+    expect(trigger[0]).toMatch(/END;$/);
     expect(statements.at(-1)).toMatch(/^UPDATE purkins_intake/);
+  });
+
+  it('preserves statement boundaries beside full-line comments and Windows line endings', () => {
+    const source = `CREATE INDEX idx_test ON test(id);
+    
+-- A full-line comment between ordinary SQL and the trigger.
+CREATE TRIGGER test_trigger AFTER UPDATE ON test
+BEGIN
+  SELECT 1;
+END;
+CREATE INDEX idx_other ON test(name);
+`;
+    for (const migrationText of [source, source.replace(/\n/g, '\r\n')]) {
+      const statements = splitPurkinsMigrationSql(migrationText);
+      expect(statements).toHaveLength(3);
+      expect(statements[0]).toMatch(/^CREATE INDEX idx_test/);
+      expect(statements[1]).toMatch(/^CREATE TRIGGER test_trigger/);
+      expect(statements[1]).toMatch(/SELECT 1;\s*END;$/);
+      expect(statements[2]).toMatch(/^CREATE INDEX idx_other/);
+    }
   });
 
   it('rejects unterminated migration statements instead of silently skipping them', () => {
