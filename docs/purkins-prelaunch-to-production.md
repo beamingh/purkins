@@ -89,13 +89,13 @@ infrastructure and refuses rerunning first-time creation blindly.
 After resource creation (these steps are deliberately independent):
 
 ```powershell
-npm ci --prefix mcp
 npm run build:workers
 npm run purkins:cloudflare -- build
 npm run purkins:cloudflare -- migrate --confirm=MIGRATE-PURKINS-FOREVER
 npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
 ```
 
+The root npm workspace installs MCP alongside Astro through a single `npm ci`.
 The build swaps in the generated configuration only temporarily, then restores
 the committed `wrangler.jsonc`, even on a normal build failure. It refuses
 to run if that file has uncommitted edits or an unrecovered backup.
