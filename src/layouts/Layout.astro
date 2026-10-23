@@ -6,6 +6,7 @@ import { normalizeSearchQuery } from '../features/search/query';
 import { EMPTY_MENUS, visibleItems } from '../features/navigation/db';
 import { getEmailProvider } from '../features/email';
 import { buildShellModel } from '../features/storefront/shell';
+import { isPrelaunchNoindex, PRELAUNCH_ROBOTS_HEADER } from '../features/seo/prelaunch';
 import StoreHeader from '#theme/Header.astro';
 import StoreFooter from '#theme/Footer.astro';
 import '../styles/global.css';
@@ -99,6 +100,7 @@ const shell = buildShellModel({
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <title>{pageTitle}</title>
     <meta name="description" content={desc} />
+    {isPrelaunchNoindex(env.PRELAUNCH_NOINDEX) && <meta name="robots" content={PRELAUNCH_ROBOTS_HEADER} />}
     <link rel="canonical" href={canonical} />
 
     <meta property="og:type" content="website" />
