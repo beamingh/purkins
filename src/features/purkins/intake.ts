@@ -5,9 +5,12 @@ import { toMinorUnits } from '../../money';
  * Use an entered conversion rate, never a guessed/external exchange rate.
  */
 export type IntakeStatus = 'draft' | 'approved';
+export type PricingMode = 'cost_based' | 'manual';
 export type PurchaseCurrency = 'ZMW' | 'ZAR';
 
 export interface IntakeFields {
+  /** Existing callers default to cost-based; rapid intake may explicitly opt into manual. */
+  pricing_mode?: PricingMode;
   size_label: string | null;
   colour: string | null;
   age_range: string | null;
@@ -27,6 +30,7 @@ export interface IntakeFields {
 }
 
 export interface IntakeRecord extends IntakeFields {
+  pricing_mode: PricingMode;
   product_id: number;
   sku: string;
   status: IntakeStatus;
@@ -68,6 +72,11 @@ function currencyAmount(value: string, field: string): number | null {
 
 export function parseIntakeFields(form: FormData): { data: IntakeFields } | { error: string } {
   try {
+    const pricingModeRaw = read(form, 'pricing_mode') || 'cost_based';
+    if (pricingModeRaw !== 'manual' && pricingModeRaw !== 'cost_based') {
+      throw new Error('Choose manual or cost-based pricing.');
+    }
+    const pricing_mode: PricingMode = pricingModeRaw;
     const purchase_currency = (read(form, 'purchase_currency') || 'ZMW').toUpperCase();
     if (purchase_currency !== 'ZMW' && purchase_currency !== 'ZAR') {
       throw new Error('Purchase currency must be ZMW or ZAR.');
@@ -83,7 +92,7 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
       zar_to_zmw = Number(rateRaw);
       if (zar_to_zmw <= 0) throw new Error('Exchange rate must be above zero.');
     }
-    if (purchase_currency === 'ZAR' && purchase_cost_minor !== null && zar_to_zmw === null) {
+    if (pricing_mode === 'cost_based' && purchase_currency === 'ZAR' && purchase_cost_minor !== null && zar_to_zmw === null) {
       throw new Error('Enter the ZMW-per-rand rate for a rand purchase cost.');
     }
     const markupRaw = read(form, 'markup_percent');
@@ -110,6 +119,7 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
       throw new Error('Unknown stock condition.');
     }
     return { data: {
+      pricing_mode,
       brand: optionalText(form, 'brand', 100),
       supplier_barcode: normalizeSupplierBarcode(read(form, 'supplier_barcode')),
       retail_tag_minor: currencyAmount(read(form, 'retail_tag_price'), 'Supplier price tag'),
@@ -143,6 +153,7 @@ export function landedCostCents(fields: IntakeFields): number | null {
 
 /** Markup, NOT gross margin: selling = landed cost × (1 + markup% / 100). */
 export function suggestedSellingPriceCents(fields: IntakeFields): number | null {
+  if (fields.pricing_mode === 'manual') return null;
   const landed = landedCostCents(fields);
   if (landed === null || fields.markup_percent === null) return null;
   return Math.ceil(landed * (100 + fields.markup_percent) / 100);
