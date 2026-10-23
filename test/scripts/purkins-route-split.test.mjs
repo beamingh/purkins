@@ -22,8 +22,8 @@ describe('Purkins route-level Worker isolation', () => {
     for (const binding of optionalMcpBindings) {
       expect(declaration).toContain(binding);
     }
-    expect(declaration).not.toMatch(/\\bMCP_TOKEN:\\s*string/);
-    expect(declaration).not.toMatch(/\\bSTORE_MCP:\\s*DurableObjectNamespace/);
+    expect(declaration).not.toContain('MCP_TOKEN: string;');
+    expect(declaration).not.toContain('STORE_MCP: DurableObjectNamespace;');
   });
 
   it('never bundles private management endpoints into the public Worker', () => {
