@@ -455,7 +455,6 @@ const inputClass =
     });
     const locationSelect = desk.querySelector('select[name="location_id"]') as unknown as HTMLSelectElement | null;
     const newLocationInput = desk.querySelector<HTMLInputElement>('input[name="storage_location_new"]');
-    const newLocationPanel = desk.querySelector('details[data-intake-new-location]') as unknown as HTMLDetailsElement | null;
     const locationKey = 'purkins:stock-intake:location-id:v2';
     try {
       // Server-side saved-item selection takes precedence on Save & Next.
