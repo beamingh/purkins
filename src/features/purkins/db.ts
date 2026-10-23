@@ -8,6 +8,31 @@ import {
 } from './intake';
 
 /**
+ * Existing private storage paths, to power the Admin intake selector.
+ * A new path is recorded with an item and appears in future selections:
+ * no separate master-data table or public endpoint is needed.
+ */
+export async function listStorageLocations(
+  db: D1Database,
+  selectedLocation: string | null = null,
+): Promise<string[]> {
+  const { results } = await db.prepare(
+    `SELECT MIN(TRIM(storage_location)) AS location
+       FROM purkins_intake
+      WHERE storage_location IS NOT NULL AND TRIM(storage_location) <> ''
+      GROUP BY TRIM(storage_location) COLLATE NOCASE
+      ORDER BY location COLLATE NOCASE
+      LIMIT 200`,
+  ).all<{ location: string }>();
+  const values = (results ?? []).map((row) => row.location);
+  if (selectedLocation && !values.some((location) => location.toLowerCase() === selectedLocation.toLowerCase())) {
+    values.push(selectedLocation);
+    values.sort((a, b) => a.localeCompare(b));
+  }
+  return values;
+}
+
+/**
  * Owner-side intake only. Do NOT join this table in storefront/public routes.
  * The current Minshop admin has one shared credential, not per-user roles;
  * do not invite a partner until role-level permissions are implemented.
