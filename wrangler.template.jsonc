@@ -64,7 +64,9 @@
   ],
   "vars": {
     "STORE_NAME": "My Shop",
-    "TIME_ZONE": "UTC"
+    "TIME_ZONE": "UTC",
+    // One durable store: switch to "false" when ready to be indexed; keep D1/R2.
+    "PRELAUNCH_NOINDEX": "true"
     // Serve product images from an R2 custom domain (bypasses the Worker /images
     // route and unlocks on-demand delivery in Admin); connect a public custom
     // domain to the bucket first. See README.
