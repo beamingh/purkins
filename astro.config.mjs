@@ -19,6 +19,19 @@ import { themeCssPath, writeThemeArtifacts } from './scripts/theme-css.mjs';
 const theme = resolveTheme();
 writeThemeArtifacts();
 
+// An explicit split build uses a generated, route-filtered Astro srcDir.
+// Ordinary npm run build/dev/check retain the original source layout.
+const workerTarget = process.env.PURKINS_WORKER_TARGET;
+if (workerTarget && !['public', 'admin'].includes(workerTarget)) {
+  throw new Error('Invalid PURKINS_WORKER_TARGET (expected public or admin).');
+}
+const splitSrc = workerTarget
+  ? new URL(`./.instances/split-build/${workerTarget}/src/`, import.meta.url)
+  : undefined;
+const splitOutput = workerTarget
+  ? new URL(`./dist/${workerTarget}/`, import.meta.url)
+  : undefined;
+
 // Stamp every build with the theme it was compiled for. The deploy scripts
 // refuse to ship an artifact whose stamp disagrees with the current
 // selection — without this, `deploy --skip-build` happily deploys whatever
@@ -28,9 +41,10 @@ const themeStamp = {
   hooks: {
     'astro:build:done': async () => {
       const { writeFileSync, mkdirSync } = await import('node:fs');
-      mkdirSync(new URL('./dist/', import.meta.url), { recursive: true });
+      const stampDir = splitOutput ?? new URL('./dist/', import.meta.url);
+      mkdirSync(stampDir, { recursive: true });
       writeFileSync(
-        new URL('./dist/theme.json', import.meta.url),
+        new URL('./theme.json', stampDir),
         `${JSON.stringify({ theme: theme.id }, null, 2)}\n`,
       );
     },
@@ -38,6 +52,8 @@ const themeStamp = {
 };
 
 export default defineConfig({
+  ...(splitSrc ? { srcDir: splitSrc } : {}),
+  ...(splitOutput ? { outDir: splitOutput } : {}),
   output: 'server',
   integrations: [themeStamp],
   // Replaced by the equivalent middleware guard so the bearer-capability
