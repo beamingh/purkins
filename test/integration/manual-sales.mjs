@@ -30,6 +30,7 @@ try {
     email: null,
     note: 'Paid on collection',
     fulfillment: 'fulfilled',
+    deliveryMethod: 'pickup',
     items: [
       { productPublicId: 'prod_0123456789', variantPublicId: null, quantity: 1, unitPriceCents: 95000 },
       { productPublicId: 'prod_abcdf01234', variantPublicId: 'var_0123456789', quantity: 2, unitPriceCents: 12000 },
