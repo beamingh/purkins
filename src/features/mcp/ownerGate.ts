@@ -19,11 +19,12 @@ type OwnerEnv = {
 export async function authorizedMcpOwner(
   accessJwt: string|null,
   env: OwnerEnv,
+  verify: typeof verifyAccessJwt = verifyAccessJwt,
 ): Promise<string|null> {
   const owner=normalizeOwnerEmail(env.PURKINS_MCP_OWNER_EMAIL);
   if(!owner || !accessJwt || !env.CF_ACCESS_TEAM_DOMAIN || !env.CF_ACCESS_AUD) return null;
   try{
-    const identity=await verifyAccessJwt(accessJwt,{
+    const identity=await verify(accessJwt,{
       teamDomain:env.CF_ACCESS_TEAM_DOMAIN,aud:env.CF_ACCESS_AUD,
     });
     return isApprovedMcpOwner(identity?.email,owner)?owner:null;
