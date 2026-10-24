@@ -17,6 +17,7 @@ import {
   type IntakeFields, type IntakeRecord,
 } from '../../src/features/purkins/intake';
 import { assignIntakeLocation, getLocation, resolveLegacyLocation } from '../../src/features/purkins/locations';
+import { createGuardedStockDraft, adjustGuardedDraftStock } from '../../src/features/mcp/stockGuard';
 
 // Never send private cost, location or supplier codes to the buyer tier.
 // These registrations are invoked ONLY behind the MCP operator-token gate.
@@ -93,10 +94,12 @@ async function stockView(db: D1Database, product: Product) {
     id: product.public_id, slug: product.slug, name: product.name,
     description: product.description, stock: variants.length ? variants.filter((v) => v.active === 1).reduce((sum, v) => sum + v.stock, 0) : product.stock,
     price_cents: product.price_cents, currency: product.currency,
+    stock_revision: (product as Product & {mcp_stock_revision?: number}).mcp_stock_revision ?? 0,
     active: product.active === 1, intake: privateIntake,
     variants: variants.map((v) => ({
       id: v.public_id, label: v.label, sku: v.sku, stock: v.stock,
       price_cents: v.price_cents, active: v.active === 1,
+      stock_revision: (v as typeof v & {mcp_stock_revision?: number}).mcp_stock_revision ?? 0,
       supplier_barcode: variantCodes.get(v.id) ?? null,
     })),
   };
@@ -320,5 +323,62 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
     if (!p || !await getIntake(db, p.id)) return reply({error:'Purkins stock item not found.'});
     const error = await approveIntake(db, p.id);
     return reply(error ? {published:false, error} : {published:true, id:p.public_id});
+  });
+}
+
+/**
+ * First safe stock-write slice. Product/variant edits, prices on published
+ * products, destructive changes and approval still require separate safeguards.
+ * This register is invoked only for an authenticated owner and its own
+ * independent stock-write scope, NOT by the legacy write gate.
+ */
+export function registerGuardedPurkinsStockTools(
+  server: McpServer, db: D1Database, allowWrites = false, actor?: string,
+): void {
+  if (!allowWrites || !actor) return;
+  const requestKey = z.string().uuid();
+  server.registerTool('create_guarded_purkins_draft', {
+    description: 'Create exactly one PRIVATE unpublished Purkins product with no variants. Idempotent UUIDv4 request_id; repeat same ID only for exact retry. Never publishes or creates a sale; size variants and photos need separate reviewed flows.',
+    inputSchema: {
+      request_id: requestKey,
+      name: z.string().trim().min(1).max(200),
+      description: z.string().max(5000).nullable().default(null),
+      price_cents: money,
+      stock: z.number().int().min(0).max(1_000_000),
+      intake: detailsSchema,
+    },
+  }, async ({ request_id, name, description, price_cents, stock, intake }) => {
+    try {
+      const fields = parseDetails({
+        ...intake, storage_location: null,
+        condition_status: intake.condition_status ?? 'review',
+        pricing_mode: intake.pricing_mode ?? 'manual',
+      });
+      const result = await createGuardedStockDraft(db, actor, {
+        request_id, name, description, price_cents, stock,
+        location_id: intake.location_id ?? null, intake: fields,
+      });
+      return reply(result);
+    } catch (error) {
+      return reply({ error: error instanceof Error ? error.message : 'Unable to create draft.' });
+    }
+  });
+
+  server.registerTool('adjust_guarded_purkins_stock', {
+    description: 'Change the counted stock of an UNPUBLISHED draft product or its existing variant. Never edits paid sales. Requires current stock and stock_revision from get_purkins_stock, plus an idempotent UUIDv4 request_id; refuse stale changes.',
+    inputSchema: {
+      request_id: requestKey,
+      product_id: z.string().min(1),
+      variant_id: z.string().nullable().default(null),
+      expected_stock: z.number().int().nonnegative(),
+      expected_revision: z.number().int().nonnegative(),
+      new_stock: z.number().int().min(0).max(1_000_000),
+    },
+  }, async (input) => {
+    try {
+      return reply(await adjustGuardedDraftStock(db, actor, input));
+    } catch (error) {
+      return reply({ error: error instanceof Error ? error.message : 'Unable to update draft stock.' });
+    }
   });
 }
