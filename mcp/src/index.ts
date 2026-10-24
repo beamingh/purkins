@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
 import { registerPurkinsTools } from './purkins';
+import { registerLocationTools } from './locations';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
 import { z } from 'zod';
@@ -316,6 +317,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
       .PURKINS_MCP_WRITES_ENABLED === 'true';
     registerPurkinsTools(this.server, db, allowWrites);
+    registerLocationTools(this.server, db);
 
     // --- reads ---
     this.server.registerTool(
