@@ -66,10 +66,11 @@ Check Admin error/redirect parity and TypeScript build locally. No local tests w
 Additional source review after the initial implementation identified and corrected:
 
 1. **Operator authorization:** An Access-signed identity with any nonempty email previously qualified as operator. Now the independently verified Access identity must match `PURKINS_MCP_OWNER_EMAIL`; missing config denies. Legacy fixed `MCP_TOKEN` is a separate owner credential and requires its own key-management review.
-2. **Admin write/result ambiguity:** The category POST refactor accidentally caught cache-purge failures as input errors, making a committed write appear to have failed. Expected validation errors use `CategoryValidationError`; DB/cache failures now propagate, preserving the original failure semantics.
-3. **Hierarchy validation:** Invalid/missing parents and circular moves are again reported as validation errors to the Admin editor rather than generic server failures.
-4. **Test coverage:** Replaced fake 32-character category IDs with actual 10-character Crockford public IDs and added positive lookup tests, negative ID tests, command cycle/parent validation, and infrastructure-failure tests.
-5. **Untrusted image sources:** The imported URL validator blocked common internal/IP URLs but did not restrict arbitrary public-looking hostnames. The media importer now requires an exact hostname on `PURKINS_MCP_IMAGE_IMPORT_HOSTS`. Empty list denies all URL imports. Owner access and the existing draft-only/write flags are still required.
+2. **Token expiry:** Access JWT validation previously accepted signed tokens without an expiry claim. It now requires a finite, unexpired `exp`, and a missing/malformed-expiry regression test has been added.
+3. **Admin write/result ambiguity:** The category POST refactor accidentally caught cache-purge failures as input errors, making a committed write appear to have failed. Expected validation errors use `CategoryValidationError`; DB/cache failures now propagate, preserving the original failure semantics.
+4. **Hierarchy validation:** Invalid/missing parents and circular moves are again reported as validation errors to the Admin editor rather than generic server failures.
+5. **Test coverage:** Replaced fake 32-character category IDs with actual 10-character Crockford public IDs and added positive lookup tests, negative ID tests, command cycle/parent validation, and infrastructure-failure tests.
+6. **Untrusted image sources:** The imported URL validator blocked common internal/IP URLs but did not restrict arbitrary public-looking hostnames. The media importer now requires an exact hostname on `PURKINS_MCP_IMAGE_IMPORT_HOSTS`. Empty list denies all URL imports. Owner access and the existing draft-only/write flags are still required.
 
 **Verification still outstanding:** no local checkout was available in the review environment and no GitHub Actions workflow had been run on this branch. All newly authored tests are committed but **not passed/verified**. Local tests/typechecks, built Worker route tests, signed-JWT/owner integration tests, media/R2 flow, cache invalidation across Workers, mutation audit/idempotency/concurrency and full Admin-to-MCP parity remain release blockers. Neither new category mutations nor live production MCP writes are activated.
 
@@ -78,6 +79,7 @@ Additional source review after the initial implementation identified and correct
 ```powershell
 npm run check
 npx vitest run mcp/src/categories.test.ts mcp/src/operator-access.test.ts mcp/src/purkins-media.test.ts src/features/categories/commands.test.ts
+npx vitest run src/features/auth/access.test.ts
 npm run mcp:check
 npm run build:workers
 ```
