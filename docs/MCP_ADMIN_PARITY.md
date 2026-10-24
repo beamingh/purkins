@@ -30,7 +30,7 @@ New on this branch: `list_purkins_locations`, `get_purkins_location` (operator-o
 | --- | --- |
 | Products and stock intake | Complete variant, stock adjustment, media association, review, archive and batch operations; safeguard retries |
 | Hierarchical locations | Read/create/move tools added in source; writes doubly gated and not production-ready; verify duplicate-name, cycle, audit, replay and concurrency protections |
-| Categories | List/get reads in source; create/edit/delete and cache purge semantics remain |
+| Categories | MCP list/get reads added; create/edit/delete validation extracted into shared category commands used by Admin. MCP mutations intentionally unregistered until cross-Worker storefront cache invalidation, audit and idempotency are implemented |
 | Media | Upload and attach, order, detach/delete with R2 safety |
 | Orders | Manual sale, detailed status/fulfilment updates, cancellation and safe adjustments |
 | Refunds | Read plus explicit owner-confirmed, reconciled refund actions |
@@ -54,3 +54,9 @@ The source-tree inventory alone does not prove every action listed is currently 
 - Media changes are verified across D1 and R2, including orphan cleanup.
 - Explicit owner approval for dangerous operations; dry-run/preview for bulk actions.
 - Document and validate the compatible ChatGPT connection flow before production enablement.
+
+## Category parity refactor (24 October 2026)
+
+`src/features/categories/commands.ts` now encapsulates category creation, editing, deletion, public-ID resolution, slug uniqueness and cycle checks. Existing Admin POST handlers invoke these shared commands, then their existing catalogue-cache purge. The shared commands themselves do not purge the cache. **Do not register MCP category mutations yet:** the independent Admin Worker must invalidate the *public storefront* cache reliably and record auditable, replay-safe operations. Existing MCP category list/detail tools remain read-only.
+
+Check Admin error/redirect parity and TypeScript build locally. No local tests were run in this chat; commit is not production validated.
