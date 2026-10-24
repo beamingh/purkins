@@ -69,22 +69,20 @@ executed by the user**, so rerun the full suite before merging.
 ## Deployment order and limitations
 
 1. Run `npm test`, `npm run check`, `npm run mcp:check`,
-   `npm run build:workers` on the new branch. Do **not** merge merely because
-   compilation succeeds; inspect the new D1 integration test result.
-2. After migrating with the separately confirmed permanent command, ensure
-   the private state records `migratedThrough: "0045_purkins_mcp_write_guard.sql"`.
-   Deploy and write activation now fail closed if the permanent migration
-   checkpoint is absent or behind the repository's latest script. The existing
-   `migrationsApplied` boolean by itself no longer authorizes deployment.
-3. Verify the migration on isolated local D1, and explicitly plan remote
-   migration **before** any Worker release containing the new location queries.
-   The new read helpers select `mcp_version`: deploying them before migration
-   would break private location inspection.
-3. After a separately approved release, establish the live owner identity flow
-   and exercise read-only MCP tooling first. Keep all write flags false.
-4. Enable only guarded, audited location writes under a controlled acceptance
-   session once authorization, retries, concurrent writes and operational
-   rollback are checked live. Never enable legacy write scope as a shortcut.
+   `npm run build:workers` on the branch. Review the isolated D1 integration
+   test result rather than accepting compilation alone.
+2. Verify migration 0045 in isolated D1, then explicitly plan the separately
+   authorized permanent remote migration **before** deploying any Worker
+   that reads `mcp_version`. Otherwise private location inspection fails.
+3. After a confirmed permanent migration, ensure its private state records
+   `migratedThrough: "0045_purkins_mcp_write_guard.sql"`. Both deployment
+   and write activation fail closed when the checkpoint is absent or old;
+   the older `migrationsApplied` boolean alone no longer suffices.
+4. After a separately approved release, test live owner identity and
+   read-only MCP tools first. Keep all write flags false.
+5. Enable only audited location writes during a controlled acceptance session
+   after reviewing authorization, retry, concurrency, and rollback results.
+   Never enable the legacy write scope as a shortcut.
 
 This is the **first guarded write slice**, not complete Admin↔MCP parity.
 Category writes remain unregistered until cross-Worker catalog-cache
