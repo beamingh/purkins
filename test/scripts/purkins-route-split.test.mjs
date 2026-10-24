@@ -85,9 +85,9 @@ describe('Purkins route-level Worker isolation', () => {
       expect(existsSync(join(temp, '.instances', 'split-build', 'admin', 'seed-demo.sql'))).toBe(true);
       expect(existsSync(join(temp, '.instances', 'split-build', 'public', 'seed-demo.sql'))).toBe(true);
       expect(readFileSync(join(publicRoot, 'features', 'runtime', 'worker-target.ts'), 'utf8'))
-        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = false;\\n'.replace('\\\\n', '\\n'));
+        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = false;\n');
       expect(readFileSync(join(adminRoot, 'features', 'runtime', 'worker-target.ts'), 'utf8'))
-        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = true;\\n'.replace('\\\\n', '\\n'));
+        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = true;\n');
     } finally {
       rmSync(temp, { recursive: true, force: true });
     }
