@@ -17,6 +17,7 @@ type Receipt = {
   target_id: string;
   before_stock: number | null;
   after_stock: number | null;
+  expected_revision: number | null;
   outcome: 'pending' | 'applied' | 'rejected';
 };
 export type StockGuardResult =
@@ -74,19 +75,11 @@ async function replay(
   if (prior.outcome !== 'applied') {
     return { ok: false, conflict: true, error: 'This request was rejected. Refresh the stock and use a new request ID.' };
   }
-  // An immutable receipt is a historical result, NOT a promise of current stock.
-  // Return its recorded stock and revision rather than reapplying a change.
-  const row = action === 'product.create_draft'
-    ? await db.prepare('SELECT mcp_stock_revision FROM products WHERE public_id=?')
-      .bind(prior.target_id).first<{mcp_stock_revision: number}>()
-    : null;
+  // Return the historical committed result, not current stock, even if
+  // another owner action or checkout changed the quantity since this write.
   return {
-    ok: true, id: prior.target_id,
-    stock: prior.after_stock ?? 0,
-    revision: action === 'stock.adjust'
-      ? (await db.prepare('SELECT expected_revision FROM purkins_mcp_stock_mutations WHERE request_id=?')
-        .bind(requestId).first<{expected_revision: number}>())?.expected_revision ?? 0
-      : row?.mcp_stock_revision ?? 0,
+    ok: true, id: prior.target_id, stock: prior.after_stock ?? 0,
+    revision: action === 'stock.adjust' ? (prior.expected_revision ?? 0) + 1 : 0,
     replayed: true,
   };
 }
@@ -130,7 +123,7 @@ export async function createGuardedStockDraft(
     throw new Error('Invalid draft name, description, stock or selling price.');
   }
   if (input.location_id !== null && !locationIdValid(input.location_id)) throw new Error('Invalid location reference.');
-  if (input.intake.storage_location !== null) throw new Error('Use location_id, never an inferred free-text location.');
+  if (input.intake.storage_location != null) throw new Error('Use location_id, never an inferred free-text location.');
   normalizeSupplierBarcode(input.intake.supplier_barcode);
   const slug = slugify(name);
   if (!slug) throw new Error('Name does not form a usable product slug.');
@@ -153,7 +146,7 @@ export async function createGuardedStockDraft(
   const r: Receipt = {
     request_id:key, actor, action:'product.create_draft',payload_sha256:hash,
     nonce:crypto.randomUUID(),target_id:productId,before_stock:null,
-    after_stock:input.stock,outcome:'pending',
+    after_stock:input.stock,expected_revision:0,outcome:'pending',
   };
   const f = input.intake;
   try {
@@ -164,14 +157,15 @@ export async function createGuardedStockDraft(
         'stock,active,weight_grams,requires_shipping,public_id,last_mcp_stock_request) ' +
         "SELECT ?,?,?,?,'zmw',NULL,?,0,NULL,1,?,? WHERE EXISTS (" +
         'SELECT 1 FROM purkins_mcp_stock_mutations WHERE request_id=? AND nonce=?) ' +
-        'RETURNING id',
-      ).bind(name,slug,input.description,input.price_cents,input.stock,productId,r.nonce,key,r.nonce),
+        'AND (? IS NULL OR EXISTS (SELECT 1 FROM purkins_locations WHERE id=?)) RETURNING id',
+      ).bind(name,slug,input.description,input.price_cents,input.stock,productId,r.nonce,key,r.nonce,
+        input.location_id,input.location_id),
       db.prepare(
         'INSERT INTO purkins_intake (product_id,sku,size_label,colour,age_range,storage_location,' +
         'location_id,purchase_currency,purchase_cost_minor,zar_to_zmw,overhead_zwm_cents,' +
         'markup_percent,brand,supplier_barcode,retail_tag_minor,retail_tag_currency,' +
         'pack_count,condition_status,internal_notes,pricing_mode,status) ' +
-        "SELECT p.id,printf('PUR-%06d',p.id),?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,? ,?,'draft' " +
+        "SELECT p.id,printf('PUR-%06d',p.id),?,?,?,NULL,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'draft' " +
         'FROM products p WHERE p.public_id=? AND p.last_mcp_stock_request=? ' +
         'AND EXISTS (SELECT 1 FROM purkins_mcp_stock_mutations WHERE request_id=? AND nonce=?) ' +
         'AND (? IS NULL OR EXISTS (SELECT 1 FROM purkins_locations WHERE id=?))',
@@ -225,10 +219,9 @@ export async function adjustGuardedDraftStock(
   const r:Receipt={
     request_id:key,actor,action:'stock.adjust',payload_sha256:hash,
     nonce:crypto.randomUUID(),target_id:target,
-    before_stock:input.expected_stock,after_stock:input.new_stock,outcome:'pending',
+    before_stock:input.expected_stock,after_stock:input.new_stock,
+    expected_revision:input.expected_revision,outcome:'pending',
   };
-  const table=variant?'product_variants':'products';
-  const idField=variant?'v.public_id':'p.public_id';
   const statement=variant
     ? db.prepare(
       'UPDATE product_variants SET stock=?,last_mcp_stock_request=? ' +
