@@ -85,3 +85,21 @@ npm run build:workers
 ```
 
 No migration, deployment or remote inventory mutation is part of these checks.
+
+## Local TypeScript and test-discovery diagnostics (24 October 2026)
+
+User executed `npm run check` on the draft branch: **417 files, 0 errors, 0 warnings, 2 hints**. Explicit `npx vitest run` was given 5 paths but executed only 2 root `src/` test files (14 passing tests): root `vitest.config.ts` excluded the MCP test folder. `npm run mcp:check` failed with **3 errors**: mismatched R2 bucket definitions between MCP and root `@cloudflare/workers-types` dependencies, and unresolved `Env.BUCKET` / `Env.FILES` while following the type-only storage barrel from `upload.ts`.
+
+The follow-up code fix is intentionally **type-safe**, not `as any` or `@ts-ignore`:
+- MCP media R2 binding is typed using `Parameters<typeof createR2Storage>[0]`, identical to the root storage adapter.
+- `src/features/media/upload.ts` now imports its `StorageProvider` interface directly from `../storage/provider`; a type-only import must not pull in `../storage/index.ts` with storefront runtime env bindings.
+- Root Vitest `include` now covers `mcp/src/**/*.test.ts`, so explicitly requested MCP test files can actually execute.
+
+**Status:** code fixes committed but **not yet tested** after these changes. Root and MCP currently declare different versions of the Cloudflare types dependency; this remains dependency-alignment technical debt even though the shared adapter uses a single public type contract. Do not claim `mcp:check` passes until the user reruns it successfully.
+
+Safe local verification after pulling the branch:
+```powershell
+npm run mcp:check
+npx vitest run mcp/src/categories.test.ts mcp/src/operator-access.test.ts mcp/src/purkins-media.test.ts src/features/categories/commands.test.ts src/features/auth/access.test.ts
+npm run check
+```
