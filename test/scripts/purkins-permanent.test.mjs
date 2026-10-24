@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import {
   TARGET, parseAccounts, assertApiList, detectCollisions,
-  renderPermanentConfigs,
+  renderPermanentConfigs, latestMigrationFilename, isMigrationReady,
 } from '../../scripts/purkins-permanent-core.mjs';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
@@ -92,6 +92,19 @@ describe('Permanent Purkins provisioning safety', () => {
     expect(() => renderPermanentConfigs(s, m, 'garbage')).toThrow(/UUID/);
     expect(() => renderPermanentConfigs(s.replace('"PRELAUNCH_NOINDEX": "true"', '"PRELAUNCH_NOINDEX": "false"'), m, '00000000-1234-4000-8000-123456789abc'))
       .toThrow(/noindex/);
+  });
+
+  it('blocks deploy after a new migration is added until the permanent DB is migrated again', () => {
+    const latest = latestMigrationFilename([
+      '0043_purkins_location_tree.sql', '0045_purkins_mcp_write_guard.sql',
+      'notes.md', 'unrelated.txt',
+    ]);
+    expect(latest).toBe('0045_purkins_mcp_write_guard.sql');
+    expect(isMigrationReady({ migrationsApplied: true }, latest)).toBe(false);
+    expect(isMigrationReady({ migrationsApplied: true, migratedThrough: '0044_purkins_manual_sales.sql' }, latest)).toBe(false);
+    expect(isMigrationReady({ migrationsApplied: false, migratedThrough: latest }, latest)).toBe(false);
+    expect(isMigrationReady({ migrationsApplied: true, migratedThrough: latest }, latest)).toBe(true);
+    expect(() => latestMigrationFilename(['readme.md'])).toThrow(/No Purkins SQL migration/);
   });
 
   it('never provisions/migrates/deploys unless an exact confirmation is supplied', () => {
