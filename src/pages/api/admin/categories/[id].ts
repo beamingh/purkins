@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { updateCategoryCommand, deleteCategoryCommand } from '../../../../features/categories/commands';
 import { parsePublicId } from '../../../../features/ids/publicId';
+import { getCategoryByPublicId } from '../../../../features/categories/db';
 import { CACHE_TAG } from '../../../../features/cache/tags';
 import { purgeCacheTags } from '../../../../features/cache/purge';
 
@@ -9,7 +10,9 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ request, params, redirect }) => {
   const publicId = parsePublicId(params.id, 'category');
-  if (!publicId) return new Response('Not found', { status: 404 });
+  if (!publicId || !await getCategoryByPublicId(env.DB, publicId)) {
+    return new Response('Not found', { status: 404 });
+  }
   const form = await request.formData();
   const isDelete = String(form.get('_action')) === 'delete';
   try {
