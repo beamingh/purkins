@@ -1,5 +1,5 @@
 import { verifyAccessJwt } from '../auth/access';
-import { isApprovedMcpOwner } from '../../../mcp/src/operator-access';
+import { isApprovedMcpOwner } from './ownerIdentity';
 import { normalizeOwnerEmail } from './clientTokens';
 
 type OwnerEnv = {
