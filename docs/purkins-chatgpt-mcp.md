@@ -27,7 +27,7 @@ These complement existing `list_purkins_stock`, `search_purkins_stock`,
 `get_purkins_stock`, `create_purkins_stock`, `update_purkins_stock`,
 `set_purkins_variant` and `approve_purkins_stock`.
 
-`import_purkins_image` requires an externally accessible HTTPS image URL.
+`import_purkins_image` requires an externally accessible HTTPS image URL **whose exact hostname is explicitly listed** in the Admin MCP Worker's `PURKINS_MCP_IMAGE_IMPORT_HOSTS` configuration (comma-separated trusted hostnames, no wildcards). The default empty list rejects all URL imports. This is separate from the global MCP write switch. Use controlled image sources only; adding an untrusted hostname defeats the outbound-fetch restriction.
 Chat message attachments are **not automatically available as image bytes** to
 an MCP server. For photos uploaded directly from the user's device, use the
 existing Admin Media upload page, then `list_purkins_media` and
