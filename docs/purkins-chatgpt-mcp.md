@@ -92,12 +92,29 @@ A successful OAuth setup must be tested before connecting. The code change
 alone is **not** an OAuth issuer or a complete live ChatGPT connection.
 Cloudflare's Access Managed OAuth handles the external authorization flow.
 
+## New owner write-safety scope
+
+See [MCP_WRITE_GUARD.md](MCP_WRITE_GUARD.md). Global
+`PURKINS_MCP_WRITES_ENABLED=true` alone does **not** expose legacy product,
+stock, media, fulfilment, and order mutation tools anymore. Those older paths
+also require `PURKINS_MCP_LEGACY_WRITES_ENABLED=true`, which must remain
+**false in production** until they are audited and replay-safe. Guarded location
+mutations separately require `PURKINS_MCP_LOCATION_WRITES_ENABLED=true` and
+verified owner identity in addition to the global gate. Both scoped flags
+default to false.
+
+Migration `0045_purkins_mcp_write_guard.sql` is required **before** deploying
+Workers with revision-aware location reads. Do not deploy this branch or
+turn on any write flag until isolated D1, local build and owner-authenticated
+runtime acceptance checks pass.
+
 ## Durable, deliberate write activation
 
 The permanent Admin configuration is gitignored and currently defaults to
 `PURKINS_MCP_WRITES_ENABLED=false`. **Do not change a tracked template to
-true or patch the production Worker ad hoc.** Only after the OAuth/owner
-identity and read tests are green:
+true or patch the production Worker ad hoc.** Only after all applicable scoped-write audit, idempotency, migration,
+replay and approval tests are green (the generic switch alone keeps the older
+mutators hidden):
 
 ```powershell
 npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
