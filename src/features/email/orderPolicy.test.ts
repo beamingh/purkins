@@ -6,6 +6,13 @@ describe('shouldSendCustomerOrderEmail', () => {
     expect(shouldSendCustomerOrderEmail('demo')).toBe(false);
   });
 
+  it.each(['cash', 'airtel_money', 'mtn_momo', 'zamtel_money', 'bank_transfer', 'other'])(
+    'suppresses customer emails for manually paid %s orders',
+    (paymentMethod) => {
+      expect(shouldSendCustomerOrderEmail(paymentMethod)).toBe(false);
+    },
+  );
+
   it.each(['stripe', 'lightning', 'opennode', null, undefined])(
     'allows customer email for %s orders',
     (paymentMethod) => {
