@@ -29,7 +29,7 @@ export async function reviewPurkinsDraft(db: D1Database, productId: string) {
   const blockers:string[]=[];
   const notes:string[]=[];
   if(product.active!==0 || intake.status!=='draft') {
-    notes.push('This product is not currently an unpublished draft.');
+    blockers.push('This item is not currently an unpublished draft; use the separate owner publication workflow.');
   }
   if(product.currency.toLowerCase()!=='zmw') blockers.push('Selling currency must be ZMW.');
   if((intake.condition_status??'complete')!=='complete') blockers.push('Review physical stock condition.');
