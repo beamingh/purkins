@@ -15,9 +15,11 @@
  *   npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
  *   npm run purkins:cloudflare -- mcp-writes-off --confirm=DISABLE-PURKINS-MCP-WRITES
  *
- * Even deploy is initially UNROUTED (workers_dev=false, preview_urls=false).
- * Human review of Cloudflare Access and first-run Admin is required before
- * any public hostname is enabled. MCP has its own deploy gate later.
+ * New installations initially have no public route (workers_dev=false,
+ * preview_urls=false). Existing Purkins Workers may already have active
+ * custom domains assigned through Cloudflare. Deploy updates the Worker code
+ * served on those domains; this script neither configures nor removes them.
+ * MCP authentication and write scopes have their own release gates.
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -274,7 +276,7 @@ function remoteMigrate() {
     migratedThrough: latestMigration(),
   }, null, 2) + '\n', { mode: 0o600 });
 }
-function deployUnrouted() {
+function deployPermanentWorkers() {
   requireConfirmation('deploy');
   ensureSafeLocal();
   const state = readState();
@@ -282,11 +284,11 @@ function deployUnrouted() {
     fail('Remote Purkins migration record does not cover the latest SQL migration. Run migrate first.');
   }
   buildForPermanent();
-  console.log('Deploying BOTH Workers with workers_dev=false and preview_urls=false.');
+  console.log('Updating BOTH permanent Workers (workers.dev and preview URLs remain disabled).');
   for (const target of ['public', 'admin']) {
     runLocal('wrangler', ['deploy', '--config', join(root, 'dist', target, 'server', 'wrangler.json')]);
   }
-  console.log('Both Workers deployed UNROUTED. Configure Admin secrets and Access before public URLs.');
+  console.log('Both Workers deployed. Existing Cloudflare-managed custom domains remain live; this script did not add or remove routes.');
 }
 
 try {
@@ -297,7 +299,7 @@ try {
   if (command === 'create') await create();
   if (command === 'build') buildForPermanent();
   if (command === 'migrate') remoteMigrate();
-  if (command === 'deploy') deployUnrouted();
+  if (command === 'deploy') deployPermanentWorkers();
   if (command === 'mcp-writes-on') setMcpWrites(true);
   if (command === 'mcp-writes-off') setMcpWrites(false);
 } catch (error) {
