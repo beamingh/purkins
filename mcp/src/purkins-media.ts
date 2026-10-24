@@ -92,7 +92,7 @@ async function draftProduct(db: D1Database, ref: string) {
 }
 
 export function registerPurkinsMediaTools(
-  server: McpServer, db: D1Database, bucket: R2Bucket, allowWrites: boolean,
+  server: McpServer, db: D1Database, bucket: R2Bucket | undefined, allowWrites: boolean,
 ): void {
   server.registerTool('list_purkins_media', {
     description: 'Operator-only list of media library images. Returns med_ IDs for attaching photos to private stock drafts.',
@@ -148,6 +148,7 @@ export function registerPurkinsMediaTools(
   }, async ({product_id, image_url}) => {
     const d = await draftProduct(db, product_id);
     if ('error' in d) return reply(d);
+    if (!bucket) return reply({error: 'R2 BUCKET binding is not configured for this MCP Worker.'});
     const file = await downloadImage(image_url);
     const media = await uploadMedia(db, createR2Storage(bucket), file, file.name);
     const attached = await attachMediaToProduct(db, d.product.id, media.id);
