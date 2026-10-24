@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database } from '@cloudflare/workers-types';
 import { createR2Storage } from '../../src/features/storage/r2';
 import { countMedia, getMediaByPublicId, listMedia, attachMediaToProduct } from '../../src/features/media/db';
 import { uploadMedia, validateUpload } from '../../src/features/media/upload';
@@ -106,7 +106,7 @@ async function draftProduct(db: D1Database, ref: string) {
 }
 
 export function registerPurkinsMediaTools(
-  server: McpServer, db: D1Database, bucket: R2Bucket | undefined, allowWrites: boolean,
+  server: McpServer, db: D1Database, bucket: Parameters<typeof createR2Storage>[0] | undefined, allowWrites: boolean,
   imageImportAllowedHosts: readonly string[] = [],
 ): void {
   server.registerTool('list_purkins_media', {
