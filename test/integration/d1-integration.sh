@@ -13,7 +13,13 @@ cleanup() {
     kill "$worker_pid" 2>/dev/null || true
     wait "$worker_pid" 2>/dev/null || true
   fi
-  rm -rf "$state_dir"
+  # On Windows, Miniflare's SQLite file handles may be released just after
+  # Wrangler exits. Retry cleanup rather than printing misleading test failures.
+  for _ in 1 2 3 4 5; do
+    if rm -rf "$state_dir" 2>/dev/null; then return; fi
+    sleep 0.25
+  done
+  echo "WARNING: local test directory remained busy after Worker exit: $state_dir" >&2
 }
 trap cleanup EXIT INT TERM
 
@@ -65,9 +71,15 @@ done
 # services to the dev proxy; with it on, the proxy intermittently answered a
 # request with its own bare 500 without ever invoking the Worker.
 export X_LOCAL_OBSERVABILITY=false
-npx wrangler dev \
+# This suite tests the *launched* public-cache policy. The committed Purkins
+# instance deliberately keeps PRELAUNCH_NOINDEX=true; override only the isolated
+# local Worker so the existing public caching expectations are meaningful.
+# Call the Node CLI directly rather than starting an npx process tree: Git Bash
+# must be able to stop the exact Worker PID before removing local D1/R2 files.
+node node_modules/wrangler/bin/wrangler.js dev \
   --config dist/server/wrangler.json \
   --persist-to "$state_dir" \
+  --var PRELAUNCH_NOINDEX:false \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
   --ip 127.0.0.1 \
@@ -641,7 +653,7 @@ fi
 # which is invisible until a store notices stock stuck on hold. Assert the built
 # artifact really exposes the handler.
 scheduled_status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
-  "http://127.0.0.1:$test_port/cdn-cgi/handler/scheduled")"
+  "http://127.0.0.1:$test_port/cdn-cgi/local/scheduled")"
 if [[ "$scheduled_status" != "200" ]]; then
   echo "D1 integration failed: built worker exposes no scheduled handler (got $scheduled_status)" >&2
   exit 1
