@@ -15,6 +15,7 @@
     "PRELAUNCH_NOINDEX": "true",
     "PURKINS_MCP_WRITES_ENABLED": "false",
     "PURKINS_MCP_LOCATION_WRITES_ENABLED": "false",
+    "PURKINS_MCP_STOCK_WRITES_ENABLED": "false",
     "PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"
   },
   "ratelimits": [
