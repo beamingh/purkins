@@ -322,7 +322,15 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
       .PURKINS_MCP_WRITES_ENABLED === 'true';
     registerPurkinsTools(this.server, db, allowWrites);
-    registerPurkinsMediaTools(this.server, db, (this.env as Env & { BUCKET?: R2Bucket }).BUCKET, allowWrites);
+    const mediaEnv = this.env as Env & {
+      BUCKET?: R2Bucket;
+      PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
+    };
+    const imageImportAllowedHosts = (mediaEnv.PURKINS_MCP_IMAGE_IMPORT_HOSTS ?? '')
+      .split(',').map(host => host.trim()).filter(Boolean);
+    registerPurkinsMediaTools(
+      this.server, db, mediaEnv.BUCKET, allowWrites, imageImportAllowedHosts,
+    );
     const allowLocationWrites = allowWrites && (this.env as Env & {
       PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
     }).PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true';
