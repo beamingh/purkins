@@ -49,6 +49,7 @@ interface Receipt {
   product_public_id: string;
   total_units: number;
   variant_count: number;
+  barcode_count: number;
   completed: number;
 }
 type NormalizedVariant = Required<Omit<ClothingVariantInput, 'price_cents'>> & { price_cents: number };
@@ -199,12 +200,13 @@ export async function createGuardedClothingDraft(
   const stmts = [
     db.prepare(
       'INSERT INTO purkins_mcp_clothing_receipts ' +
-      '(request_id,actor,payload_sha256,nonce,product_public_id,total_units,variant_count) ' +
-      'SELECT ?,?,?,?,?,?,? WHERE (? IS NULL OR EXISTS (' +
+      '(request_id,actor,payload_sha256,nonce,product_public_id,total_units,variant_count,barcode_count) ' +
+      'SELECT ?,?,?,?,?,?,?,? WHERE (? IS NULL OR EXISTS (' +
       'SELECT 1 FROM purkins_locations WHERE id=?)) ' +
       'ON CONFLICT(request_id) DO NOTHING RETURNING request_id',
     ).bind(item.request_id, actor, digest, nonce, productId, item.total_units,
-      item.variants.length, item.location_id, item.location_id),
+      item.variants.length, item.variants.filter(v => v.supplier_barcode !== null).length,
+      item.location_id, item.location_id),
     db.prepare(
       'INSERT INTO products (name,slug,description,price_cents,currency,image_key,stock,' +
       'active,variant_label,weight_grams,requires_shipping,public_id,last_mcp_stock_request) ' +
@@ -269,9 +271,13 @@ export async function createGuardedClothingDraft(
     'WHERE p.public_id=? AND p.last_mcp_stock_request=?)=variant_count AND ' +
     '(SELECT count(*) FROM purkins_variant_intake_details d ' +
     'JOIN product_variants v ON v.id=d.variant_id JOIN products p ON p.id=v.product_id ' +
-    'WHERE p.public_id=? AND p.last_mcp_stock_request=?)=variant_count ' +
+    'WHERE p.public_id=? AND p.last_mcp_stock_request=?)=variant_count AND ' +
+    '(SELECT count(*) FROM purkins_variant_identifiers b ' +
+    'JOIN product_variants v ON v.id=b.variant_id JOIN products p ON p.id=v.product_id ' +
+    'WHERE p.public_id=? AND p.last_mcp_stock_request=?)=barcode_count ' +
     'THEN 1 ELSE -1 END WHERE request_id=? AND nonce=? RETURNING completed',
-  ).bind(productId,nonce,productId,nonce,productId,nonce,item.request_id,nonce));
+  ).bind(productId,nonce,productId,nonce,productId,nonce,
+    productId,nonce,item.request_id,nonce));
 
   try {
     const results = await db.batch(stmts);
