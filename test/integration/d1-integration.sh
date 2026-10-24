@@ -281,12 +281,17 @@ private_cache='private, no-store'
 
 for path in \
   / /products /products/sample-tee /categories/apparel '/search?q=sample' \
-  /pages/shipping /robots.txt /sitemap.xml /llms.txt \
+  /pages/shipping /sitemap.xml /llms.txt \
   /api/products /api/products/sample-tee
 do
   assert_cache_control "$path" "$public_cache"
 done
 assert_cache_control / "$public_cache" HEAD
+
+# robots.txt is deliberately uncacheable even after launch: switching the same
+# store between prelaunch and indexable mode must not replay stale crawl rules.
+# This is a route-owned explicit policy, not the generic public-page fallback.
+assert_cache_control /robots.txt "$private_cache"
 
 for path in \
   /cart /checkout /express /payment-setup /partials/cart-count \
