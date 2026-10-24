@@ -134,7 +134,11 @@ export function registerPurkinsMediaTools(
     const p = id ? await getProductByPublicId(db, id) : null;
     if (!p) return reply({error: 'Pass a valid prod_ product ID.'});
     const images = await listProductImages(db, p.id);
-    return reply({ product_id: id, images: images.map(i => ({
+    return reply({
+      product_id: id,
+      gallery_revision: (p as typeof p & {mcp_gallery_revision?:number}).mcp_gallery_revision ?? 0,
+      draft: p.active === 0,
+      images: images.map(i => ({
       id: i.public_id, image_path: '/images/' + i.image_key,
       alt: i.alt, primary: i.image_key === p.image_key,
     })) });
