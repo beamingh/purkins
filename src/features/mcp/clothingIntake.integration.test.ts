@@ -21,10 +21,11 @@ intakeForm.set('retail_tag_currency','ZAR');
 intakeForm.set('condition_status','review');
 const parsed = parseIntakeFields(intakeForm);
 if ('error' in parsed) throw Error(parsed.error);
+const intakeData = parsed.data; // Narrow the discriminated result outside the fixture closure.
 
 function clothing(name: string, request_id = uuid()): ClothingDraftInput {
   return { request_id, name, description: null, price_cents: 12000,
-    location_id:null, intake:parsed.data, variants:[
+    location_id:null, intake:intakeData, variants:[
       {label:'Grey / Newborn',size_label:'Newborn',colour:'Grey',stock:3,
        retail_tag_minor:6999,retail_tag_currency:'ZAR',pack_count:1,
        supplier_barcode:'001234567890'},
@@ -153,19 +154,37 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
       "WHEN NEW.label='BLOCKED' BEGIN SELECT RAISE(ABORT,'blocked test variant'); END;",
     ).run();
     const request_id=uuid();
+    const input={
+      ...clothing('Atomic Rollback Clothing',request_id),
+      variants:[{label:'First',stock:2},{label:'BLOCKED',stock:1}],
+    };
+    // The database trigger raises SQLITE_CONSTRAINT. The service deliberately
+    // translates constraint failures into an operator-visible conflict result.
+    // Assert both that contract AND transaction rollback, not a thrown error.
+    const beforeVariants=(await db.prepare('SELECT count(*) AS n FROM product_variants')
+      .first<{n:number}>())?.n;
+    const beforeDetails=(await db.prepare('SELECT count(*) AS n FROM purkins_variant_intake_details')
+      .first<{n:number}>())?.n;
+    let result;
     try {
-      await expect(createGuardedClothingDraft(db,actor,{
-        ...clothing('Atomic Rollback Clothing',request_id),
-        variants:[{label:'First',stock:2},{label:'BLOCKED',stock:1}],
-      })).rejects.toThrow(/blocked test variant/i);
+      result=await createGuardedClothingDraft(db,actor,input);
+      expect(result).toMatchObject({ok:false,conflict:true,request_id});
     } finally {
       await db.prepare('DROP TRIGGER block_clothing_variant').run();
     }
     expect(await getProductBySlug(db,'atomic-rollback-clothing')).toBeNull();
     expect(await db.prepare('SELECT request_id FROM purkins_mcp_clothing_receipts WHERE request_id=?')
       .bind(request_id).first()).toBeNull();
+    expect((await db.prepare('SELECT count(*) AS n FROM product_variants')
+      .first<{n:number}>())?.n).toBe(beforeVariants);
     expect((await db.prepare('SELECT count(*) AS n FROM purkins_variant_intake_details')
-      .first<{n:number}>())?.n).toBe(6);
+      .first<{n:number}>())?.n).toBe(beforeDetails);
+    // The original UUID was rolled back, so retrying that exact request after
+    // the temporary constraint is removed must succeed exactly once.
+    const retry=await createGuardedClothingDraft(db,actor,input);
+    expect(retry).toMatchObject({ok:true,request_id,total_units:3,replayed:false});
+    const replay=await createGuardedClothingDraft(db,actor,input);
+    expect(replay).toMatchObject({ok:true,replayed:true});
   });
 
   it('validates stable location references and does not invent new storage hierarchy', async () => {
@@ -190,7 +209,10 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
     const a=clothing('Batch Clothing First');
     const b=clothing('Batch Clothing Second');
     const c=clothing('Batch Clothing Third');
-    await createGuardedClothingDraft(db,actor,b); // preexisting, another request_id
+    // An unrelated request already created the SAME product name; using b's
+    // original UUID would be a valid idempotent replay, not a conflict.
+    const preexisting=await createGuardedClothingDraft(db,actor,clothing(b.name));
+    expect(preexisting.ok).toBe(true);
     const first=await createGuardedClothingBatch(db,actor,[a,b,c]);
     expect(first.stopped_early).toBe(false);
     expect(first.results.map(r=>r.ok)).toEqual([true,false,true]);
