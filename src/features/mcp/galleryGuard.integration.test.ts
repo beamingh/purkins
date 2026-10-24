@@ -83,7 +83,7 @@ describe('Owner guarded gallery edits (real isolated D1)',()=>{
     const input={action:'gallery.attach' as const,request_id,product_id:product,
       media_id:firstMedia,expected_revision:0,alt:'Grey newborn cotton babygrow'};
     const result=await applyGuardedGalleryMutation(db,actor,input);
-    expect(result).toMatchObject({ok:true,gallery_revision:1,replayed:false,published:false});
+    expect(result).toMatchObject({ok:true,gallery_revision:1,replayed:false,was_unpublished_at_commit:true});
     if(!result.ok)throw Error(result.error);
     expect(result.image_id).toMatch(/^pimg_/);
     expect(await version()).toBe(1);
