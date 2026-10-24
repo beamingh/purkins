@@ -77,6 +77,16 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
     ]);
     const product=await getProductByPublicId(db,result.id);
     expect(product).toMatchObject({active:0,stock:11,variant_label:'Size / Colour',currency:'zmw'});
+    const privateView = await stockView(db, product!);
+    expect(privateView?.active).toBe(false);
+    expect(privateView?.variants[0]).toMatchObject({
+      label: 'Grey / Newborn', supplier_barcode: '001234567890',
+      size_label: 'Newborn', colour: 'Grey',
+      retail_tag_minor: 6999, retail_tag_currency: 'ZAR', pack_count: 1,
+    });
+    expect(privateView?.variants[2]).toMatchObject({
+      stock: 7, price_cents: 15000, retail_tag_minor: 7999,
+    });
     const fields=await getIntake(db,product!.id);
     expect(fields).toMatchObject({status:'draft',brand:'Little Castle',
       purchase_currency:'ZAR',purchase_cost_minor:6999,retail_tag_minor:6999});
