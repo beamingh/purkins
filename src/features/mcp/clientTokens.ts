@@ -121,16 +121,16 @@ export async function revokeMcpClientToken(
   const nonce=crypto.randomUUID();
   const result=await db.batch([
     db.prepare(
-      'UPDATE purkins_mcp_client_tokens SET revoked_at=? '+
+      'UPDATE purkins_mcp_client_tokens SET revoked_at=?,revocation_nonce=? '+
       'WHERE id=? AND accountable_email=? AND revoked_at IS NULL RETURNING id'
-    ).bind(now,opts.id,owner),
+    ).bind(now,nonce,opts.id,owner),
     // D1 batch is atomic; insert the audit record ONLY if revocation happened.
     db.prepare(
       'INSERT INTO purkins_mcp_client_token_events '+
       '(id,token_id,actor_email,action,occurred_at) '+
       "SELECT ?,id,?,'revoked',? FROM purkins_mcp_client_tokens "+
-      'WHERE id=? AND accountable_email=? AND revoked_at=?'
-    ).bind(nonce,owner,now,opts.id,owner,now),
+      'WHERE id=? AND accountable_email=? AND revocation_nonce=?'
+    ).bind(nonce,owner,now,opts.id,owner,nonce),
   ]);
   const changed=(result[0]?.results?.length??0)>0;
   return changed?{ok:true,message:'Connection revoked.'}:
