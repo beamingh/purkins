@@ -101,6 +101,13 @@ const error = Astro.url.searchParams.get('error');
             </select>
           </label>
           <label class="block text-sm">
+            Handover method
+            <select name="delivery_method" class="mt-1 w-full rounded border border-line p-2" required>
+              <option value="pickup">Customer pickup / handover</option>
+              <option value="shipping">Delivery to customer (arrange separately)</option>
+            </select>
+          </label>
+          <label class="block text-sm">
             Hand-over status
             <select name="fulfillment" class="mt-1 w-full rounded border border-line p-2" required>
               <option value="fulfilled">Handed over to customer</option>
