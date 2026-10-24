@@ -16,8 +16,8 @@ CREATE INDEX IF NOT EXISTS idx_purkins_mcp_mutations_created
 
 -- Admin's existing location writes do not change this MCP fencing marker;
 -- they still take effect and cause stale MCP version checks to fail when
--- handled by the guarded path. A future Admin refactor will increment version
--- for Admin edits too. Until then MCP checks BOTH the expected parent and
--- version, so concurrent Admin moves cannot silently overwrite their result.
+-- handled by the guarded path. Existing Admin location moves now increment
+-- mcp_version in the shared moveLocation service. The MCP write guard checks
+-- BOTH expected parent and version, with a SQLite cycle trigger as fallback.
 ALTER TABLE purkins_locations ADD COLUMN mcp_version INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE purkins_locations ADD COLUMN last_mcp_request TEXT;
