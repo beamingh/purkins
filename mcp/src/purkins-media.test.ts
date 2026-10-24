@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { safeImageUrl, downloadImage, registerPurkinsMediaTools } from './purkins-media';
+import { safeImageUrl, imageImportHostAllowed, downloadImage, registerPurkinsMediaTools } from './purkins-media';
 
 const tinyGif = Uint8Array.from([
   0x47,0x49,0x46,0x38,0x39,0x61,0x01,0x00,0x01,0x00,
@@ -50,6 +50,22 @@ describe('Purkins MCP image URL boundary', () => {
 
     await expect(downloadImage('https://127.0.0.1/secret', vi.fn() as unknown as typeof fetch))
       .rejects.toThrow('public HTTPS image URL');
+  });
+});
+
+describe('MCP image importer host allowlist', () => {
+  it('fails closed by default, including otherwise public HTTPS URLs', () => {
+    expect(imageImportHostAllowed('https://images.example.org/1.jpg', [])).toBe(false);
+    expect(imageImportHostAllowed('https://images.example.org/1.jpg', ['other.example.org'])).toBe(false);
+  });
+  it('permits only exact, explicitly trusted HTTPS hostnames', () => {
+    const hosts = ['images.example.org'];
+    expect(imageImportHostAllowed('https://images.example.org/1.jpg', hosts)).toBe(true);
+    expect(imageImportHostAllowed('https://images.example.org./1.jpg', hosts)).toBe(true);
+    expect(imageImportHostAllowed('https://images.example.org.attacker.com/1.jpg', hosts)).toBe(false);
+    expect(imageImportHostAllowed('https://sub.images.example.org/1.jpg', hosts)).toBe(false);
+    expect(imageImportHostAllowed('http://images.example.org/1.jpg', hosts)).toBe(false);
+    expect(imageImportHostAllowed('https://127.0.0.1/1.jpg', hosts)).toBe(false);
   });
 });
 
