@@ -1,7 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import {
   getLocation, listLocationTree, locationIdValid, locationKind,
-  locationName, type StockLocation,
+  locationName,
 } from '../purkins/locations';
 
 const UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
