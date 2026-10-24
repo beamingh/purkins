@@ -34,8 +34,22 @@ describe('Owner-only MCP Connections gate', () => {
     expect(await authorizedMcpOwner('valid-owner', config, verify)).toBe('owner@example.com');
   });
 
-  it('fails closed on JWKS/network errors', async () => {
-    verify.mockRejectedValue(new Error('unavailable'));
-    await expect(authorizedMcpOwner('identity', config, verify)).resolves.toBeNull();
+  it('fails closed when Cloudflare JWKS retrieval rejects', async () => {
+    // A direct async verifier avoids creating a globally tracked rejected
+    // vi.fn() result, which can be reported as an unhandled rejection in the
+    // full Miniflare + Vitest pool despite the application catching it.
+    const unreachableJwks: typeof verifyAccessJwt = async () => {
+      throw new Error('JWKS temporarily unavailable');
+    };
+    const result = await authorizedMcpOwner('identity', config, unreachableJwks);
+    expect(result).toBeNull();
+  });
+
+  it('fails closed when verification throws synchronously', async () => {
+    const brokenVerifier: typeof verifyAccessJwt = () => {
+      throw new Error('unexpected verifier failure');
+    };
+    const result = await authorizedMcpOwner('identity', config, brokenVerifier);
+    expect(result).toBeNull();
   });
 });
