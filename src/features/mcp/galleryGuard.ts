@@ -134,13 +134,13 @@ export async function applyGuardedGalleryMutation(
     ).bind(alt||null,nonce,image,alt,product,input.expected_revision,key,nonce));
   } else {
     statements.push(db.prepare(
-      'UPDATE product_images SET position=(' +
-      'SELECT COALESCE(MIN(position),0)-1 FROM product_images ' +
-      'WHERE product_id=product_images.product_id),last_mcp_gallery_nonce=? ' +
+      'UPDATE product_images AS target SET position=(' +
+      'SELECT COALESCE(MIN(pi.position),0)-1 FROM product_images pi ' +
+      'WHERE pi.product_id=target.product_id),last_mcp_gallery_nonce=? ' +
       'WHERE public_id=? AND id<>(SELECT pi.id FROM product_images pi ' +
-      'WHERE pi.product_id=product_images.product_id ORDER BY pi.position,pi.id LIMIT 1) ' +
+      'WHERE pi.product_id=target.product_id ORDER BY pi.position,pi.id LIMIT 1) ' +
       'AND EXISTS(SELECT 1 FROM products p JOIN purkins_intake i ON i.product_id=p.id ' +
-      'WHERE p.id=product_images.product_id AND p.public_id=? AND p.active=0 ' +
+      'WHERE p.id=target.product_id AND p.public_id=? AND p.active=0 ' +
       "AND i.status='draft' AND p.mcp_gallery_revision=?) " +
       'AND EXISTS(SELECT 1 FROM purkins_mcp_gallery_receipts r WHERE r.request_id=? AND r.nonce=?) ' +
       'RETURNING public_id',
