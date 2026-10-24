@@ -9,7 +9,7 @@ function form(overrides: Record<string, string> = {}, itemValues = [first, secon
   const f = new FormData();
   for (const [key, value] of Object.entries({
     idempotency_key: uuid, channel: 'whatsapp', tender: 'airtel_money',
-    customer_name: '', email: '', note: '', fulfillment: 'fulfilled',
+    customer_name: '', email: '', note: '', fulfillment: 'fulfilled', delivery_method: 'pickup',
     ...overrides,
   })) f.set(key, value);
   itemValues.forEach((value, index) => {
@@ -56,6 +56,7 @@ describe('Purkins owner-created sales', () => {
     [{ tender: 'stripe' }, 'payment'],
     [{ email: 'bad' }, 'email'],
     [{ fulfillment: 'pending' }, 'handed over'],
+    [{ delivery_method: 'invalid' }, 'pickup'],
     [{ note: 'x'.repeat(1001) }, 'Notes'],
     [{ customer_name: 'x'.repeat(121) }, 'Customer name'],
   ])('rejects invalid or unsafe request fields %j', (override, word) => {
