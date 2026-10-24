@@ -60,3 +60,26 @@ The source-tree inventory alone does not prove every action listed is currently 
 `src/features/categories/commands.ts` now encapsulates category creation, editing, deletion, public-ID resolution, slug uniqueness and cycle checks. Existing Admin POST handlers invoke these shared commands, then their existing catalogue-cache purge. The shared commands themselves do not purge the cache. **Do not register MCP category mutations yet:** the independent Admin Worker must invalidate the *public storefront* cache reliably and record auditable, replay-safe operations. Existing MCP category list/detail tools remain read-only.
 
 Check Admin error/redirect parity and TypeScript build locally. No local tests were run in this chat; commit is not production validated.
+
+## Security and regression re-audit (24 October 2026)
+
+Additional source review after the initial implementation identified and corrected:
+
+1. **Operator authorization:** An Access-signed identity with any nonempty email previously qualified as operator. Now the independently verified Access identity must match `PURKINS_MCP_OWNER_EMAIL`; missing config denies. Legacy fixed `MCP_TOKEN` is a separate owner credential and requires its own key-management review.
+2. **Admin write/result ambiguity:** The category POST refactor accidentally caught cache-purge failures as input errors, making a committed write appear to have failed. Expected validation errors use `CategoryValidationError`; DB/cache failures now propagate, preserving the original failure semantics.
+3. **Hierarchy validation:** Invalid/missing parents and circular moves are again reported as validation errors to the Admin editor rather than generic server failures.
+4. **Test coverage:** Replaced fake 32-character category IDs with actual 10-character Crockford public IDs and added positive lookup tests, negative ID tests, command cycle/parent validation, and infrastructure-failure tests.
+5. **Untrusted image sources:** The imported URL validator blocked common internal/IP URLs but did not restrict arbitrary public-looking hostnames. The media importer now requires an exact hostname on `PURKINS_MCP_IMAGE_IMPORT_HOSTS`. Empty list denies all URL imports. Owner access and the existing draft-only/write flags are still required.
+
+**Verification still outstanding:** no local checkout was available in the review environment and no GitHub Actions workflow had been run on this branch. All newly authored tests are committed but **not passed/verified**. Local tests/typechecks, built Worker route tests, signed-JWT/owner integration tests, media/R2 flow, cache invalidation across Workers, mutation audit/idempotency/concurrency and full Admin-to-MCP parity remain release blockers. Neither new category mutations nor live production MCP writes are activated.
+
+### Safe verification commands (from an existing development checkout)
+
+```powershell
+npm run check
+npx vitest run mcp/src/categories.test.ts mcp/src/operator-access.test.ts mcp/src/purkins-media.test.ts src/features/categories/commands.test.ts
+npm run mcp:check
+npm run build:workers
+```
+
+No migration, deployment or remote inventory mutation is part of these checks.
