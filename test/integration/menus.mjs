@@ -69,19 +69,22 @@ const PRE_MENU_SCHEMA = `
 const MIGRATION = readFileSync(new URL('../../migrations/0028_nav_menus.sql', import.meta.url), 'utf8');
 
 /**
- * Strip whole-line comments FIRST, then split on ';'.
+ * Normalize Windows CRLF/CR line endings before removing comment-only lines.
+ * A trailing '\r' otherwise prevents /^\s*--.*$/ from matching on Windows,
+ * which leaves comment blocks as the first D1 statement.
  *
- * Splitting first and discarding chunks that begin with '--' silently drops every
- * statement preceded by a comment block — which, in this migration, is all of
- * them. The migration has no semicolons or '--' inside string literals.
+ * Remove comments before splitting (including comments with ';'), and retain
+ * newlines in SQL so any inline "--" comment terminates correctly.
+ * This migration has no semicolons in SQL string literals.
  */
 const statements = (sql) =>
   sql
+    .replace(/\r\n?/g, '\n')
     .split('\n')
     .map((line) => line.replace(/^\s*--.*$/, ''))
     .join('\n')
     .split(';')
-    .map((s) => s.replace(/\s+/g, ' ').trim())
+    .map((s) => s.trim())
     .filter(Boolean);
 
 async function freshDb({ seedBefore } = {}) {
@@ -94,7 +97,7 @@ async function freshDb({ seedBefore } = {}) {
   // creates menu_items while pages/settings are still empty, so the backfill
   // matches zero rows and passes while proving nothing about the upgrade path.
   if (seedBefore) await seedBefore(db);
-  for (const stmt of statements(MIGRATION)) await db.exec(stmt.replace(/\n\s*/g, ' '));
+  for (const stmt of statements(MIGRATION)) await db.exec(stmt);
   // 0033 adds public_id after 0028; the creation path writes it, so mirror it.
   await db.exec('ALTER TABLE menu_items ADD COLUMN public_id TEXT');
   return db;
@@ -109,6 +112,15 @@ const addCategory = (db, name, slug) =>
 const rowsOf = async (db, sql) => (await db.prepare(sql).all()).results ?? [];
 
 console.log('\nnavigation menus');
+
+await check('SQL migration parser handles Windows and Unix line endings', async () => {
+  const unix = statements(MIGRATION.replace(/\r\n?/g, '\n'));
+  const windows = statements(MIGRATION.replace(/\r\n?/g, '\n').replace(/\n/g, '\r\n'));
+  assert.deepEqual(windows, unix, 'CRLF should parse exactly like LF');
+  assert.equal(unix.length, 5, 'create table, 2 indexes, 2 seed inserts');
+  assert.match(unix[0], /^CREATE TABLE IF NOT EXISTS menu_items\s*\(/);
+  assert.doesNotMatch(unix[0], /--\s*0028:/);
+});
 
 // ── migration seed ──────────────────────────────────────────────────────────
 
