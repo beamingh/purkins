@@ -2,6 +2,7 @@
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { authorizedMcpOwner } from '../../features/mcp/ownerGate';
+import { MCP_OWNER_READ_TOOLS } from '../../features/mcp/clientScope';
 import {
   issueMcpClientToken, revokeMcpClientToken, listMcpClientTokens,
   listMcpClientTokenEvents, MCP_CLIENT_TOKEN_DAYS,
@@ -145,6 +146,20 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     </form>
   </section>
 
+  <section class="mb-10 rounded-lg border border-line bg-white p-5" aria-labelledby="tools-title">
+    <h2 id="tools-title" class="font-serif text-xl">Read-only tool registry</h2>
+    <p class="mt-2 text-sm text-gray-600">
+      The tools new tokens are eligible to call after the connection authenticates.
+      Checkout creation, drafts, publication, sales, refunds and settings mutations are excluded.
+      Individual tools still follow their existing data and access checks.
+    </p>
+    <ul class="mt-4 grid gap-2 sm:grid-cols-2">
+      {MCP_OWNER_READ_TOOLS.map(name=>(
+        <li class="rounded border border-line bg-gray-50 px-3 py-2 font-mono text-xs">{name}</li>
+      ))}
+    </ul>
+  </section>
+
   <section class="mb-10" aria-labelledby="list-title">
     <h2 id="list-title" class="mb-3 font-serif text-2xl">Existing connections</h2>
     <div class="overflow-x-auto rounded-lg border border-line bg-white">
@@ -154,7 +169,7 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
         </thead>
         <tbody>
           {connections.map(row=>(
-            <tr class="border-b border-line" key={row.id}>
+            <tr class="border-b border-line">
               <td class="p-3">
                 <strong class="block">{row.name}</strong>
                 <code class="text-xs text-gray-500">{row.token_prefix}…</code>
