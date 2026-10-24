@@ -11,7 +11,7 @@
  *   npm run purkins:cloudflare -- create --confirm=CREATE-PURKINS-FOREVER
  *   npm run purkins:cloudflare -- build              # local build only
  *   npm run purkins:cloudflare -- migrate --confirm=MIGRATE-PURKINS-FOREVER
- *   npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
+ *   npm run purkins:cloudflare -- deploy --confirm=DEPLOY-PURKINS-WORKERS
  *   npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
  *   npm run purkins:cloudflare -- mcp-writes-off --confirm=DISABLE-PURKINS-MCP-WRITES
  *
@@ -41,7 +41,7 @@ const latestMigration = () => latestMigrationFilename(readdirSync(join(root, 'mi
 const expected = {
   create: 'CREATE-PURKINS-FOREVER',
   migrate: 'MIGRATE-PURKINS-FOREVER',
-  deploy: 'DEPLOY-UNROUTED-PURKINS',
+  deploy: 'DEPLOY-PURKINS-WORKERS',
   'mcp-writes-on': 'ENABLE-PURKINS-MCP-WRITES',
   'mcp-writes-off': 'DISABLE-PURKINS-MCP-WRITES',
 };
@@ -65,7 +65,12 @@ function runLocal(bin, args, opts = {}) {
   return result.stdout ?? '';
 }
 function requireConfirmation(action) {
-  if (confirm !== expected[action]) {
+  // Backward compatibility: older Purkins deployment instructions used a
+  // misleading "unrouted" token. It retains the SAME exact-confirmation gate,
+  // but the recommended token now correctly describes updates to live Workers.
+  const legacyDeployToken = action === 'deploy' &&
+    confirm === 'DEPLOY-UNROUTED-PURKINS';
+  if (!legacyDeployToken && confirm !== expected[action]) {
     fail('This action changes PERMANENT remote infrastructure. Rerun with --confirm=' + expected[action]);
   }
 }
