@@ -2,7 +2,10 @@
 export function shouldSendCustomerOrderEmail(
   paymentMethod: string | null | undefined,
 ): boolean {
-  return paymentMethod !== 'demo';
+  // Manual sales have no guest order token and no automated customer email.
+  // Operators may share a printable receipt separately if requested.
+  return paymentMethod !== 'demo' &&
+    !['cash', 'airtel_money', 'mtn_momo', 'zamtel_money', 'bank_transfer', 'other'].includes(paymentMethod ?? '');
 }
 
 /** Resolve and validate the address required to place a demo order. */
