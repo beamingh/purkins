@@ -53,6 +53,7 @@ describe('Purkins owner-created sales', () => {
   it.each([
     [{ idempotency_key: 'bad' }, 'Reload'],
     [{ channel: 'untrusted' }, 'channel'],
+    [{ channel: 'toString' }, 'channel'],
     [{ tender: 'stripe' }, 'payment'],
     [{ email: 'bad' }, 'email'],
     [{ fulfillment: 'pending' }, 'handed over'],
@@ -69,10 +70,10 @@ describe('Purkins owner-created sales', () => {
     const blank = form();
     blank.delete('unit_price');
     expect(parseManualSaleForm(blank).ok).toBe(false);
-    expect(parseManualSaleForm(form({}, ['product_1234|'])).toEqual(
+    expect(parseManualSaleForm(form({}, ['product_1234|']))).toEqual(
       expect.objectContaining({ ok: false }),
     );
-    expect(parseManualSaleForm(form({}, ['prod_0123456789|var_bad'])).toEqual(
+    expect(parseManualSaleForm(form({}, ['prod_0123456789|var_bad']))).toEqual(
       expect.objectContaining({ ok: false }),
     );
   });
@@ -86,7 +87,7 @@ describe('Purkins owner-created sales', () => {
   });
 
   it('limits the order to 30 lines', () => {
-    expect(parseManualSaleForm(form({}, Array(31).fill(first))).toEqual(
+    expect(parseManualSaleForm(form({}, Array(31).fill(first)))).toEqual(
       expect.objectContaining({ ok: false }),
     );
   });
