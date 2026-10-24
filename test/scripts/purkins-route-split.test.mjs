@@ -84,9 +84,21 @@ describe('Purkins route-level Worker isolation', () => {
       expect(existsSync(join(adminRoot, 'features', 'purkins', 'db.ts'))).toBe(true);
       expect(existsSync(join(temp, '.instances', 'split-build', 'admin', 'seed-demo.sql'))).toBe(true);
       expect(existsSync(join(temp, '.instances', 'split-build', 'public', 'seed-demo.sql'))).toBe(true);
+      expect(readFileSync(join(publicRoot, 'features', 'runtime', 'worker-target.ts'), 'utf8'))
+        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = false;\\n'.replace('\\\\n', '\\n'));
+      expect(readFileSync(join(adminRoot, 'features', 'runtime', 'worker-target.ts'), 'utf8'))
+        .toBe('export const HAS_LOCAL_ADMIN_ROUTES = true;\\n'.replace('\\\\n', '\\n'));
     } finally {
       rmSync(temp, { recursive: true, force: true });
     }
+  });
+
+  it('keeps first-run redirect only when Admin routes exist on the same Worker', () => {
+    const middleware = readFileSync(new URL('../../src/middleware.ts', import.meta.url), 'utf8');
+    const monolithic = readFileSync(new URL('../../src/features/runtime/worker-target.ts', import.meta.url), 'utf8');
+    expect(middleware).toContain('HAS_LOCAL_ADMIN_ROUTES &&');
+    expect(middleware).toContain("return context.redirect('/admin/setup', 302)");
+    expect(monolithic).toContain('HAS_LOCAL_ADMIN_ROUTES = true');
   });
 
   it('public Worker rejects Admin and MCP even if a build accidentally included the routes', () => {
