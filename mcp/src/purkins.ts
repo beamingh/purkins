@@ -18,6 +18,7 @@ import {
 } from '../../src/features/purkins/intake';
 import { assignIntakeLocation, getLocation, resolveLegacyLocation } from '../../src/features/purkins/locations';
 import { createGuardedStockDraft, adjustGuardedDraftStock } from '../../src/features/mcp/stockGuard';
+import { createGuardedClothingBatch } from '../../src/features/mcp/clothingIntake';
 
 // Never send private cost, location or supplier codes to the buyer tier.
 // These registrations are invoked ONLY behind the MCP operator-token gate.
@@ -83,13 +84,22 @@ async function resolve(db: D1Database, ref: string): Promise<Product | null> {
   return publicId ? getProductByPublicId(db, publicId) : getProductBySlug(db, id);
 }
 
-async function stockView(db: D1Database, product: Product) {
+export async function stockView(db: D1Database, product: Product) {
   const intake = await getIntake(db, product.id);
   if (!intake) return null;
   const { product_id: _internalRowId, ...privateIntake } = intake;
   void _internalRowId;
   const variantCodes = await getVariantSupplierBarcodes(db, product.id);
   const variants = await listVariants(db, product.id, true);
+  const {results: details} = await db.prepare(
+    'SELECT d.variant_id,d.size_label,d.colour,d.retail_tag_minor,' +
+    'd.retail_tag_currency,d.pack_count FROM purkins_variant_intake_details d ' +
+    'JOIN product_variants v ON v.id=d.variant_id WHERE v.product_id=?',
+  ).bind(product.id).all<{
+    variant_id: number; size_label: string | null; colour: string | null;
+    retail_tag_minor: number | null; retail_tag_currency: string; pack_count: number | null;
+  }>();
+  const detailByVariant = new Map((details ?? []).map(d => [d.variant_id, d]));
   return {
     id: product.public_id, slug: product.slug, name: product.name,
     description: product.description, stock: variants.length ? variants.filter((v) => v.active === 1).reduce((sum, v) => sum + v.stock, 0) : product.stock,
@@ -100,6 +110,11 @@ async function stockView(db: D1Database, product: Product) {
       id: v.public_id, label: v.label, sku: v.sku, stock: v.stock,
       price_cents: v.price_cents, active: v.active === 1,
       stock_revision: (v as typeof v & {mcp_stock_revision?: number}).mcp_stock_revision ?? 0,
+      size_label: detailByVariant.get(v.id)?.size_label ?? null,
+      colour: detailByVariant.get(v.id)?.colour ?? null,
+      retail_tag_minor: detailByVariant.get(v.id)?.retail_tag_minor ?? null,
+      retail_tag_currency: detailByVariant.get(v.id)?.retail_tag_currency ?? null,
+      pack_count: detailByVariant.get(v.id)?.pack_count ?? null,
       supplier_barcode: variantCodes.get(v.id) ?? null,
     })),
   };
@@ -379,6 +394,63 @@ export function registerGuardedPurkinsStockTools(
       return reply(await adjustGuardedDraftStock(db, actor, input));
     } catch (error) {
       return reply({ error: error instanceof Error ? error.message : 'Unable to update draft stock.' });
+    }
+  });
+}
+
+/**
+ * Safe multi-variant / bulk intake. NEVER enables legacy inventory mutators,
+ * photo changes, publication, sale creation or existing-product price changes.
+ * The operator is authenticated before this function is registered.
+ */
+export function registerGuardedClothingIntakeTools(
+  server: McpServer, db: D1Database, allowWrites = false, actor?: string,
+): void {
+  if (!allowWrites || !actor) return;
+  const requestKey = z.string().uuid();
+  const clothingVariant = z.object({
+    label: z.string().trim().min(1).max(100),
+    size_label: z.string().max(60).nullable().optional(),
+    colour: z.string().max(60).nullable().optional(),
+    stock: z.number().int().min(0).max(1_000_000),
+    price_cents: money.optional(),
+    supplier_barcode: z.string().max(80).nullable().optional(),
+    retail_tag_minor: money.nullable().optional(),
+    retail_tag_currency: z.enum(['ZAR','ZMW']).optional(),
+    pack_count: z.number().int().min(1).max(999).nullable().optional(),
+  });
+  const clothingItem = z.object({
+    request_id: requestKey,
+    name: z.string().trim().min(1).max(200),
+    description: z.string().max(5000).nullable().default(null),
+    price_cents: money,
+    location_id: z.string().regex(/^loc_[0-9a-f]{24}$/).nullable().default(null),
+    intake: detailsSchema,
+    variants: z.array(clothingVariant).min(1).max(20),
+  });
+  server.registerTool('bulk_create_guarded_clothing_drafts', {
+    description: 'Create 1–8 PRIVATE unpublished products per call with 1–20 size/colour variants each. Each product needs its own UUIDv4 request_id; use the SAME IDs to retry. Prices and tags use integer minor currency units (cents); ZAR tag is NOT cost. Existing loc_ location IDs only. Per-product transactions may succeed independently: examine EVERY result and stopped_early. Never publishes.',
+    inputSchema: { products: z.array(clothingItem).min(1).max(8) },
+  }, async ({ products }) => {
+    try {
+      if (products.some(product => product.intake.storage_location)) {
+        return reply({ error: 'Use existing loc_ location_id, not a free-text location path.' });
+      }
+      const prepared = products.map(item => ({
+        request_id: item.request_id,
+        name: item.name, description: item.description, price_cents: item.price_cents,
+        location_id: item.location_id,
+        intake: parseDetails({
+          ...item.intake,
+          storage_location: null,
+          pricing_mode: item.intake.pricing_mode ?? 'manual',
+          condition_status: item.intake.condition_status ?? 'review',
+        }),
+        variants: item.variants,
+      }));
+      return reply(await createGuardedClothingBatch(db, actor, prepared));
+    } catch (error) {
+      return reply({ error: error instanceof Error ? error.message : 'Invalid clothing intake request.' });
     }
   });
 }
