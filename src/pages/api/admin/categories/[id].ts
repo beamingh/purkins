@@ -1,8 +1,9 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { updateCategoryCommand, deleteCategoryCommand } from '../../../../features/categories/commands';
-import { parsePublicId } from '../../../../features/ids/publicId';
 import { getCategoryByPublicId } from '../../../../features/categories/db';
+import { parseCategoryForm } from '../../../../features/categories/form';
+import { parsePublicId } from '../../../../features/ids/publicId';
 import { CACHE_TAG } from '../../../../features/cache/tags';
 import { purgeCacheTags } from '../../../../features/cache/purge';
 
@@ -10,25 +11,26 @@ export const prerender = false;
 
 export const POST: APIRoute = async ({ request, params, redirect }) => {
   const publicId = parsePublicId(params.id, 'category');
-  if (!publicId || !await getCategoryByPublicId(env.DB, publicId)) {
-    return new Response('Not found', { status: 404 });
-  }
+  const category = publicId ? await getCategoryByPublicId(env.DB, publicId) : null;
+  if (!category || !publicId) return new Response('Not found', { status: 404 });
+
   const form = await request.formData();
   const isDelete = String(form.get('_action')) === 'delete';
-  try {
-    if (isDelete) {
-      await deleteCategoryCommand(env.DB, publicId);
-    } else {
-      await updateCategoryCommand(env.DB, publicId, {
-        name: String(form.get('name') ?? ''),
-        slug: String(form.get('slug') ?? ''),
-        parent_id: String(form.get('parent_id') ?? '') || null,
-      });
+  if (isDelete) {
+    await deleteCategoryCommand(env.DB, publicId);
+  } else {
+    const parsed = parseCategoryForm(form);
+    if ('error' in parsed) {
+      return redirect(`/admin/categories/${publicId}/edit?error=${encodeURIComponent(parsed.error)}`, 303);
     }
-    await purgeCacheTags([CACHE_TAG.catalog]);
-    return redirect('/admin/categories', 303);
-  } catch (error) {
-    const msg = encodeURIComponent(error instanceof Error ? error.message : 'Unable to update category.');
-    return redirect(`/admin/categories/${publicId}/edit?error=${msg}`, 303);
+    await updateCategoryCommand(env.DB, publicId, {
+      name: parsed.data.name,
+      slug: parsed.data.slugInput,
+      parent_id: parsed.data.parentPublicId,
+    });
   }
+  // Intentionally outside a catch: if cache invalidation fails, do not
+  // tell the operator the DB write failed and invite a duplicate retry.
+  await purgeCacheTags([CACHE_TAG.catalog]);
+  return redirect('/admin/categories', 303);
 };
