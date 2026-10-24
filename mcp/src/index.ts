@@ -7,6 +7,7 @@ import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
+import { canCreateCheckout, canWriteAsOperator } from '../../src/features/mcp/clientScope';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -276,7 +277,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     );
 
     // A read-only owner credential must not inherit the buyer checkout writer.
-    if (this.props?.readOnly !== true) this.server.registerTool(
+    if (canCreateCheckout(this.props)) this.server.registerTool(
       'create_checkout',
       {
         description:
@@ -334,7 +335,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
       PURKINS_MCP_GALLERY_WRITES_ENABLED?: string;
     };
-    const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true' && this.props?.readOnly !== true;
+    const allowWrites = canWriteAsOperator(this.props, writeEnv.PURKINS_MCP_WRITES_ENABLED);
     // Old stock/product/order/image mutators do not yet have durable per-request
     // receipts. A general write switch alone must NEVER expose them.
     const allowLegacyWrites = allowWrites &&
