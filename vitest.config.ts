@@ -31,7 +31,7 @@ export default getViteConfig(
     test: {
       environment: 'node',
       reporters: ['default', new CopyFailuresReporter()],
-      include: ['src/**/*.test.ts', 'test/storefront/**/*.test.{ts,mjs}', 'test/scripts/**/*.test.{ts,mjs}'],
+      include: ['src/**/*.test.ts', 'mcp/src/**/*.test.ts', 'test/storefront/**/*.test.{ts,mjs}', 'test/scripts/**/*.test.{ts,mjs}'],
       alias: {
         '#theme': theme.dir,
         // Mirrors astro.config.mjs: if a test ever renders something that
