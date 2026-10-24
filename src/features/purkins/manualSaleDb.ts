@@ -1,8 +1,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import { getProductByPublicId } from '../products/db';
-import { listVariants } from '../products/variants';
-import { generatePublicId } from '../ids/publicId';
-import { getOrderByProviderSessionId } from '../orders/db';
+import { getProductByPublicId } from '../products/db.ts';
+import { generatePublicId } from '../ids/publicId.ts';
+import { getOrderByProviderSessionId } from '../orders/db.ts';
 import type { ManualSaleForm } from './manualSale';
 
 interface ResolvedLine {
@@ -11,6 +10,11 @@ interface ResolvedLine {
   name: string;
   quantity: number;
   unitPriceCents: number;
+}
+interface VariantRow {
+  id: number;
+  public_id: string | null;
+  label: string;
 }
 interface Target {
   productId: number;
@@ -40,7 +44,7 @@ export async function recordManualSale(
 
   const lines: ResolvedLine[] = [];
   const products = new Map<string, Awaited<ReturnType<typeof getProductByPublicId>>>();
-  const variants = new Map<string, Awaited<ReturnType<typeof listVariants>>>();
+  const variants = new Map<string, VariantRow[]>();
   for (const item of form.items) {
     let product = products.get(item.productPublicId);
     if (product === undefined) {
@@ -52,7 +56,12 @@ export async function recordManualSale(
     }
     let productVariants = variants.get(item.productPublicId);
     if (!productVariants) {
-      productVariants = await listVariants(db, product.id, true);
+      // Include unpublished/inactive variants: owner-entered sales may use
+      // stock awaiting storefront approval.
+      const found = await db.prepare(
+        'SELECT id, public_id, label FROM product_variants WHERE product_id = ? ORDER BY position, id',
+      ).bind(product.id).all<VariantRow>();
+      productVariants = found.results ?? [];
       variants.set(item.productPublicId, productVariants);
     }
     const variant = item.variantPublicId
