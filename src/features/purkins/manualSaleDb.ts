@@ -108,14 +108,14 @@ export async function recordManualSale(
     'INSERT INTO orders (provider_session_id, public_id, email, amount_total_cents, currency,',
     'status, payment_method, settlement_token, fulfillment_status, fulfilled_at, delivery_method)',
     "SELECT ?, ?, ?, ?, ?, 'paid', ?, ?, ?,",
-    "CASE WHEN ? = 'fulfilled' THEN datetime('now') ELSE NULL END, 'pickup'",
+    "CASE WHEN ? = 'fulfilled' THEN datetime('now') ELSE NULL END, ?",
     'WHERE ' + conditions.join(' AND '),
     'ON CONFLICT(provider_session_id) DO NOTHING RETURNING id',
   ].join(' ');
   const stmts = [
     db.prepare(insertSql).bind(
       session, publicId, form.email, totalCents, currency.toLowerCase(),
-      form.tender, token, form.fulfillment, form.fulfillment, ...params,
+      form.tender, token, form.fulfillment, form.fulfillment, form.deliveryMethod, ...params,
     ),
   ];
   for (const target of targets.values()) {
