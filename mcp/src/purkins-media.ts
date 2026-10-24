@@ -35,6 +35,20 @@ export function safeImageUrl(input: string): URL | null {
   }
 }
 
+/** Restrict outbound downloads to explicitly trusted HTTPS hosts.
+ * A public-looking DNS name alone is not sufficient SSRF protection.
+ * Exact hostnames only, never wildcards or suffix matches.
+ */
+export function imageImportHostAllowed(url: string, allowedHosts: readonly string[]): boolean {
+  const source = safeImageUrl(url);
+  if (!source) return false;
+  const host = source.hostname.toLowerCase().replace(/\\.$/, '');
+  return allowedHosts.some(raw => {
+    const candidate = raw.trim().toLowerCase();
+    return /^[a-z0-9.-]+$/.test(candidate) && candidate === host;
+  });
+}
+
 export async function downloadImage(url: string, load: typeof fetch = fetch): Promise<File> {
   const source = safeImageUrl(url);
   if (!source) throw new Error('Use a public HTTPS image URL (no IP addresses, credentials, local hosts, or redirects).');
@@ -93,6 +107,7 @@ async function draftProduct(db: D1Database, ref: string) {
 
 export function registerPurkinsMediaTools(
   server: McpServer, db: D1Database, bucket: R2Bucket | undefined, allowWrites: boolean,
+  imageImportAllowedHosts: readonly string[] = [],
 ): void {
   server.registerTool('list_purkins_media', {
     description: 'Operator-only list of media library images. Returns med_ IDs for attaching photos to private stock drafts.',
@@ -149,6 +164,9 @@ export function registerPurkinsMediaTools(
     const d = await draftProduct(db, product_id);
     if ('error' in d) return reply(d);
     if (!bucket) return reply({error: 'R2 BUCKET binding is not configured for this MCP Worker.'});
+    if (!imageImportHostAllowed(image_url, imageImportAllowedHosts)) {
+      return reply({error: 'Image URL must use an explicitly approved HTTPS image host.'});
+    }
     const file = await downloadImage(image_url);
     const media = await uploadMedia(db, createR2Storage(bucket), file, file.name);
     const attached = await attachMediaToProduct(db, d.product.id, media.id);
