@@ -12,7 +12,7 @@
     "check": "npm run theme:sync && astro check",
     "test": "npm run theme:sync && vitest run",
     "test:watch": "vitest",
-    "test:integration": "node --experimental-strip-types test/integration/reservations.mjs && node --experimental-strip-types test/integration/refunds.mjs && node --experimental-strip-types test/integration/media.mjs && node --experimental-strip-types test/integration/menus.mjs && node --experimental-strip-types test/integration/guest-access.mjs && node --experimental-strip-types test/integration/shipping.mjs && bash test/integration/d1-integration.sh",
+    "test:integration": "node --experimental-strip-types test/integration/manual-sales.mjs && node --experimental-strip-types test/integration/reservations.mjs && node --experimental-strip-types test/integration/refunds.mjs && node --experimental-strip-types test/integration/media.mjs && node --experimental-strip-types test/integration/menus.mjs && node --experimental-strip-types test/integration/guest-access.mjs && node --experimental-strip-types test/integration/shipping.mjs && bash test/integration/d1-integration.sh",
     "test:d1": "astro build && npm run test:integration",
     "test:storefront-equivalence": "astro build && bash test/integration/storefront-baselines.sh",
     "test:storefront-contract": "vitest run test/storefront",
