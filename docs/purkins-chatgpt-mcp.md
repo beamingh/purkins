@@ -45,8 +45,9 @@ The Admin Worker retains both:
 - Legacy secret for existing MCP clients: `Authorization: Bearer <MCP_TOKEN>`.
 - Cloudflare Access-signed identity for an **OAuth-backed** ChatGPT connection:
   `Cf-Access-Jwt-Assertion` must be signed by the configured Access team,
-  have the correct audience and a nonempty email. An unsigned/forged header
-  cannot authorize the operator tier. `PURKINS_MCP_ACCESS_AUD` may be
+  have the correct audience and an email exactly matching the separately
+  configured `PURKINS_MCP_OWNER_EMAIL`. Missing owner configuration fails
+  closed. An unsigned/forged header cannot authorize the operator tier. `PURKINS_MCP_ACCESS_AUD` may be
   configured for a separate owner-only MCP Access application; otherwise the
   current `CF_ACCESS_AUD` is used.
 
@@ -71,9 +72,14 @@ unauthenticated, or make the Admin Worker public to make tool discovery pass.
    redirect on `POST /mcp`. Verify what signed Access JWT reaches the Worker.
 3. Confirm the MCP Access application's AUD and set
    `PURKINS_MCP_ACCESS_AUD` as a Worker **secret** if it differs from the
-   dashboard's `CF_ACCESS_AUD`. Never log JWTs or bearer tokens.
+   dashboard's `CF_ACCESS_AUD`. **Also configure `PURKINS_MCP_OWNER_EMAIL`
+   securely with the one authorized owner's Access identity email.** Without
+   it, an Access-authenticated MCP session cannot become an operator. Keep
+   the Access policy restricted to the owner as an independent protection.
+   Never log JWTs, bearer tokens or secret values.
 4. Test: no identity → rejected; forged Access header → rejected;
-   non-owner → rejected; owner OAuth token → successful `initialize`
+   valid Access token for a non-owner → rejected; missing owner email config → rejected;
+   owner OAuth token → successful `initialize`
    and `tools/list`, including the private stock read tools.
 5. In an eligible ChatGPT Business/Enterprise/Edu workspace, Plugins →
    Add custom MCP server → paste the **actual** HTTPS `/mcp` URL →
