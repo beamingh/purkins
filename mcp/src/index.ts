@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
-import { registerPurkinsTools, registerGuardedPurkinsStockTools } from './purkins';
+import { registerPurkinsTools, registerGuardedPurkinsStockTools, registerGuardedClothingIntakeTools } from './purkins';
 import { registerPurkinsMediaTools } from './purkins-media';
 import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
@@ -325,6 +325,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_LEGACY_WRITES_ENABLED?: string;
       PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
       PURKINS_MCP_STOCK_WRITES_ENABLED?: string;
+      PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
     };
     const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true';
     // Old stock/product/order/image mutators do not yet have durable per-request
@@ -336,6 +337,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       writeEnv.PURKINS_MCP_STOCK_WRITES_ENABLED === 'true' &&
       Boolean(this.props.actor);
     registerGuardedPurkinsStockTools(this.server, db, allowStockWrites, this.props.actor);
+    const allowClothingWrites = allowStockWrites &&
+      writeEnv.PURKINS_MCP_CLOTHING_WRITES_ENABLED === 'true';
+    registerGuardedClothingIntakeTools(this.server, db, allowClothingWrites, this.props.actor);
     const mediaEnv = this.env as Env & {
       BUCKET?: Parameters<typeof createR2Storage>[0];
       PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
