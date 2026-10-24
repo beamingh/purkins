@@ -569,6 +569,7 @@ export default {
         CF_ACCESS_TEAM_DOMAIN?: string;
         CF_ACCESS_AUD?: string;
         PURKINS_MCP_ACCESS_AUD?: string;
+        PURKINS_MCP_OWNER_EMAIL?: string;
       };
       let operator = false;
       // Legacy MCP clients with a separately provisioned operator secret.
@@ -585,7 +586,12 @@ export default {
             const identity = await verifyAccessJwt(accessJwt, {
               teamDomain: accessEnv.CF_ACCESS_TEAM_DOMAIN, aud,
             });
-            operator = Boolean(identity?.email);
+            // An application-scoped signature proves the Access application,
+            // not that this person is the Purkins owner. Fail closed without
+            // an explicit owner email allowlist value.
+            const ownerEmail = accessEnv.PURKINS_MCP_OWNER_EMAIL?.trim().toLowerCase();
+            operator = Boolean(ownerEmail && identity?.email &&
+              identity.email.trim().toLowerCase() === ownerEmail);
           } catch {
             operator = false; // no JWKS → fail closed
           }
