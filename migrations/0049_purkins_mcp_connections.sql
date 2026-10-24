@@ -20,3 +20,14 @@ CREATE INDEX idx_purkins_mcp_client_tokens_status
   ON purkins_mcp_client_tokens(revoked_at, expires_at);
 CREATE INDEX idx_purkins_mcp_client_tokens_accountable
   ON purkins_mcp_client_tokens(accountable_email);
+
+-- Minimal audit trail. No token value, token hash, request payload, JWT or IP.
+CREATE TABLE purkins_mcp_client_token_events (
+  id TEXT PRIMARY KEY NOT NULL,
+  token_id TEXT NOT NULL REFERENCES purkins_mcp_client_tokens(id),
+  actor_email TEXT NOT NULL,
+  action TEXT NOT NULL CHECK (action IN ('created','revoked')),
+  occurred_at INTEGER NOT NULL
+);
+CREATE INDEX idx_purkins_mcp_client_token_events_recent
+  ON purkins_mcp_client_token_events(occurred_at DESC);
