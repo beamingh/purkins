@@ -49,12 +49,34 @@ reusable pattern for later stock, sales and catalog mutations.
   sibling constraints and receipt rollback. Tool-registration tests cover
   access gates.
 
+## Verified local validation — 24 October 2026
+
+User supplied a complete Windows terminal transcript on the initial guarded-write
+implementation: `npm run check` passed with **419 files and 0 errors**;
+four targeted test files passed **25/25 tests**; `npm run mcp:check` passed
+TypeScript and Wrangler dry run; the full `npm test` suite passed
+**102 files / 1,060 tests**; `npm run build:workers` built both isolated
+Workers. No production Cloudflare resources were modified.
+
+A subsequent release-safety fix adds a strict local migration checkpoint to
+`scripts/purkins-permanent.mjs`: the old state value
+`migrationsApplied=true` is insufficient when new migration files exist.
+The confirmed `migrate` command must record `migratedThrough` for the
+current latest SQL script, and both `deploy` and `mcp-writes-on`
+refuse outdated records. **The new checkpoint change has not yet been
+executed by the user**, so rerun the full suite before merging.
+
 ## Deployment order and limitations
 
 1. Run `npm test`, `npm run check`, `npm run mcp:check`,
    `npm run build:workers` on the new branch. Do **not** merge merely because
    compilation succeeds; inspect the new D1 integration test result.
-2. Verify the migration on isolated local D1, and explicitly plan remote
+2. After migrating with the separately confirmed permanent command, ensure
+   the private state records `migratedThrough: "0045_purkins_mcp_write_guard.sql"`.
+   Deploy and write activation now fail closed if the permanent migration
+   checkpoint is absent or behind the repository's latest script. The existing
+   `migrationsApplied` boolean by itself no longer authorizes deployment.
+3. Verify the migration on isolated local D1, and explicitly plan remote
    migration **before** any Worker release containing the new location queries.
    The new read helpers select `mcp_version`: deploying them before migration
    would break private location inspection.
