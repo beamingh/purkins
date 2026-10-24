@@ -32,6 +32,7 @@ export interface ManualSaleForm {
   email: string | null;
   note: string | null;
   fulfillment: 'fulfilled' | 'unfulfilled';
+  deliveryMethod: 'pickup' | 'shipping';
   items: RequestedSaleItem[];
 }
 
@@ -75,6 +76,10 @@ export function parseManualSaleForm(form: FormData): ParseSaleResult {
   if (fulfillment !== 'fulfilled' && fulfillment !== 'unfulfilled') {
     return { ok: false, error: 'Choose whether the sale has been handed over.' };
   }
+  const deliveryMethod = get('delivery_method');
+  if (deliveryMethod !== 'pickup' && deliveryMethod !== 'shipping') {
+    return { ok: false, error: 'Choose pickup or delivery.' };
+  }
 
   const choices = form.getAll('item').map(String);
   const quantities = form.getAll('quantity').map(String);
@@ -113,7 +118,8 @@ export function parseManualSaleForm(form: FormData): ParseSaleResult {
       email,
       note,
       fulfillment,
-      items,
+      deliveryMethod,
+      items:
     },
   };
 }
