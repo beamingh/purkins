@@ -20,14 +20,14 @@ Operator reads: `list_products`, `get_product`, `list_orders`, `get_order`, `ord
 
 Operator writes behind the existing global switch: `create_product`, `update_product`, `fulfill_order`, `create_purkins_stock`, `update_purkins_stock`, `set_purkins_variant`, `approve_purkins_stock`. Existing switch alone is **not** sufficient authorization for production launch.
 
-New on this branch: `list_purkins_locations`, `get_purkins_location`. Both operator-only and read-only, backed by `src/features/purkins/locations.ts`.
+New on this branch: `list_purkins_locations`, `get_purkins_location` (operator-only reads), plus `create_purkins_location`, `move_purkins_location` (development-only writes). All reuse `src/features/purkins/locations.ts`. Location mutations register only when **both** `PURKINS_MCP_WRITES_ENABLED=true` and `PURKINS_MCP_LOCATION_WRITES_ENABLED=true`. These flags alone do not satisfy audit, scoped authorization, or safe retries; keep both disabled in production.
 
 ## Admin surface requiring parity review
 
 | Surface verified in source tree | Work still needed |
 | --- | --- |
 | Products and stock intake | Complete variant, stock adjustment, media association, review, archive and batch operations; safeguard retries |
-| Hierarchical locations | Read tools added; create/move still missing; verify duplicate-name and cycle protections |
+| Hierarchical locations | Read/create/move tools added in source; writes doubly gated and not production-ready; verify duplicate-name, cycle, audit, replay and concurrency protections |
 | Categories | List, create, edit, hierarchy, remove |
 | Media | Upload and attach, order, detach/delete with R2 safety |
 | Orders | Manual sale, detailed status/fulfilment updates, cancellation and safe adjustments |
