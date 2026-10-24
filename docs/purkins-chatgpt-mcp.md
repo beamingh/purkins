@@ -119,7 +119,7 @@ mutators hidden):
 ```powershell
 npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
 npm run purkins:cloudflare -- build
-npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
+npm run purkins:cloudflare -- deploy --confirm=DEPLOY-PURKINS-WORKERS
 ```
 
 The first command changes ONLY the local generated Admin Worker configuration
@@ -131,7 +131,7 @@ Emergency rollback to read-only mode:
 
 ```powershell
 npm run purkins:cloudflare -- mcp-writes-off --confirm=DISABLE-PURKINS-MCP-WRITES
-npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
+npm run purkins:cloudflare -- deploy --confirm=DEPLOY-PURKINS-WORKERS
 ```
 
 Do not reset D1/R2, recreate the instance, or seed real stock.
