@@ -1,6 +1,7 @@
 import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { Miniflare } from 'miniflare';
 import { readFileSync } from 'node:fs';
+import { splitPurkinsMigrationSql } from '../purkins/migration-test-sql';
 import type { D1Database } from '@cloudflare/workers-types';
 import {
   issueMcpClientToken, authenticateMcpClientToken, revokeMcpClientToken,
@@ -20,7 +21,9 @@ describe('Owner MCP client credentials (real isolated D1)',()=>{
     });
     db=await mf.getD1Database('DB');
     const sql=readFileSync(new URL('../../../migrations/0049_purkins_mcp_connections.sql',import.meta.url),'utf8');
-    await db.exec(sql);
+    for (const statement of splitPurkinsMigrationSql(sql)) {
+      await db.prepare(statement).run();
+    }
   },30000);
   afterAll(async()=>{await mf?.dispose()});
 
