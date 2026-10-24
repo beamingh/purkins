@@ -4,6 +4,7 @@ import { registerPurkinsTools } from './purkins';
 import { registerPurkinsMediaTools } from './purkins-media';
 import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
+import { isApprovedMcpOwner } from './operator-access';
 import type { R2Bucket } from '@cloudflare/workers-types';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -589,9 +590,7 @@ export default {
             // An application-scoped signature proves the Access application,
             // not that this person is the Purkins owner. Fail closed without
             // an explicit owner email allowlist value.
-            const ownerEmail = accessEnv.PURKINS_MCP_OWNER_EMAIL?.trim().toLowerCase();
-            operator = Boolean(ownerEmail && identity?.email &&
-              identity.email.trim().toLowerCase() === ownerEmail);
+            operator = isApprovedMcpOwner(identity?.email, accessEnv.PURKINS_MCP_OWNER_EMAIL);
           } catch {
             operator = false; // no JWKS → fail closed
           }
