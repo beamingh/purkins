@@ -60,9 +60,9 @@ export function parseManualSaleForm(form: FormData): ParseSaleResult {
   if (!UUID_V4.test(idempotencyKey)) return { ok: false, error: 'Reload the form to get a fresh order request.' };
 
   const channel = get('channel');
-  if (!(channel in MANUAL_CHANNELS)) return { ok: false, error: 'Choose a valid sales channel.' };
+  if (!Object.hasOwn(MANUAL_CHANNELS, channel)) return { ok: false, error: 'Choose a valid sales channel.' };
   const tender = get('tender');
-  if (!(tender in MANUAL_TENDERS)) return { ok: false, error: 'Choose a valid received-payment method.' };
+  if (!Object.hasOwn(MANUAL_TENDERS, tender)) return { ok: false, error: 'Choose a valid received-payment method.' };
 
   const customerName = get('customer_name') || null;
   const email = get('email').toLowerCase() || null;
@@ -119,7 +119,7 @@ export function parseManualSaleForm(form: FormData): ParseSaleResult {
       note,
       fulfillment,
       deliveryMethod,
-      items:
+      items,
     },
   };
 }
