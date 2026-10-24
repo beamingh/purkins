@@ -4,6 +4,14 @@ import { parseCategoryForm } from './form';
 import { uniqueCategorySlug } from './slug';
 import { parsePublicId } from '../ids/publicId';
 
+/** Expected input/hierarchy failure, distinct from DB and cache failures. */
+export class CategoryValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CategoryValidationError';
+  }
+}
+
 export type CategoryCommand = {
   name: string;
   slug?: string;
@@ -16,14 +24,14 @@ function checked(data: CategoryCommand) {
   form.set('slug', data.slug ?? '');
   form.set('parent_id', data.parent_id ?? '');
   const parsed = parseCategoryForm(form);
-  if ('error' in parsed) throw new Error(parsed.error);
+  if ('error' in parsed) throw new CategoryValidationError(parsed.error);
   return parsed.data;
 }
 
 async function parentRowId(db: D1Database, publicId: string | null): Promise<number | null> {
   if (!publicId) return null;
   const parent = await getCategoryByPublicId(db, publicId);
-  if (!parent) throw new Error('That parent category no longer exists.');
+  if (!parent) throw new CategoryValidationError('That parent category no longer exists.');
   return parent.id;
 }
 
@@ -44,13 +52,13 @@ export async function createCategoryCommand(db: D1Database, input: CategoryComma
 
 export async function updateCategoryCommand(db: D1Database, id: string, input: CategoryCommand) {
   const publicId = parsePublicId(id, 'category');
-  if (!publicId) throw new Error('Pass a valid cat_ public ID.');
+  if (!publicId) throw new CategoryValidationError('Pass a valid cat_ public ID.');
   const category = await getCategoryByPublicId(db, publicId);
-  if (!category) throw new Error('Category not found.');
+  if (!category) throw new CategoryValidationError('Category not found.');
   const parsed = checked(input);
   const parent_id = await parentRowId(db, parsed.parentPublicId);
   if (parent_id != null && new Set(await descendantIds(db, category.id)).has(parent_id)) {
-    throw new Error('A category cannot be moved under itself or one of its sub-categories.');
+    throw new CategoryValidationError('A category cannot be moved under itself or one of its sub-categories.');
   }
   const slug = await uniqueCategorySlug(db, parsed.slugInput || parsed.name, category.id);
   await updateCategory(db, category.id, { name: parsed.name, slug, parent_id });
