@@ -73,9 +73,10 @@ const MIGRATION = readFileSync(new URL('../../migrations/0028_nav_menus.sql', im
  * A trailing '\r' otherwise prevents /^\s*--.*$/ from matching on Windows,
  * which leaves comment blocks as the first D1 statement.
  *
- * Remove comments before splitting (including comments with ';'), and retain
- * newlines in SQL so any inline "--" comment terminates correctly.
- * This migration has no semicolons in SQL string literals.
+ * Remove comment-only lines before splitting (including comments with ';').
+ * D1.exec treats embedded newlines as statement separators, so collapse each
+ * complete SQL statement onto one line BEFORE calling db.exec.
+ * This migration has no semicolons inside SQL string literals.
  */
 const statements = (sql) =>
   sql
@@ -84,7 +85,7 @@ const statements = (sql) =>
     .map((line) => line.replace(/^\s*--.*$/, ''))
     .join('\n')
     .split(';')
-    .map((s) => s.trim())
+    .map((s) => s.replace(/\s+/g, ' ').trim())
     .filter(Boolean);
 
 async function freshDb({ seedBefore } = {}) {
@@ -120,6 +121,8 @@ await check('SQL migration parser handles Windows and Unix line endings', async 
   assert.equal(unix.length, 5, 'create table, 2 indexes, 2 seed inserts');
   assert.match(unix[0], /^CREATE TABLE IF NOT EXISTS menu_items\s*\(/);
   assert.doesNotMatch(unix[0], /--\s*0028:/);
+  assert.ok(unix.every((statement) => !/[\r\n]/.test(statement)),
+    'D1.exec must receive one complete SQL statement per physical line');
 });
 
 // ── migration seed ──────────────────────────────────────────────────────────
