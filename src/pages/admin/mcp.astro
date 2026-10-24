@@ -1,0 +1,214 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import { authorizedMcpOwner } from '../../features/mcp/ownerGate';
+import {
+  issueMcpClientToken, revokeMcpClientToken, listMcpClientTokens,
+  listMcpClientTokenEvents, MCP_CLIENT_TOKEN_DAYS,
+} from '../../features/mcp/clientTokens';
+
+export const prerender = false;
+
+Astro.response.headers.set('Cache-Control','private, no-store');
+Astro.response.headers.set('Referrer-Policy','no-referrer');
+
+const owner=await authorizedMcpOwner(
+  Astro.request.headers.get('Cf-Access-Jwt-Assertion'),env,
+);
+if(!owner) {
+  return new Response(
+    'MCP connections require the configured owner’s verified Cloudflare Access identity. Check PURKINS_MCP_OWNER_EMAIL and Access JWT settings.',
+    {status:403,headers:{'Cache-Control':'no-store','Content-Type':'text/plain; charset=utf-8'}},
+  );
+}
+
+let revealedToken:string|null=null;
+let success='';
+let error='';
+if(Astro.request.method==='POST'){
+  // Defense in depth. Cookie-based Access and Admin auth require a same-origin
+  // form submission, not an attacker-controlled cross-site POST.
+  if(Astro.request.headers.get('Origin')!==Astro.url.origin){
+    error='Cross-origin token changes are forbidden.';
+  } else {
+    const form=await Astro.request.formData();
+    const action=String(form.get('_action')??'');
+    try{
+      if(action==='create'){
+        const issued=await issueMcpClientToken(env.DB,{
+          ownerEmail:owner,
+          name:String(form.get('name')??''),
+          expiryDays:Number(form.get('expires_days')??''),
+          requestId:String(form.get('request_id')??''),
+        });
+        if(issued.ok){
+          revealedToken=issued.token;
+          success='Connection created. Copy its token now; it will not be displayed again.';
+        } else error=issued.message;
+      }else if(action==='revoke'){
+        const revoked=await revokeMcpClientToken(env.DB,{
+          id:String(form.get('token_id')??''),ownerEmail:owner,
+        });
+        if(revoked.ok)success=revoked.message;
+        else error=revoked.message;
+      }else{
+        error='Unknown token-management action.';
+      }
+    }catch{
+      // Do not disclose driver/SQL errors or raw credentials to the browser.
+      error='Token management could not complete. Check Worker logs; retry creation with a new request ID only after checking the token list.';
+    }
+  }
+}
+
+const connections=await listMcpClientTokens(env.DB);
+const events=await listMcpClientTokenEvents(env.DB);
+const now=Math.floor(Date.now()/1000);
+const status=(row:typeof connections[number])=>row.revoked_at!==null?'Revoked':row.expires_at<=now?'Expired':'Active';
+const format=(seconds:number|null)=>seconds===null?'Never':new Date(seconds*1000).toLocaleString('en-ZM',{
+  timeZone:'Africa/Lusaka',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',
+});
+const requestId=crypto.randomUUID();
+const mcpEndpoint=`${Astro.url.origin}/mcp`;
+---
+
+<AdminLayout title="MCP connections" active="mcp">
+  <header class="mb-8">
+    <p class="mb-2 text-xs uppercase tracking-widest text-gray-500">Private / Owner only</p>
+    <h1 class="font-serif text-3xl">MCP connections &amp; tokens</h1>
+    <p class="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">
+      Create expiring credentials for reading your Purkins catalogue and stock with MCP clients.
+      New dashboard-issued tokens are always <strong>read-only</strong>, even when separate owner
+      write permissions are enabled. Keep the existing Cloudflare Access owner policy in place.
+    </p>
+  </header>
+
+  {success && <p role="status" class="mb-5 rounded-md border border-green-300 bg-green-50 px-4 py-3 text-sm text-green-900">{success}</p>}
+  {error && <p role="alert" class="mb-5 rounded-md border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900">{error}</p>}
+
+  {revealedToken && (
+    <section class="mb-8 rounded-lg border-2 border-amber-400 bg-amber-50 p-5" aria-labelledby="one-time-title">
+      <h2 id="one-time-title" class="font-serif text-xl">Your token — visible only once</h2>
+      <p class="mt-2 text-sm text-amber-900">
+        Copy it now and store it privately. Do not post it in chat, add it to a URL, or commit it to Git.
+        Reloading this page will hide it permanently; if it is lost, revoke it and generate another.
+      </p>
+      <div class="mt-4 flex flex-col gap-3">
+        <label for="mcp-one-time-token" class="text-xs font-semibold uppercase tracking-wide">Bearer token</label>
+        <textarea id="mcp-one-time-token" readonly rows="3" spellcheck="false"
+          class="w-full resize-none break-all rounded border border-amber-300 bg-white p-3 font-mono text-xs">{revealedToken}</textarea>
+        <button type="button" id="copy-mcp-token"
+          class="self-start rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white">
+          Copy token
+        </button>
+      </div>
+    </section>
+  )}
+
+  <section class="mb-8 rounded-lg border border-line bg-white p-5" aria-labelledby="endpoint-title">
+    <h2 id="endpoint-title" class="font-serif text-xl">Connection details</h2>
+    <dl class="mt-4 grid gap-3 text-sm">
+      <div><dt class="font-semibold">MCP endpoint</dt><dd class="mt-1 break-all font-mono text-xs">{mcpEndpoint}</dd></div>
+      <div><dt class="font-semibold">Authentication</dt><dd class="mt-1">Authorization: Bearer &lt;token&gt;, plus any Cloudflare Access policy required by your client</dd></div>
+      <div><dt class="font-semibold">Client capabilities</dt><dd class="mt-1">Private owner reads only; no product changes, publication, sales or refunds</dd></div>
+    </dl>
+    <p class="mt-4 text-sm text-amber-900">
+      Important: These bearer tokens are not OAuth authorization codes. ChatGPT's custom
+      connector may still require Cloudflare Access Managed OAuth; do not assume a generated
+      token alone bypasses the Access login or enables direct ChatGPT connection.
+    </p>
+  </section>
+
+  <section class="mb-10 rounded-lg border border-line bg-white p-5" aria-labelledby="create-title">
+    <h2 id="create-title" class="font-serif text-xl">Create new token</h2>
+    <p class="mt-2 text-sm text-gray-600">Only the verified Purkins owner can create or revoke connections.</p>
+    <form method="post" action="/admin/mcp" class="mt-5 grid gap-4">
+      <input type="hidden" name="_action" value="create" />
+      <input type="hidden" name="request_id" value={requestId} />
+      <div>
+        <label for="token-name" class="mb-1 block text-sm font-medium">Connection name</label>
+        <input id="token-name" name="name" required minlength="3" maxlength="120"
+          placeholder="ChatGPT — Purkins inventory" autocomplete="off"
+          class="w-full rounded-md border border-line bg-white p-3 text-sm" />
+      </div>
+      <div>
+        <label for="token-expiry" class="mb-1 block text-sm font-medium">Expires after</label>
+        <select id="token-expiry" name="expires_days"
+          class="w-full rounded-md border border-line bg-white p-3 text-sm">
+          {MCP_CLIENT_TOKEN_DAYS.map(days=><option value={days} selected={days===90}>{days} days</option>)}
+        </select>
+      </div>
+      <p class="text-xs text-gray-600">Accountable owner: {owner}. Scope: read-only (fixed).</p>
+      <button type="submit" class="self-start rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white">
+        Generate one-time token
+      </button>
+    </form>
+  </section>
+
+  <section class="mb-10" aria-labelledby="list-title">
+    <h2 id="list-title" class="mb-3 font-serif text-2xl">Existing connections</h2>
+    <div class="overflow-x-auto rounded-lg border border-line bg-white">
+      <table class="w-full min-w-[650px] text-left text-sm">
+        <thead class="border-b border-line bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+          <tr><th class="p-3">Connection</th><th class="p-3">Status</th><th class="p-3">Expiry</th><th class="p-3">Last used</th><th class="p-3">Calls</th><th class="p-3">Action</th></tr>
+        </thead>
+        <tbody>
+          {connections.map(row=>(
+            <tr class="border-b border-line" key={row.id}>
+              <td class="p-3">
+                <strong class="block">{row.name}</strong>
+                <code class="text-xs text-gray-500">{row.token_prefix}…</code>
+                <span class="block text-xs text-gray-500">Read only · {row.accountable_email}</span>
+              </td>
+              <td class="p-3">{status(row)}</td>
+              <td class="p-3 whitespace-nowrap text-xs">{format(row.expires_at)}</td>
+              <td class="p-3 whitespace-nowrap text-xs">{format(row.last_used_at)}</td>
+              <td class="p-3">{row.call_count}</td>
+              <td class="p-3">
+                {row.revoked_at===null&&row.expires_at>now ? (
+                  <form method="post" action="/admin/mcp" onsubmit="return confirm('Revoke this connection immediately?');">
+                    <input type="hidden" name="_action" value="revoke" />
+                    <input type="hidden" name="token_id" value={row.id} />
+                    <button class="rounded border border-red-400 px-3 py-2 text-xs text-red-700" type="submit">Revoke</button>
+                  </form>
+                ):<span class="text-xs text-gray-500">—</span>}
+              </td>
+            </tr>
+          ))}
+          {connections.length===0&&<tr><td colspan="6" class="p-6 text-center text-sm text-gray-500">No MCP client tokens have been issued.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section aria-labelledby="audit-title">
+    <h2 id="audit-title" class="mb-3 font-serif text-2xl">Credential audit</h2>
+    <div class="overflow-x-auto rounded-lg border border-line bg-white">
+      <table class="w-full min-w-[450px] text-sm">
+        <thead class="border-b border-line bg-gray-50 text-xs uppercase tracking-wide text-gray-600">
+          <tr><th class="p-3 text-left">When</th><th class="p-3 text-left">Operation</th><th class="p-3 text-left">Owner</th></tr>
+        </thead>
+        <tbody>
+          {events.map((event)=>(
+            <tr class="border-b border-line"><td class="p-3 text-xs">{format(event.occurred_at)}</td><td class="p-3 capitalize">{event.action}</td><td class="p-3 text-xs">{event.actor_email}</td></tr>
+          ))}
+          {events.length===0&&<tr><td colspan="3" class="p-5 text-center text-gray-500">No credential changes recorded.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</AdminLayout>
+
+<script>
+  document.getElementById('copy-mcp-token')?.addEventListener('click',async()=>{
+    const textarea=document.getElementById('mcp-one-time-token') as HTMLTextAreaElement|null;
+    if(!textarea)return;
+    try{
+      await navigator.clipboard.writeText(textarea.value);
+      const button=document.getElementById('copy-mcp-token');
+      if(button)button.textContent='Copied';
+    }catch{
+      textarea.select();
+    }
+  });
+</script>
