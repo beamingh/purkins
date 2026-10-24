@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { createCategoryCommand } from '../../../features/categories/commands';
+import { createCategoryCommand, CategoryValidationError } from '../../../features/categories/commands';
 import { parseCategoryForm } from '../../../features/categories/form';
 import { CACHE_TAG } from '../../../features/cache/tags';
 import { purgeCacheTags } from '../../../features/cache/purge';
@@ -17,11 +17,16 @@ export const POST: APIRoute = async ({ request, redirect }) => {
   const parsed = parseCategoryForm(form);
   if ('error' in parsed) return redirect(fail(parsed.error), 303);
 
-  await createCategoryCommand(env.DB, {
-    name: parsed.data.name,
-    slug: parsed.data.slugInput,
-    parent_id: parsed.data.parentPublicId,
-  });
+  try {
+    await createCategoryCommand(env.DB, {
+      name: parsed.data.name,
+      slug: parsed.data.slugInput,
+      parent_id: parsed.data.parentPublicId,
+    });
+  } catch (error) {
+    if (error instanceof CategoryValidationError) return redirect(fail(error.message), 303);
+    throw error; // DB faults must not be presented as validation errors.
+  }
   await purgeCacheTags([CACHE_TAG.catalog]);
   return redirect('/admin/categories', 303);
 };
