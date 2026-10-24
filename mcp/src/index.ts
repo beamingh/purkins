@@ -275,7 +275,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       async () => result(await this.storefront('/api/checkout')),
     );
 
-    this.server.registerTool(
+    // A read-only owner credential must not inherit the buyer checkout writer.
+    if (this.props?.readOnly !== true) this.server.registerTool(
       'create_checkout',
       {
         description:
