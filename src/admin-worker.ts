@@ -21,7 +21,8 @@ export default {
       // This Worker is operator-only: never expose the legacy anonymous buyer
       // MCP tier here. Authenticated operator calls also undergo the MCP
       // handler's constant-time bearer token verification.
-      if (!request.headers.get('Authorization')) {
+      if (!request.headers.get('Authorization') &&
+          !request.headers.get('Cf-Access-Jwt-Assertion')) {
         return new Response('Operator MCP authorization required.', {
           status: 401, headers: { 'cache-control': 'no-store' },
         });
