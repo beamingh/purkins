@@ -46,8 +46,11 @@ export function prepareWorkerSource(root, target) {
   // their existing first-run setup behavior. Never edit the real src tree.
   const marker = join(destination, 'features', 'runtime', 'worker-target.ts');
   mkdirSync(join(destination, 'features', 'runtime'), { recursive: true });
-  writeFileSync(marker, 'export const HAS_LOCAL_ADMIN_ROUTES = ' +
-    (target === 'public' ? 'false' : 'true') + ';\\n'.replace('\\\\n', '\\n'));
+  writeFileSync(
+    marker,
+    'export const HAS_LOCAL_ADMIN_ROUTES = ' +
+      (target === 'public' ? 'false' : 'true') + ';\n',
+  );
   // src/features/seed/demo.ts imports ../../../seed-demo.sql?raw from the
   // repository root. Preserve that relative dependency inside the generated
   // per-Worker project root without duplicating or modifying real inventory.
