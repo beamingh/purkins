@@ -42,7 +42,7 @@ export function safeImageUrl(input: string): URL | null {
 export function imageImportHostAllowed(url: string, allowedHosts: readonly string[]): boolean {
   const source = safeImageUrl(url);
   if (!source) return false;
-  const host = source.hostname.toLowerCase().replace(/\\.$/, '');
+  const host = source.hostname.toLowerCase().replace(/\.$/, '');
   return allowedHosts.some(raw => {
     const candidate = raw.trim().toLowerCase();
     return /^[a-z0-9.-]+$/.test(candidate) && candidate === host;
