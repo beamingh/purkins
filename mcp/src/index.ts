@@ -5,7 +5,7 @@ import { registerPurkinsMediaTools } from './purkins-media';
 import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
-import type { R2Bucket } from '@cloudflare/workers-types';
+import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
 import { z } from 'zod';
@@ -323,7 +323,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       .PURKINS_MCP_WRITES_ENABLED === 'true';
     registerPurkinsTools(this.server, db, allowWrites);
     const mediaEnv = this.env as Env & {
-      BUCKET?: R2Bucket;
+      BUCKET?: Parameters<typeof createR2Storage>[0];
       PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
     };
     const imageImportAllowedHosts = (mediaEnv.PURKINS_MCP_IMAGE_IMPORT_HOSTS ?? '')
