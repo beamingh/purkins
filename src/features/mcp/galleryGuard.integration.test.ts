@@ -44,12 +44,12 @@ describe('Owner guarded gallery edits (real isolated D1)',()=>{
       'CREATE TABLE purkins_intake (product_id INTEGER PRIMARY KEY,status TEXT,'+
       'condition_status TEXT,pricing_mode TEXT,purchase_currency TEXT,'+
       'purchase_cost_minor INTEGER,zar_to_zmw REAL,overhead_zwm_cents INTEGER,'+
-      'markup_percent INTEGER,storage_location TEXT)'
+      'markup_percent INTEGER,storage_location TEXT,location_id TEXT)'
     );
     await db.exec('CREATE TABLE purkins_locations (id TEXT PRIMARY KEY,parent_id TEXT,name TEXT)');
     await db.exec(
       'CREATE TABLE product_variants (id INTEGER PRIMARY KEY,product_id INTEGER,'+
-      'active INTEGER,stock INTEGER,price_cents INTEGER,weight_grams INTEGER)'
+      'active INTEGER,stock INTEGER,price_cents INTEGER,weight_grams INTEGER,position INTEGER NOT NULL DEFAULT 0)'
     );
     const raw=readFileSync(new URL('../../../migrations/0048_purkins_mcp_gallery_guard.sql',import.meta.url),'utf8');
     for(const stmt of splitPurkinsMigrationSql(raw))await db.prepare(stmt).run();
