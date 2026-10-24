@@ -317,7 +317,10 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
       .PURKINS_MCP_WRITES_ENABLED === 'true';
     registerPurkinsTools(this.server, db, allowWrites);
-    registerLocationTools(this.server, db);
+    const allowLocationWrites = allowWrites && (this.env as Env & {
+      PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
+    }).PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true';
+    registerLocationTools(this.server, db, allowLocationWrites);
 
     // --- reads ---
     this.server.registerTool(
