@@ -84,7 +84,7 @@ async function resolve(db: D1Database, ref: string): Promise<Product | null> {
   return publicId ? getProductByPublicId(db, publicId) : getProductBySlug(db, id);
 }
 
-async function stockView(db: D1Database, product: Product) {
+export async function stockView(db: D1Database, product: Product) {
   const intake = await getIntake(db, product.id);
   if (!intake) return null;
   const { product_id: _internalRowId, ...privateIntake } = intake;
