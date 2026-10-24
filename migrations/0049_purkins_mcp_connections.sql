@@ -13,6 +13,7 @@ CREATE TABLE purkins_mcp_client_tokens (
   created_at INTEGER NOT NULL,
   expires_at INTEGER NOT NULL CHECK (expires_at > created_at),
   revoked_at INTEGER,
+  revocation_nonce TEXT UNIQUE,
   last_used_at INTEGER,
   call_count INTEGER NOT NULL DEFAULT 0 CHECK (call_count >= 0)
 );
