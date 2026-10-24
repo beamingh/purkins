@@ -621,6 +621,28 @@ export default {
         operator = true;
         actor = 'owner:bearer';
       }
+      // Individually revocable read-only credentials take precedence over any
+      // Access identity forwarded by the edge. An expired/revoked/invalid pmcp_
+      // token MUST NOT fall through into a more privileged Access owner session.
+      if (!operator && auth?.startsWith('Bearer pmcp_')) {
+        try {
+          const client = await authenticateMcpClientToken(
+            env.DB, auth, accessEnv.PURKINS_MCP_OWNER_EMAIL,
+          );
+          if (!client) {
+            return new Response('Revoked, expired or invalid MCP client token.', {
+              status: 401, headers: { 'cache-control': 'no-store' },
+            });
+          }
+          operator = true;
+          actor = client.actor;
+          readOnly = true;
+        } catch {
+          return new Response('MCP credential verification unavailable.', {
+            status: 503, headers: { 'cache-control': 'no-store' },
+          });
+        }
+      }
       // Cloudflare Access Managed OAuth clients. Do NOT trust a bare header:
       // independently verify signature, issuer, audience, lifetime and owner
       // identity, even when the normal Cloudflare Access edge is bypassed.
@@ -639,26 +661,6 @@ export default {
           } catch {
             operator = false; // no JWKS → fail closed
           }
-        }
-      }
-      // New, individually revocable owner credentials: DB-backed validation on
-      // EVERY request (including an already-initialized MCP session). Each is
-      // irrevocably read-only in this release, independently of global flags.
-      if (!operator && auth?.startsWith('Bearer pmcp_')) {
-        try {
-          const client = await authenticateMcpClientToken(
-            env.DB, auth, accessEnv.PURKINS_MCP_OWNER_EMAIL,
-          );
-          if (client) {
-            operator = true;
-            actor = client.actor;
-            readOnly = true;
-          }
-        } catch {
-          // A database outage cannot silently downgrade or authorize a token.
-          return new Response('MCP credential verification unavailable.', {
-            status: 503, headers: { 'cache-control': 'no-store' },
-          });
         }
       }
       if (!operator && (auth || accessJwt)) {
