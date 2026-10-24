@@ -1,12 +1,5 @@
 /**
- * Extra, mandatory owner allowlist after Cloudflare Access JWT signature,
- * issuer, audience and expiry have been checked. A valid Access session is
- * not sufficient by itself to grant the Purkins MCP operator tier.
- *
- * Deliberately fail closed when the secret is unset or empty.
+ * Compatibility re-export for older MCP imports. The canonical allowlist
+ * lives within src so Astro's isolated Admin build can resolve it locally.
  */
-export function isApprovedMcpOwner(identityEmail: string | null | undefined, configuredOwnerEmail: string | null | undefined): boolean {
-  const allowed = configuredOwnerEmail?.trim().toLowerCase();
-  const asserted = identityEmail?.trim().toLowerCase();
-  return Boolean(allowed && asserted && allowed === asserted);
-}
+export { isApprovedMcpOwner } from '../../src/features/mcp/ownerIdentity';
