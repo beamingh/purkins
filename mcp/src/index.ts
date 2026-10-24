@@ -6,6 +6,7 @@ import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
+import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -201,6 +202,9 @@ const NUMERIC_ORDER_ERROR =
 export interface SessionProps extends Record<string, unknown> {
   operator: boolean;
   actor?: string;
+  // New dashboard-issued credentials are read-only, even if a global write
+  // scope is later enabled for the legacy bearer or verified Access owner.
+  readOnly?: boolean;
 }
 
 export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps> {
@@ -329,7 +333,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
       PURKINS_MCP_GALLERY_WRITES_ENABLED?: string;
     };
-    const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true';
+    const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true' && this.props?.readOnly !== true;
     // Old stock/product/order/image mutators do not yet have durable per-request
     // receipts. A general write switch alone must NEVER expose them.
     const allowLegacyWrites = allowWrites &&
@@ -610,6 +614,7 @@ export default {
       };
       let operator = false;
       let actor: string | undefined;
+      let readOnly = false;
       // Legacy MCP clients with a separately provisioned operator secret.
       if (auth && env.MCP_TOKEN && await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)) {
         operator = true;
@@ -633,6 +638,26 @@ export default {
           } catch {
             operator = false; // no JWKS → fail closed
           }
+        }
+      }
+      // New, individually revocable owner credentials: DB-backed validation on
+      // EVERY request (including an already-initialized MCP session). Each is
+      // irrevocably read-only in this release, independently of global flags.
+      if (!operator && auth?.startsWith('Bearer pmcp_')) {
+        try {
+          const client = await authenticateMcpClientToken(
+            env.DB, auth, accessEnv.PURKINS_MCP_OWNER_EMAIL,
+          );
+          if (client) {
+            operator = true;
+            actor = client.actor;
+            readOnly = true;
+          }
+        } catch {
+          // A database outage cannot silently downgrade or authorize a token.
+          return new Response('MCP credential verification unavailable.', {
+            status: 503, headers: { 'cache-control': 'no-store' },
+          });
         }
       }
       if (!operator && (auth || accessJwt)) {
@@ -666,7 +691,7 @@ export default {
       // The SDK reads session props off the ExecutionContext (the same channel the
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
-      Object.assign(ctx, { props: { operator, actor } satisfies SessionProps });
+      Object.assign(ctx, { props: { operator, actor, readOnly } satisfies SessionProps });
       return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
     }
 
