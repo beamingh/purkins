@@ -297,9 +297,39 @@ for path in \
   /cart /checkout /express /payment-setup /partials/cart-count \
   /account /account/login /order/not-a-token /order/not-a-token/status \
   /order/not-a-token/download/itm_k7m2qx8vn6 /pay/not-an-id \
-  /admin /api/admin/products /api/internal/cache-purge /api/cart /api/checkout
+  /api/internal/cache-purge /api/cart /api/checkout
 do
   assert_cache_control "$path" "$private_cache"
+done
+
+# Purkins serves /admin and /api/admin from a SEPARATE Access-protected Worker.
+# These paths must not be present in the public Worker's route manifest at all.
+# Astro's route-miss 404 is produced before its middleware, so that exact 404
+# may have no cache-control header. Requiring a middleware header here incorrectly
+# treats route isolation as a failure. Assert the stronger security boundary:
+# absence, no shared-cache directive, and no response body containing Admin UI.
+assert_admin_route_absent() {
+  local path="$1"
+  local headers="$state_dir/isolated-admin-headers.txt"
+  local body="$state_dir/isolated-admin-body.txt"
+  local status
+  status="$(curl --max-time 30 --silent --show-error \
+    --dump-header "$headers" --output "$body" --write-out '%{http_code}' \
+    "http://127.0.0.1:$test_port$path")"
+  if [[ "$status" != "404" ]]; then
+    echo "D1 integration failed: public Worker exposed $path (HTTP $status; expected 404)" >&2
+    cat "$headers" >&2
+    exit 1
+  fi
+  if tr -d '\r' <"$headers" | grep -qiE '^cache-control:.*(public|s-maxage)' ||
+    grep -qiE '(admin dashboard|record paid sale|create paid order)' "$body"; then
+    echo "D1 integration failed: public Worker $path leaked Admin content or shared-cache policy" >&2
+    exit 1
+  fi
+}
+
+for path in /admin /admin/orders/new /api/admin/products /api/admin/orders/manual /mcp; do
+  assert_admin_route_absent "$path"
 done
 
 deploy_purge_headers="$state_dir/deploy-purge-headers.txt"
