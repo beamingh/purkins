@@ -6,6 +6,8 @@ import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
+import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
+import { canCreateCheckout, canWriteAsOperator } from '../../src/features/mcp/clientScope';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -201,6 +203,9 @@ const NUMERIC_ORDER_ERROR =
 export interface SessionProps extends Record<string, unknown> {
   operator: boolean;
   actor?: string;
+  // New dashboard-issued credentials are read-only, even if a global write
+  // scope is later enabled for the legacy bearer or verified Access owner.
+  readOnly?: boolean;
 }
 
 export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps> {
@@ -271,7 +276,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       async () => result(await this.storefront('/api/checkout')),
     );
 
-    this.server.registerTool(
+    // A read-only owner credential must not inherit the buyer checkout writer.
+    if (canCreateCheckout(this.props)) this.server.registerTool(
       'create_checkout',
       {
         description:
@@ -329,7 +335,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
       PURKINS_MCP_GALLERY_WRITES_ENABLED?: string;
     };
-    const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true';
+    const allowWrites = canWriteAsOperator(this.props, writeEnv.PURKINS_MCP_WRITES_ENABLED);
     // Old stock/product/order/image mutators do not yet have durable per-request
     // receipts. A general write switch alone must NEVER expose them.
     const allowLegacyWrites = allowWrites &&
@@ -610,10 +616,33 @@ export default {
       };
       let operator = false;
       let actor: string | undefined;
+      let readOnly = false;
       // Legacy MCP clients with a separately provisioned operator secret.
       if (auth && env.MCP_TOKEN && await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)) {
         operator = true;
         actor = 'owner:bearer';
+      }
+      // Individually revocable read-only credentials take precedence over any
+      // Access identity forwarded by the edge. An expired/revoked/invalid pmcp_
+      // token MUST NOT fall through into a more privileged Access owner session.
+      if (!operator && auth?.startsWith('Bearer pmcp_')) {
+        try {
+          const client = await authenticateMcpClientToken(
+            env.DB, auth, accessEnv.PURKINS_MCP_OWNER_EMAIL,
+          );
+          if (!client) {
+            return new Response('Revoked, expired or invalid MCP client token.', {
+              status: 401, headers: { 'cache-control': 'no-store' },
+            });
+          }
+          operator = true;
+          actor = client.actor;
+          readOnly = true;
+        } catch {
+          return new Response('MCP credential verification unavailable.', {
+            status: 503, headers: { 'cache-control': 'no-store' },
+          });
+        }
       }
       // Cloudflare Access Managed OAuth clients. Do NOT trust a bare header:
       // independently verify signature, issuer, audience, lifetime and owner
@@ -666,7 +695,7 @@ export default {
       // The SDK reads session props off the ExecutionContext (the same channel the
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
-      Object.assign(ctx, { props: { operator, actor } satisfies SessionProps });
+      Object.assign(ctx, { props: { operator, actor, readOnly } satisfies SessionProps });
       return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
     }
 

@@ -20,6 +20,7 @@ type Section =
   | 'pages'
   | 'navigation'
   | 'shipping'
+  | 'mcp'
   | 'settings';
 
 interface Props {
@@ -56,6 +57,7 @@ const nav: { key: Section; label: string; href: string }[] = [
   { key: 'navigation', label: 'Navigation', href: '/admin/navigation' },
   { key: 'shipping', label: 'Shipping', href: '/admin/shipping' },
   { key: 'media', label: 'Media', href: '/admin/media' },
+  { key: 'mcp', label: 'MCP connections', href: '/admin/mcp' },
   { key: 'settings', label: 'Settings', href: '/admin/settings' },
 ];
 // Label of the section we're on — shown in the collapsed mobile disclosure.
