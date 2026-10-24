@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS purkins_mcp_clothing_receipts (
   product_public_id TEXT NOT NULL UNIQUE,
   total_units INTEGER NOT NULL CHECK (total_units BETWEEN 0 AND 1000000),
   variant_count INTEGER NOT NULL CHECK (variant_count BETWEEN 1 AND 20),
+  barcode_count INTEGER NOT NULL CHECK (barcode_count BETWEEN 0 AND 20),
   completed INTEGER NOT NULL DEFAULT 0 CHECK (completed IN (0, 1)),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
