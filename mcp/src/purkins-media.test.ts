@@ -28,7 +28,7 @@ describe('Purkins MCP image URL boundary', () => {
   });
 
   it('downloads a bounded, supported raster image without redirects', async () => {
-    const load = vi.fn(async () => new Response(tinyGif, {
+    const load = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(tinyGif, {
       status: 200, headers: { 'content-type': 'image/gif' },
     }));
     const file = await downloadImage('https://photos.example.org/example.gif', load as unknown as typeof fetch);
