@@ -44,6 +44,7 @@ describe('Purkins location migration 0043', () => {
       'INSERT INTO purkins_intake (product_id, sku, storage_location) VALUES (?,?,?)',
     ).bind(3, 'PUR-000003', 'White Bag A').run();
     await apply('0043_purkins_location_tree.sql');
+    await apply('0045_purkins_mcp_write_guard.sql');
   });
 
   afterAll(async () => { await mf?.dispose(); });

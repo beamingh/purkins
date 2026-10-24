@@ -21,12 +21,12 @@
  */
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   TARGET, parseAccounts, detectCollisions, renderPermanentConfigs,
-  assertUuid, assertApiList,
+  assertUuid, assertApiList, latestMigrationFilename, isMigrationReady,
 } from './purkins-permanent-core.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
@@ -35,6 +35,7 @@ const stateFile = join(instanceDir, 'purkins-permanent.json');
 const generated = join(root, 'wrangler.purkins.permanent.jsonc');
 const backup = join(instanceDir, 'wrangler.original.backup.jsonc');
 const adminGenerated = join(root, 'wrangler.admin.permanent.jsonc');
+const latestMigration = () => latestMigrationFilename(readdirSync(join(root, 'migrations')));
 const expected = {
   create: 'CREATE-PURKINS-FOREVER',
   migrate: 'MIGRATE-PURKINS-FOREVER',
@@ -238,8 +239,8 @@ function setMcpWrites(enabled) {
   requireConfirmation(enabled ? 'mcp-writes-on' : 'mcp-writes-off');
   ensureSafeLocal();
   const state = readState();
-  if (enabled && state.migrationsApplied !== true) {
-    fail('Apply permanent D1 migrations before enabling operator writes.');
+  if (enabled && !isMigrationReady(state, latestMigration())) {
+    fail('Permanent D1 migration record is out of date. Apply the current migration set first.');
   }
   const current = readFileSync(adminGenerated, 'utf8');
   const previous = state.mcpWritesEnabled === true ? 'true' : 'false';
@@ -270,13 +271,16 @@ function remoteMigrate() {
   const state = readState();
   writeFileSync(stateFile, JSON.stringify({
     ...state, migrationsApplied: true, migratedAt: new Date().toISOString(),
+    migratedThrough: latestMigration(),
   }, null, 2) + '\n', { mode: 0o600 });
 }
 function deployUnrouted() {
   requireConfirmation('deploy');
   ensureSafeLocal();
   const state = readState();
-  if (state.migrationsApplied !== true) fail('Remote Purkins migrations must complete before deploying. Run migrate first.');
+  if (!isMigrationReady(state, latestMigration())) {
+    fail('Remote Purkins migration record does not cover the latest SQL migration. Run migrate first.');
+  }
   buildForPermanent();
   console.log('Deploying BOTH Workers with workers_dev=false and preview_urls=false.');
   for (const target of ['public', 'admin']) {

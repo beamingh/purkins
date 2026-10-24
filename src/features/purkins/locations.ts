@@ -8,6 +8,7 @@ export interface StockLocation {
   name: string;
   kind: LocationKind;
   parent_id: string | null;
+  mcp_version: number;
 }
 export interface LocationOption extends StockLocation {
   path: string;
@@ -34,7 +35,7 @@ export function locationKind(raw: string): LocationKind {
 
 export async function getLocation(db: D1Database, id: string): Promise<StockLocation | null> {
   if (!locationIdValid(id)) return null;
-  return db.prepare('SELECT id, name, kind, parent_id FROM purkins_locations WHERE id=?')
+  return db.prepare('SELECT id, name, kind, parent_id, mcp_version FROM purkins_locations WHERE id=?')
     .bind(id).first<StockLocation>();
 }
 
@@ -44,7 +45,7 @@ export async function getLocation(db: D1Database, id: string): Promise<StockLoca
  */
 export async function listLocationTree(db: D1Database): Promise<LocationOption[]> {
   const { results } = await db.prepare(
-    'SELECT id, name, kind, parent_id FROM purkins_locations ORDER BY name COLLATE NOCASE LIMIT 2001',
+    'SELECT id, name, kind, parent_id, mcp_version FROM purkins_locations ORDER BY name COLLATE NOCASE LIMIT 2001',
   ).all<StockLocation>();
   const rows = results ?? [];
   if (rows.length > 2000) throw new Error('Too many storage locations; use pagination.');
@@ -120,7 +121,7 @@ export async function moveLocation(
   }
   // SQLite sibling uniqueness and the cycle trigger defend against races/other writers.
   try {
-    await db.prepare('UPDATE purkins_locations SET parent_id=? WHERE id=?')
+    await db.prepare('UPDATE purkins_locations SET parent_id=?, mcp_version=mcp_version+1 WHERE id=?')
       .bind(parentId, id).run();
   } catch (error) {
     if (String(error).includes('UNIQUE')) throw new Error('The destination already contains that location name.');

@@ -40,7 +40,7 @@ describe('Purkins stock intake through demo settlement', () => {
     for (const sql of schema) await db.exec(sql);
     // D1's exec() treats comment-only fragments as empty statements. Run each
     // real statement separately so the migration is exercised unchanged.
-    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql']) {
+    for (const name of ['0040_purkins_intake.sql', '0041_purkins_cataloguing.sql', '0042_purkins_manual_pricing.sql', '0043_purkins_location_tree.sql', '0045_purkins_mcp_write_guard.sql']) {
       const migrationSql = readFileSync(new URL('../../../migrations/' + name, import.meta.url), 'utf8');
       // D1 test adapter executes one statement at a time. Keep the CREATE
       // TRIGGER block (with its internal semicolon) as a single statement.

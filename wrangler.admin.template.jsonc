@@ -13,7 +13,9 @@
     "STORE_NAME": "Purkins",
     "TIME_ZONE": "Africa/Lusaka",
     "PRELAUNCH_NOINDEX": "true",
-    "PURKINS_MCP_WRITES_ENABLED": "false"
+    "PURKINS_MCP_WRITES_ENABLED": "false",
+    "PURKINS_MCP_LOCATION_WRITES_ENABLED": "false",
+    "PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"
   },
   "ratelimits": [
     { "name": "AUTH_RATE_LIMITER", "namespace_id": "10001", "simple": { "limit": 10, "period": 60 } },

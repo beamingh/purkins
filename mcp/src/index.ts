@@ -199,6 +199,7 @@ const NUMERIC_ORDER_ERROR =
  */
 export interface SessionProps extends Record<string, unknown> {
   operator: boolean;
+  actor?: string;
 }
 
 export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps> {
@@ -319,9 +320,17 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
 
     // A valid operator token enables sensitive reads, NOT automatic write access.
     // All operator writes require this explicit config switch; default is off.
-    const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
-      .PURKINS_MCP_WRITES_ENABLED === 'true';
-    registerPurkinsTools(this.server, db, allowWrites);
+    const writeEnv = this.env as Env & {
+      PURKINS_MCP_WRITES_ENABLED?: string;
+      PURKINS_MCP_LEGACY_WRITES_ENABLED?: string;
+      PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
+    };
+    const allowWrites = writeEnv.PURKINS_MCP_WRITES_ENABLED === 'true';
+    // Old stock/product/order/image mutators do not yet have durable per-request
+    // receipts. A general write switch alone must NEVER expose them.
+    const allowLegacyWrites = allowWrites &&
+      writeEnv.PURKINS_MCP_LEGACY_WRITES_ENABLED === 'true';
+    registerPurkinsTools(this.server, db, allowLegacyWrites);
     const mediaEnv = this.env as Env & {
       BUCKET?: Parameters<typeof createR2Storage>[0];
       PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
@@ -329,12 +338,12 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const imageImportAllowedHosts = (mediaEnv.PURKINS_MCP_IMAGE_IMPORT_HOSTS ?? '')
       .split(',').map(host => host.trim()).filter(Boolean);
     registerPurkinsMediaTools(
-      this.server, db, mediaEnv.BUCKET, allowWrites, imageImportAllowedHosts,
+      this.server, db, mediaEnv.BUCKET, allowLegacyWrites, imageImportAllowedHosts,
     );
-    const allowLocationWrites = allowWrites && (this.env as Env & {
-      PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
-    }).PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true';
-    registerLocationTools(this.server, db, allowLocationWrites);
+    const allowLocationWrites = allowWrites &&
+      writeEnv.PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true' &&
+      Boolean(this.props.actor);
+    registerLocationTools(this.server, db, allowLocationWrites, this.props.actor);
     registerCategoryTools(this.server, db);
 
     // --- reads ---
@@ -433,7 +442,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     );
 
     // --- writes: token AND explicit instance-level enablement required ---
-    if (!allowWrites) return;
+    if (!allowLegacyWrites) return;
     this.server.registerTool(
       'create_product',
       {
@@ -581,9 +590,11 @@ export default {
         PURKINS_MCP_OWNER_EMAIL?: string;
       };
       let operator = false;
+      let actor: string | undefined;
       // Legacy MCP clients with a separately provisioned operator secret.
       if (auth && env.MCP_TOKEN && await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)) {
         operator = true;
+        actor = 'owner:bearer';
       }
       // Cloudflare Access Managed OAuth clients. Do NOT trust a bare header:
       // independently verify signature, issuer, audience, lifetime and owner
@@ -599,6 +610,7 @@ export default {
             // not that this person is the Purkins owner. Fail closed without
             // an explicit owner email allowlist value.
             operator = isApprovedMcpOwner(identity?.email, accessEnv.PURKINS_MCP_OWNER_EMAIL);
+            if (operator) actor = 'owner:access:' + identity!.email.trim().toLowerCase();
           } catch {
             operator = false; // no JWKS → fail closed
           }
@@ -635,7 +647,7 @@ export default {
       // The SDK reads session props off the ExecutionContext (the same channel the
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
-      Object.assign(ctx, { props: { operator } satisfies SessionProps });
+      Object.assign(ctx, { props: { operator, actor } satisfies SessionProps });
       return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
     }
 
