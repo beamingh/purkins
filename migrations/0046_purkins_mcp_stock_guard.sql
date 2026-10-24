@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS purkins_mcp_stock_mutations (
   target_id TEXT NOT NULL,
   before_stock INTEGER,
   after_stock INTEGER,
+  expected_revision INTEGER,
   outcome TEXT NOT NULL DEFAULT 'pending'
     CHECK (outcome IN ('pending','applied','rejected')),
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
