@@ -99,3 +99,19 @@ export function renderPermanentConfigs(storeTemplate, adminTemplate, id) {
   }
   return { storefront, admin };
 }
+
+/**
+ * Fail-closed schema gate for PERMANENT deployments. Previous installations
+ * only stored migrationsApplied=true, which says nothing about newer scripts.
+ * Sorting canonical four-digit migration names is deterministic; no local
+ * shell, timestamps or remote mutations are needed for the check.
+ */
+export function latestMigrationFilename(files) {
+  const names = files.filter(name => /^\d{4}_[a-z0-9_-]+\.sql$/i.test(name)).sort();
+  if (names.length === 0) throw new Error('No Purkins SQL migration files found.');
+  return names.at(-1);
+}
+
+export function isMigrationReady(state, latest) {
+  return state?.migrationsApplied === true && state?.migratedThrough === latest;
+}
