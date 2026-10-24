@@ -43,11 +43,22 @@ const PAYMENT_LABELS: Record<string, string> = {
   lightning: 'Lightning',
   opennode: 'Bitcoin (OpenNode)',
   demo: 'Demo (no charge)',
+  cash: 'Cash',
+  airtel_money: 'Airtel Money',
+  mtn_momo: 'MTN Mobile Money',
+  zamtel_money: 'Zamtel Money',
+  bank_transfer: 'Bank transfer',
+  other: 'Other received payment',
 };
 const paymentLabel = order.payment_method
   ? (PAYMENT_LABELS[order.payment_method] ?? order.payment_method)
   : '—';
 const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
+const manualSale = order.provider_session_id?.startsWith('manual:')
+  ? await env.DB.prepare('SELECT channel, customer_name, note FROM purkins_manual_sales WHERE order_id = ?')
+      .bind(order.id)
+      .first<{ channel: string; customer_name: string | null; note: string | null }>()
+  : null;
 const items = await listOrderItemsWithImages(env.DB, order.id);
 const inventoryExceptions = await listOrderInventoryExceptions(env.DB, order.id);
 const fulfilled = order.fulfillment_status === 'fulfilled';
@@ -117,6 +128,7 @@ const noticeMsg = Astro.url.searchParams.get('notice');
 const canReissue =
   !!order.email &&
   !!order.public_id?.startsWith('ord_') &&
+  !order.provider_session_id?.startsWith('manual:') &&
   shouldSendCustomerOrderEmail(order.payment_method);
 const itemsTotalCents = items.reduce((sum, it) => sum + it.price_cents * it.quantity, 0);
 // Older orders (placed before line-item capture) may have no items; flag any
@@ -148,6 +160,7 @@ const labelInternational =
 const willEmailCustomer =
   !!order.email &&
   order.payment_method !== 'demo' &&
+  !order.provider_session_id?.startsWith('manual:') &&
   !!(await getEmailProvider(Astro.locals.settings ?? (await getStoreSettings(env.DB))));
 ---
 
@@ -198,6 +211,24 @@ const willEmailCustomer =
   }
 
   <dl class="mb-8 grid grid-cols-2 gap-x-8 gap-y-3 text-sm sm:max-w-lg">
+    {manualSale && (
+      <div>
+        <dt class="text-xs uppercase tracking-widest text-gray-400">Sales channel</dt>
+        <dd class="font-medium">{manualSale.channel.replace(/_/g, ' ')}</dd>
+      </div>
+    )}
+    {manualSale?.customer_name && (
+      <div>
+        <dt class="text-xs uppercase tracking-widest text-gray-400">Customer name</dt>
+        <dd>{manualSale.customer_name}</dd>
+      </div>
+    )}
+    {manualSale?.note && (
+      <div class="col-span-2">
+        <dt class="text-xs uppercase tracking-widest text-gray-400">Internal sale note</dt>
+        <dd class="whitespace-pre-wrap">{manualSale.note}</dd>
+      </div>
+    )}
     <div>
       <dt class="text-xs uppercase tracking-widest text-gray-400">Status</dt>
       <dd class="font-medium">{order.status}</dd>

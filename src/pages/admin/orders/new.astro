@@ -1,0 +1,212 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { MANUAL_CHANNELS, MANUAL_TENDERS } from '../../../features/purkins/manualSale';
+
+interface CatalogLine {
+  product_id: string;
+  name: string;
+  variant_id: string | null;
+  variant_label: string | null;
+  price_cents: number;
+  stock: number;
+  sku: string | null;
+}
+
+// Admin-only catalog includes private intake drafts: the public storefront
+// intentionally excludes these. A bounded query prevents enormous form HTML.
+const { results } = await env.DB.prepare(
+  "SELECT p.public_id AS product_id, p.name, v.public_id AS variant_id, " +
+  "v.label AS variant_label, COALESCE(v.price_cents, p.price_cents) AS price_cents, " +
+  "COALESCE(v.stock, p.stock) AS stock, COALESCE(v.sku, i.sku) AS sku " +
+  "FROM products p LEFT JOIN product_variants v ON v.product_id=p.id " +
+  "LEFT JOIN purkins_intake i ON i.product_id=p.id " +
+  "WHERE p.public_id IS NOT NULL AND (v.id IS NULL OR v.public_id IS NOT NULL) " +
+  "ORDER BY p.name COLLATE NOCASE, v.position, v.id LIMIT 1501",
+).all<CatalogLine>();
+const catalog = (results ?? []).slice(0, 1500);
+const truncated = (results ?? []).length > 1500;
+const customers = await env.DB.prepare(
+  "SELECT DISTINCT email FROM orders WHERE email IS NOT NULL AND email != '' ORDER BY email LIMIT 100",
+).all<{ email: string }>();
+const error = Astro.url.searchParams.get('error');
+---
+
+<AdminLayout title="Record paid sale" active="orders">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <p class="text-xs uppercase tracking-widest text-muted">Purkins / Orders</p>
+      <h1 class="mt-2 font-serif text-3xl tracking-tight">Create paid order</h1>
+    </div>
+    <a href="/admin/orders" class="rounded border border-line px-4 py-2 text-sm hover:bg-surface">Back to orders</a>
+  </div>
+  <p class="mb-5 max-w-3xl text-sm text-muted">
+    For completed in-person, Facebook, phone or WhatsApp sales. Add several stock items
+    and optionally identify the customer. Only submit after actually receiving full payment:
+    saving immediately records revenue and deducts inventory once.
+  </p>
+  {error && <p role="alert" class="mb-5 rounded border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+  {truncated && <p class="mb-5 rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+    Only the first 1,500 catalog entries are shown; use product search or contact the developer to add paginated item lookup before recording other SKUs.
+  </p>}
+  {catalog.length === 0 ? (
+    <div class="rounded border border-line p-5 text-sm">
+      There is no recorded stock yet. <a class="underline" href="/admin/stock-intake">Add inventory first.</a>
+    </div>
+  ) : (
+    <form method="POST" action="/api/admin/orders/manual" id="manual-sale-form" class="space-y-6">
+      <input type="hidden" name="idempotency_key" value={crypto.randomUUID()} />
+      <section class="rounded-lg border border-line p-5">
+        <h2 class="mb-4 font-serif text-xl">Items</h2>
+        <div id="sale-lines" class="space-y-3"></div>
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <button id="sale-add-line" type="button" class="rounded border border-line px-4 py-2 text-sm hover:bg-surface">+ Add another item</button>
+          <p class="text-sm font-semibold">Total: <output id="sale-total">K0.00</output></p>
+        </div>
+        <p class="mt-3 text-xs text-muted">
+          The current catalog price is filled automatically. Change the price to reflect an agreed discount.
+          Stock shown here is informational; the server verifies all item quantities again when saving.
+        </p>
+      </section>
+      <section class="rounded-lg border border-line p-5">
+        <h2 class="mb-4 font-serif text-xl">Customer (optional)</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm">
+            Customer name
+            <input name="customer_name" maxlength="120" class="mt-1 w-full rounded border border-line p-2" placeholder="Leave blank for anonymous sale" />
+          </label>
+          <label class="block text-sm">
+            Customer email
+            <input name="email" type="email" maxlength="254" list="sale-customer-emails" class="mt-1 w-full rounded border border-line p-2" placeholder="Optional; existing emails link automatically" />
+            <datalist id="sale-customer-emails">
+              {(customers.results ?? []).map(c => <option value={c.email}/>)}
+            </datalist>
+          </label>
+        </div>
+        <p class="mt-2 text-xs text-muted">An existing email links to that customer's history. A blank email creates no customer profile or account.</p>
+      </section>
+      <section class="rounded-lg border border-line p-5">
+        <h2 class="mb-4 font-serif text-xl">Sale details</h2>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm">
+            Sales channel
+            <select name="channel" class="mt-1 w-full rounded border border-line p-2" required>
+              {Object.entries(MANUAL_CHANNELS).map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+          <label class="block text-sm">
+            Payment already received via
+            <select name="tender" class="mt-1 w-full rounded border border-line p-2" required>
+              {Object.entries(MANUAL_TENDERS).map(([value, label]) => <option value={value}>{label}</option>)}
+            </select>
+          </label>
+          <label class="block text-sm">
+            Handover method
+            <select name="delivery_method" class="mt-1 w-full rounded border border-line p-2" required>
+              <option value="pickup">Customer pickup / handover</option>
+              <option value="shipping">Delivery to customer (arrange separately)</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            Hand-over status
+            <select name="fulfillment" class="mt-1 w-full rounded border border-line p-2" required>
+              <option value="fulfilled">Handed over to customer</option>
+              <option value="unfulfilled">Paid, waiting for pickup/delivery</option>
+            </select>
+          </label>
+          <label class="block text-sm">
+            Internal note
+            <textarea name="note" maxlength="1000" rows="2" class="mt-1 w-full rounded border border-line p-2" placeholder="Optional transaction reference"></textarea>
+          </label>
+        </div>
+      </section>
+      <div class="flex flex-wrap items-center gap-4">
+        <button type="submit" class="rounded bg-brand px-5 py-3 font-semibold text-white">Record paid sale and deduct stock</button>
+        <span class="text-xs text-muted">This action is final; do not submit an unpaid or partially paid order here.</span>
+      </div>
+    </form>
+  )}
+  <template id="sale-line-template">
+    <div class="sale-line rounded border border-line bg-white/50 p-3">
+      <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_6rem_8rem_auto] sm:items-end">
+        <label class="block text-sm">
+          Product / variant
+          <select name="item" class="sale-choice mt-1 w-full rounded border border-line p-2" required>
+            <option value="">Choose product</option>
+            {catalog.map(item => (
+              <option
+                value={item.product_id + '|' + (item.variant_id ?? '')}
+                data-price={item.price_cents}
+                data-stock={item.stock}
+              >
+                {item.name}{item.variant_label ? ' — ' + item.variant_label : ''}
+                {item.sku ? ' · ' + item.sku : ''} · {item.stock} available
+              </option>
+            ))}
+          </select>
+        </label>
+        <label class="block text-sm">
+          Quantity
+          <input name="quantity" type="number" min="1" max="9999" step="1" value="1" class="sale-qty mt-1 w-full rounded border border-line p-2" required />
+        </label>
+        <label class="block text-sm">
+          K / unit
+          <input name="unit_price" type="number" min="0" max="9999999.99" step="0.01" class="sale-price mt-1 w-full rounded border border-line p-2" required />
+        </label>
+        <button type="button" class="sale-remove rounded border border-line px-3 py-2 text-sm">Remove</button>
+      </div>
+      <p class="sale-stock mt-1 text-xs text-muted"></p>
+    </div>
+  </template>
+</AdminLayout>
+
+<script is:inline>
+  const container = document.getElementById('sale-lines');
+  const template = document.getElementById('sale-line-template');
+  const total = document.getElementById('sale-total');
+  const addButton = document.getElementById('sale-add-line');
+  const form = document.getElementById('manual-sale-form');
+  if (container && template && total && addButton && form) {
+    function refresh() {
+      let sum = 0;
+      for (const line of container.querySelectorAll('.sale-line')) {
+        const select = line.querySelector('.sale-choice');
+        const option = select.selectedOptions[0];
+        const stock = Number(option?.dataset.stock ?? 0);
+        const qty = Number(line.querySelector('.sale-qty').value);
+        const price = Number(line.querySelector('.sale-price').value);
+        line.querySelector('.sale-stock').textContent =
+          option?.value ? (qty > stock ? 'Insufficient stock: ' + stock + ' available' : stock + ' in stock') : '';
+        if (Number.isFinite(price) && Number.isFinite(qty)) sum += price * qty;
+      }
+      total.value = 'K' + sum.toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+    function addLine() {
+      if (container.children.length >= 30) return;
+      container.appendChild(template.content.firstElementChild.cloneNode(true));
+      refresh();
+    }
+    addButton.addEventListener('click', addLine);
+    container.addEventListener('change', (event) => {
+      if (event.target.matches('.sale-choice')) {
+        const line = event.target.closest('.sale-line');
+        const unitCents = Number(event.target.selectedOptions[0]?.dataset.price ?? 0);
+        line.querySelector('.sale-price').value = event.target.value ? (unitCents / 100).toFixed(2) : '';
+      }
+      refresh();
+    });
+    container.addEventListener('input', refresh);
+    container.addEventListener('click', (event) => {
+      if (!event.target.matches('.sale-remove')) return;
+      event.target.closest('.sale-line').remove();
+      if (!container.children.length) addLine();
+      refresh();
+    });
+    form.addEventListener('submit', (event) => {
+      // Avoid duplicate submission; backend idempotency is the authoritative guard.
+      if (!form.reportValidity()) { event.preventDefault(); return; }
+      form.querySelector('[type=submit]').disabled = true;
+    });
+    addLine();
+  }
+</script>
