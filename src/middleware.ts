@@ -28,6 +28,7 @@ import { addCacheTags, responseCacheTags } from './features/cache/tags';
 import { normalizeSearchQuery } from './features/search/query';
 import { isForbiddenFormOrigin } from './features/auth/formOrigin';
 import { isPrelaunchNoindex, PRELAUNCH_ROBOTS_HEADER } from './features/seo/prelaunch';
+import { HAS_LOCAL_ADMIN_ROUTES } from './features/runtime/worker-target';
 
 /**
  * Admin auth gate. Protects BOTH the admin UI (`/admin/*`) and the admin API
@@ -110,11 +111,13 @@ async function gate(context: APIContext, next: MiddlewareNext): Promise<Response
     }
   }
 
-  // First-run funnel: until the setup wizard is finished, send the STOREFRONT to it
-  // too — the admin already redirects /admin → /admin/setup the same way. Skips
-  // /admin (its own gate), /api, and assets to avoid loops; only fires once settings
-  // loaded and setup_complete isn't set.
+  // First-run funnel for a monolithic build: redirect to the setup wizard
+  // only when /admin/setup exists on THIS Worker. Purkins' public split build
+  // intentionally excludes Admin routes; directing shoppers there would 404
+  // if the shared D1 has not been initialized yet. The protected Admin Worker
+  // retains its own first-run setup and login flow.
   if (
+    HAS_LOCAL_ADMIN_ROUTES &&
     isDocument &&
     !path.startsWith('/admin') &&
     context.locals.settings &&
