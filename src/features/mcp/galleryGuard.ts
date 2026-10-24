@@ -23,7 +23,7 @@ type Receipt = {
 };
 export type GalleryWriteResult =
   | { ok: true; product_id: string; image_id: string; gallery_revision: number;
-      replayed: boolean; published: false }
+      replayed: boolean; was_unpublished_at_commit: true }
   | { ok: false; conflict: boolean; error: string };
 
 function ownerActor(actor: string): string {
@@ -94,7 +94,7 @@ export async function applyGuardedGalleryMutation(
     if(prior.completed!==1) return conflict('Previous request is incomplete. Investigate before retrying.');
     return {ok:true,product_id:prior.product_public_id,
       image_id:prior.image_public_id,gallery_revision:prior.expected_revision+1,
-      replayed:true,published:false};
+      replayed:true,was_unpublished_at_commit:true};
   }
 
   // Only an existing media claim is supported here. Upload photo bytes through
@@ -172,12 +172,12 @@ export async function applyGuardedGalleryMutation(
     const results=await db.batch(statements);
     if(results[1]?.results?.length && results[3]?.results?.length) {
       return {ok:true,product_id:product,image_id:resultingImageId,
-        gallery_revision:input.expected_revision+1,replayed:false,published:false};
+        gallery_revision:input.expected_revision+1,replayed:false,was_unpublished_at_commit:true};
     }
     const concurrent=await findReceipt(db,key);
     if(concurrent?.completed===1 && concurrent.actor===actor && concurrent.payload_sha256===hash) {
       return {ok:true,product_id:product,image_id:concurrent.image_public_id,
-        gallery_revision:concurrent.expected_revision+1,replayed:true,published:false};
+        gallery_revision:concurrent.expected_revision+1,replayed:true,was_unpublished_at_commit:true};
     }
     return conflict('Gallery changed during this operation. Refresh and retry with a new request ID.');
   } catch(error) {
@@ -188,7 +188,7 @@ export async function applyGuardedGalleryMutation(
       }
       if(previous.completed===1) {
         return {ok:true,product_id:product,image_id:previous.image_public_id,
-          gallery_revision:previous.expected_revision+1,replayed:true,published:false};
+          gallery_revision:previous.expected_revision+1,replayed:true,was_unpublished_at_commit:true};
       }
     }
     if(/constraint|UNIQUE|CHECK/i.test(String(error))) {
