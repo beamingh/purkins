@@ -90,6 +90,13 @@ describe('verifyAccessJwt', () => {
     expect(await verifyAccessJwt(jwt, { teamDomain: TEAM, aud: AUD })).toBeNull();
   });
 
+  it('rejects signed tokens with missing or malformed expiry', async () => {
+    const missingExpiry = await signJwt(payload({ exp: undefined }));
+    const malformedExpiry = await signJwt(payload({ exp: 'never' }));
+    expect(await verifyAccessJwt(missingExpiry, { teamDomain: TEAM, aud: AUD })).toBeNull();
+    expect(await verifyAccessJwt(malformedExpiry, { teamDomain: TEAM, aud: AUD })).toBeNull();
+  });
+
   it('rejects malformed tokens', async () => {
     expect(await verifyAccessJwt('not.a.jwt', { teamDomain: TEAM, aud: AUD })).toBeNull();
     expect(await verifyAccessJwt('only-one-part', { teamDomain: TEAM, aud: AUD })).toBeNull();
