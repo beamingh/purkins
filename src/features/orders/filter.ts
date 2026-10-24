@@ -45,6 +45,12 @@ export const ORDER_METHOD_OPTIONS: { value: string; label: string }[] = [
   { value: 'lightning', label: 'Lightning' },
   { value: 'opennode', label: 'Bitcoin (OpenNode)' },
   { value: 'demo', label: 'Demo' },
+  { value: 'cash', label: 'Cash' },
+  { value: 'airtel_money', label: 'Airtel Money' },
+  { value: 'mtn_momo', label: 'MTN MoMo' },
+  { value: 'zamtel_money', label: 'Zamtel Money' },
+  { value: 'bank_transfer', label: 'Bank transfer' },
+  { value: 'other', label: 'Other manual payment' },
 ];
 
 const isStatus = (v: string | null): v is OrderStatusFilter =>
