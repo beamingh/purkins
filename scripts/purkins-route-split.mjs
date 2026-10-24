@@ -8,7 +8,7 @@
  * Public-only: customer pages, cart, checkout, payments, webhooks, public JSON.
  * Admin-only: /admin, /api/admin, plus shared image/health endpoints.
  */
-import { cpSync, existsSync, mkdirSync, rmSync, copyFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, rmSync, copyFileSync, writeFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 const adminRoute = (r) => r === 'admin' || r.startsWith('admin/') ||
@@ -41,6 +41,16 @@ export function prepareWorkerSource(root, target) {
       return routeBelongsToWorker(target, rel.slice('pages/'.length));
     },
   });
+  // The public source tree has no Admin setup route. Stamp this compile-time
+  // marker inside the GENERATED tree only; monolithic and Admin builds keep
+  // their existing first-run setup behavior. Never edit the real src tree.
+  const marker = join(destination, 'features', 'runtime', 'worker-target.ts');
+  mkdirSync(join(destination, 'features', 'runtime'), { recursive: true });
+  writeFileSync(
+    marker,
+    'export const HAS_LOCAL_ADMIN_ROUTES = ' +
+      (target === 'public' ? 'false' : 'true') + ';\n',
+  );
   // src/features/seed/demo.ts imports ../../../seed-demo.sql?raw from the
   // repository root. Preserve that relative dependency inside the generated
   // per-Worker project root without duplicating or modifying real inventory.
