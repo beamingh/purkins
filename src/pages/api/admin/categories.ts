@@ -1,8 +1,7 @@
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
-import { createCategory, getCategoryByPublicId } from '../../../features/categories/db';
+import { createCategoryCommand, CategoryValidationError } from '../../../features/categories/commands';
 import { parseCategoryForm } from '../../../features/categories/form';
-import { uniqueCategorySlug } from '../../../features/categories/slug';
 import { CACHE_TAG } from '../../../features/cache/tags';
 import { purgeCacheTags } from '../../../features/cache/purge';
 
@@ -10,27 +9,24 @@ export const prerender = false;
 
 const fail = (msg: string) => `/admin/categories/new?error=${encodeURIComponent(msg)}`;
 
-// POST /api/admin/categories — create a category, then redirect to the list.
+// Parse user input before the write, so validation failures redirect just as
+// before. DB/cache failures deliberately propagate rather than implying that
+// a database write was rolled back when only cache invalidation failed.
 export const POST: APIRoute = async ({ request, redirect }) => {
   const form = await request.formData();
   const parsed = parseCategoryForm(form);
   if ('error' in parsed) return redirect(fail(parsed.error), 303);
 
-  // The parent selector submits a cat_ public ID; resolve it to the row id here
-  // at the boundary — relationship writes stay integer internally.
-  let parentId: number | null = null;
-  if (parsed.data.parentPublicId) {
-    const parent = await getCategoryByPublicId(env.DB, parsed.data.parentPublicId);
-    if (!parent) return redirect(fail('That parent category no longer exists.'), 303);
-    parentId = parent.id;
+  try {
+    await createCategoryCommand(env.DB, {
+      name: parsed.data.name,
+      slug: parsed.data.slugInput,
+      parent_id: parsed.data.parentPublicId,
+    });
+  } catch (error) {
+    if (error instanceof CategoryValidationError) return redirect(fail(error.message), 303);
+    throw error; // DB faults must not be presented as validation errors.
   }
-
-  const slug = await uniqueCategorySlug(env.DB, parsed.data.slugInput || parsed.data.name);
-  await createCategory(env.DB, {
-    name: parsed.data.name,
-    slug,
-    parent_id: parentId,
-  });
   await purgeCacheTags([CACHE_TAG.catalog]);
   return redirect('/admin/categories', 303);
 };

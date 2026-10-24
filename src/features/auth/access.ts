@@ -107,7 +107,9 @@ export async function verifyAccessJwt(
   const auds = Array.isArray(payload.aud) ? payload.aud : payload.aud ? [payload.aud] : [];
   if (!auds.includes(opts.aud)) return null;
   const now = Math.floor(Date.now() / 1000);
-  if (typeof payload.exp === 'number' && now >= payload.exp) return null;
+  // A signed token without a finite expiry must never authorize long-lived
+  // Admin or MCP access. Cloudflare Access tokens always have exp.
+  if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp) || now >= payload.exp) return null;
   if (typeof payload.nbf === 'number' && now < payload.nbf) return null;
 
   const signed = new TextEncoder().encode(`${h}.${p}`);

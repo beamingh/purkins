@@ -1,10 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
 import { registerPurkinsTools } from './purkins';
+import { registerPurkinsMediaTools } from './purkins-media';
+import { registerLocationTools } from './locations';
+import { registerCategoryTools } from './categories';
+import { isApprovedMcpOwner } from './operator-access';
+import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
 import { z } from 'zod';
 import { timingSafeEqual } from 'node:crypto';
+import { verifyAccessJwt } from '../../src/features/auth/access';
 
 // Reuse the storefront's query logic (the db modules import only TYPES from
 // workers-types, so they're clean to share across Workers — no duplication).
@@ -316,6 +322,20 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const allowWrites = (this.env as Env & { PURKINS_MCP_WRITES_ENABLED?: string })
       .PURKINS_MCP_WRITES_ENABLED === 'true';
     registerPurkinsTools(this.server, db, allowWrites);
+    const mediaEnv = this.env as Env & {
+      BUCKET?: Parameters<typeof createR2Storage>[0];
+      PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
+    };
+    const imageImportAllowedHosts = (mediaEnv.PURKINS_MCP_IMAGE_IMPORT_HOSTS ?? '')
+      .split(',').map(host => host.trim()).filter(Boolean);
+    registerPurkinsMediaTools(
+      this.server, db, mediaEnv.BUCKET, allowWrites, imageImportAllowedHosts,
+    );
+    const allowLocationWrites = allowWrites && (this.env as Env & {
+      PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
+    }).PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true';
+    registerLocationTools(this.server, db, allowLocationWrites);
+    registerCategoryTools(this.server, db);
 
     // --- reads ---
     this.server.registerTool(
@@ -553,16 +573,41 @@ export default {
       // sell to agents. That is a deliberate change from failing the whole server
       // closed: the buyer tier exposes nothing the public JSON API does not.
       const auth = request.headers.get('Authorization');
+      const accessJwt = request.headers.get('Cf-Access-Jwt-Assertion');
+      const accessEnv = env as Env & {
+        CF_ACCESS_TEAM_DOMAIN?: string;
+        CF_ACCESS_AUD?: string;
+        PURKINS_MCP_ACCESS_AUD?: string;
+        PURKINS_MCP_OWNER_EMAIL?: string;
+      };
       let operator = false;
-      if (auth) {
-        const expected = env.MCP_TOKEN;
-        if (!expected) {
-          return new Response('Operator tools unavailable: MCP_TOKEN is not set.', { status: 503 });
-        }
-        if (!(await secureEqual(auth, `Bearer ${expected}`))) {
-          return new Response('Unauthorized', { status: 401 });
-        }
+      // Legacy MCP clients with a separately provisioned operator secret.
+      if (auth && env.MCP_TOKEN && await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)) {
         operator = true;
+      }
+      // Cloudflare Access Managed OAuth clients. Do NOT trust a bare header:
+      // independently verify signature, issuer, audience, lifetime and owner
+      // identity, even when the normal Cloudflare Access edge is bypassed.
+      if (!operator && accessJwt && accessEnv.CF_ACCESS_TEAM_DOMAIN) {
+        const aud = accessEnv.PURKINS_MCP_ACCESS_AUD || accessEnv.CF_ACCESS_AUD;
+        if (aud) {
+          try {
+            const identity = await verifyAccessJwt(accessJwt, {
+              teamDomain: accessEnv.CF_ACCESS_TEAM_DOMAIN, aud,
+            });
+            // An application-scoped signature proves the Access application,
+            // not that this person is the Purkins owner. Fail closed without
+            // an explicit owner email allowlist value.
+            operator = isApprovedMcpOwner(identity?.email, accessEnv.PURKINS_MCP_OWNER_EMAIL);
+          } catch {
+            operator = false; // no JWKS → fail closed
+          }
+        }
+      }
+      if (!operator && (auth || accessJwt)) {
+        return new Response('Unauthorized operator MCP connection.', {
+          status: 401, headers: {'cache-control': 'no-store'},
+        });
       }
 
       // Throttle the buyer tier. This Worker is the ONLY component that sees the

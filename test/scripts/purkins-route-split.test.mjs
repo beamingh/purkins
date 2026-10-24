@@ -108,7 +108,23 @@ describe('Purkins route-level Worker isolation', () => {
     expect(publicWorker).toContain("path.startsWith('/mcp/')");
     expect(adminWorker).toContain("pathname.startsWith('/api/admin/')");
     expect(adminWorker).toContain("pathname.startsWith('/mcp/')");
-    expect(adminWorker).toContain("if (!request.headers.get('Authorization'))");
+    // The Admin Worker accepts two transport credentials: a bearer token
+    // or a Cloudflare Access JWT. A request with NEITHER must be rejected
+    // before reaching the MCP handler. This replaced the old bearer-only
+    // assertion when Access-backed owner connections were introduced.
+    expect(adminWorker).toMatch(
+      /if \(!request\.headers\.get\('Authorization'\)\s*&&\s*!request\.headers\.get\('Cf-Access-Jwt-Assertion'\)\)/,
+    );
+    expect(adminWorker).toContain("status: 401");
+    expect(adminWorker).toContain('return mcpHandler.fetch(request, env as never, ctx)');
+
+    // Supplying a header is NOT sufficient authentication. Only the MCP
+    // handler may promote it to owner/operator after independent validation.
+    const mcpHandler = readFileSync(new URL('../../mcp/src/index.ts', import.meta.url), 'utf8');
+    expect(mcpHandler).toContain('await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)');
+    expect(mcpHandler).toContain('await verifyAccessJwt(accessJwt, {');
+    expect(mcpHandler).toContain('isApprovedMcpOwner(identity?.email, accessEnv.PURKINS_MCP_OWNER_EMAIL)');
+    expect(mcpHandler).toContain("status: 401");
   });
 });
 function requireSeparator() {

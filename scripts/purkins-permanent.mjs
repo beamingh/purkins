@@ -12,6 +12,8 @@
  *   npm run purkins:cloudflare -- build              # local build only
  *   npm run purkins:cloudflare -- migrate --confirm=MIGRATE-PURKINS-FOREVER
  *   npm run purkins:cloudflare -- deploy --confirm=DEPLOY-UNROUTED-PURKINS
+ *   npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
+ *   npm run purkins:cloudflare -- mcp-writes-off --confirm=DISABLE-PURKINS-MCP-WRITES
  *
  * Even deploy is initially UNROUTED (workers_dev=false, preview_urls=false).
  * Human review of Cloudflare Access and first-run Admin is required before
@@ -37,6 +39,8 @@ const expected = {
   create: 'CREATE-PURKINS-FOREVER',
   migrate: 'MIGRATE-PURKINS-FOREVER',
   deploy: 'DEPLOY-UNROUTED-PURKINS',
+  'mcp-writes-on': 'ENABLE-PURKINS-MCP-WRITES',
+  'mcp-writes-off': 'DISABLE-PURKINS-MCP-WRITES',
 };
 const command = process.argv[2] || 'plan';
 const confirm = process.argv.slice(3).find((arg) => arg.startsWith('--confirm='))?.slice(10) ?? '';
@@ -93,7 +97,7 @@ function readState() {
       '"name": "' + TARGET.adminWorker + '"',
       '"database_name": "' + TARGET.db + '"',
       '"database_id": "' + state.dbId + '"',
-      '"PURKINS_MCP_WRITES_ENABLED": "false"',
+      '"PURKINS_MCP_WRITES_ENABLED": "' + (state.mcpWritesEnabled === true ? 'true' : 'false') + '"',
       '"PRELAUNCH_NOINDEX": "true"',
       '"bucket_name": "' + TARGET.images + '"',
       '"bucket_name": "' + TARGET.files + '"',
@@ -224,6 +228,39 @@ function buildForPermanent() {
   }
   console.log('Public and Admin+MCP bundles verified against the single permanent D1.');
 }
+/**
+ * A separate, explicit LOCAL approval to include operator write tools in the
+ * NEXT Admin Worker build/deploy. Does not change Cloudflare until deploy is
+ * separately confirmed. Can be reversed without editing any tracked config.
+ * MCP_TOKEN (or verified Access OAuth) is still required per request.
+ */
+function setMcpWrites(enabled) {
+  requireConfirmation(enabled ? 'mcp-writes-on' : 'mcp-writes-off');
+  ensureSafeLocal();
+  const state = readState();
+  if (enabled && state.migrationsApplied !== true) {
+    fail('Apply permanent D1 migrations before enabling operator writes.');
+  }
+  const current = readFileSync(adminGenerated, 'utf8');
+  const previous = state.mcpWritesEnabled === true ? 'true' : 'false';
+  const from = '"PURKINS_MCP_WRITES_ENABLED": "' + previous + '"';
+  const to = '"PURKINS_MCP_WRITES_ENABLED": "' + (enabled ? 'true' : 'false') + '"';
+  if (!current.includes(from)) fail('Permanent Admin write switch was not found in expected state.');
+  const nextConfig = current.replace(from, to);
+  writeFileSync(adminGenerated, nextConfig, { mode: 0o600 });
+  try {
+    writeFileSync(stateFile, JSON.stringify({
+      ...state, mcpWritesEnabled: enabled,
+      mcpWriteSwitchUpdatedAt: new Date().toISOString(),
+    }, null, 2) + '\n', { mode: 0o600 });
+  } catch (error) {
+    writeFileSync(adminGenerated, current, { mode: 0o600 });
+    throw error;
+  }
+  console.log('Local Admin MCP writes:', enabled ? 'ON' : 'OFF');
+  console.log('No remote change. Run the separately confirmed build/deploy to apply it.');
+}
+
 function remoteMigrate() {
   requireConfirmation('migrate');
   ensureSafeLocal();
@@ -249,14 +286,16 @@ function deployUnrouted() {
 }
 
 try {
-  if (!['plan', 'create', 'build', 'migrate', 'deploy'].includes(command)) {
-    fail('Usage: npm run purkins:cloudflare -- [plan|create|build|migrate|deploy] [--confirm=...]');
+  if (!['plan', 'create', 'build', 'migrate', 'deploy', 'mcp-writes-on', 'mcp-writes-off'].includes(command)) {
+    fail('Usage: npm run purkins:cloudflare -- [plan|create|build|migrate|deploy|mcp-writes-on|mcp-writes-off] [--confirm=...]');
   }
   if (command === 'plan') await preflight();
   if (command === 'create') await create();
   if (command === 'build') buildForPermanent();
   if (command === 'migrate') remoteMigrate();
   if (command === 'deploy') deployUnrouted();
+  if (command === 'mcp-writes-on') setMcpWrites(true);
+  if (command === 'mcp-writes-off') setMcpWrites(false);
 } catch (error) {
   console.error('Purkins provisioning stopped:', error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

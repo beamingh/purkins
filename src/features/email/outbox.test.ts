@@ -211,21 +211,46 @@ describe('deliverOrderNotifications', () => {
   });
 
   it('releases a failed send back to pending with the error recorded', async () => {
-    send.mockRejectedValueOnce(new Error('smtp down'));
-    const rows = freshRows();
-    await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
-    expect(rows[0]).toMatchObject({ state: 'pending', attempts: 1, last_error: 'smtp down' });
-    expect(rows[1].state).toBe('sent'); // one kind's failure never blocks the other
+    const failure = new Error('smtp down');
+    send.mockRejectedValueOnce(failure);
+    // Expected delivery failures are logged in production. Intercept only
+    // this test's expected error, assert it happened, and always restore.
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const rows = freshRows();
+      await deliverOrderNotifications(fakeDb(rows), 7, 'https://x', SETTINGS);
+      expect(rows[0]).toMatchObject({ state: 'pending', attempts: 1, last_error: 'smtp down' });
+      expect(rows[1].state).toBe('sent'); // one kind's failure never blocks the other
+      expect(errorLog.mock.calls).toEqual([
+        [`Order notification customer-receipt/${PUBLIC_ID} failed:`, failure],
+      ]);
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('parks a row as dead once attempts are exhausted', async () => {
-    send.mockRejectedValue(new Error('hard bounce'));
-    const rows = freshRows();
-    const db = fakeDb(rows);
-    for (let i = 0; i < 5; i++) await deliverOrderNotifications(db, 7, 'https://x', SETTINGS);
-    expect(rows[0]).toMatchObject({ state: 'dead', attempts: 5 });
-    await deliverOrderNotifications(db, 7, 'https://x', SETTINGS);
-    expect(rows[0].attempts).toBe(5); // dead rows are never re-claimed
+    const failure = new Error('hard bounce');
+    send.mockRejectedValue(failure);
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const rows = freshRows();
+      const db = fakeDb(rows);
+      for (let i = 0; i < 5; i++) await deliverOrderNotifications(db, 7, 'https://x', SETTINGS);
+      expect(rows[0]).toMatchObject({ state: 'dead', attempts: 5 });
+      await deliverOrderNotifications(db, 7, 'https://x', SETTINGS);
+      expect(rows[0].attempts).toBe(5); // dead rows are never re-claimed
+      // Five attempts for each of two notification kinds; the sixth pass
+      // must not log another failure after both rows have been parked.
+      expect(errorLog.mock.calls).toEqual(
+        Array.from({ length: 5 }, () => [
+          [`Order notification customer-receipt/${PUBLIC_ID} failed:`, failure],
+          [`Order notification owner-notification/${PUBLIC_ID} failed:`, failure],
+        ]).flat(),
+      );
+    } finally {
+      errorLog.mockRestore();
+    }
   });
 
   it('parks an abandoned claim as dead once its attempts are spent', async () => {

@@ -1,5 +1,5 @@
 import type { D1Database } from '@cloudflare/workers-types';
-import type { StorageProvider } from '../storage';
+import type { StorageProvider } from '../storage/provider';
 // Explicit .ts: test/integration/media.mjs loads this module through Node's type
 // stripping, which does not resolve extensionless relative imports.
 import { createMediaRecord, type Media } from './db.ts';
