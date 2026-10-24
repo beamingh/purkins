@@ -6,6 +6,7 @@ import { splitPurkinsMigrationSql } from '../purkins/migration-test-sql';
 import { parseIntakeFields } from '../purkins/intake';
 import { getIntake } from '../purkins/db';
 import { getProductByPublicId, getProductBySlug } from '../products/db';
+import { stockView } from '../../../mcp/src/purkins';
 import { createGuardedClothingBatch, createGuardedClothingDraft, type ClothingDraftInput } from './clothingIntake';
 
 const actor = 'owner:access:owner@example.com';
