@@ -1,4 +1,4 @@
-import { parsePublicId } from '../ids/publicId';
+import { parsePublicId } from '../ids/publicId.ts';
 
 export const MANUAL_CHANNELS = {
   walk_in: 'Walk-in / in person',
