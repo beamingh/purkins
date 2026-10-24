@@ -3,6 +3,7 @@ import { McpAgent } from 'agents/mcp';
 import { registerPurkinsTools } from './purkins';
 import { registerPurkinsMediaTools } from './purkins-media';
 import { registerLocationTools } from './locations';
+import { registerCategoryTools } from './categories';
 import type { R2Bucket } from '@cloudflare/workers-types';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -325,6 +326,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_LOCATION_WRITES_ENABLED?: string;
     }).PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true';
     registerLocationTools(this.server, db, allowLocationWrites);
+    registerCategoryTools(this.server, db);
 
     // --- reads ---
     this.server.registerTool(
