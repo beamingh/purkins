@@ -617,7 +617,14 @@ export default {
       // MCP_TOKEN unset means the operator tier is unavailable — the store can still
       // sell to agents. That is a deliberate change from failing the whole server
       // closed: the buyer tier exposes nothing the public JSON API does not.
-      const auth = request.headers.get('Authorization');
+      const urlCredential=extractMcpUrlToken(request);
+      if(urlCredential.kind==='invalid')return new Response(
+        'Invalid MCP connection URL authentication.',{
+          status:401,headers:{'cache-control':'no-store','referrer-policy':'no-referrer'},
+        },
+      );
+      const auth = urlCredential.kind==='token'
+        ? urlCredential.bearer : request.headers.get('Authorization');
       const accessJwt = request.headers.get('Cf-Access-Jwt-Assertion');
       const accessEnv = env as Env & {
         CF_ACCESS_TEAM_DOMAIN?: string;
