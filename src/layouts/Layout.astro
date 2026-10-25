@@ -19,9 +19,11 @@ interface Props {
   /** Override the canonical URL. Used where two routes render the same content
    *  — the catalog is at both / and /products — so only one is indexable. */
   canonical?: string;
+  /** Suppress all indexable metadata for authenticated storefront-style previews. */
+  noIndex?: boolean;
 }
 
-const { title, description, image, canonical: canonicalOverride } = Astro.props;
+const { title, description, image, canonical: canonicalOverride, noIndex = false } = Astro.props;
 const config = getConfig();
 const { features } = config;
 // Runtime override (set by the setup wizard) wins over the build-time default.
@@ -100,20 +102,20 @@ const shell = buildShellModel({
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <title>{pageTitle}</title>
     <meta name="description" content={desc} />
-    {isPrelaunchNoindex(env.PRELAUNCH_NOINDEX) && <meta name="robots" content={PRELAUNCH_ROBOTS_HEADER} />}
-    <link rel="canonical" href={canonical} />
+    {(noIndex || isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)) && <meta name="robots" content={noIndex ? 'noindex,nofollow,noarchive' : PRELAUNCH_ROBOTS_HEADER} />}
+    {!noIndex && <link rel="canonical" href={canonical} />}
 
-    <meta property="og:type" content="website" />
-    <meta property="og:site_name" content={storeName} />
-    <meta property="og:title" content={pageTitle} />
-    <meta property="og:description" content={desc} />
-    <meta property="og:url" content={canonical} />
-    {ogImage && <meta property="og:image" content={ogImage} />}
+    {!noIndex && <meta property="og:type" content="website" />}
+    {!noIndex && <meta property="og:site_name" content={storeName} />}
+    {!noIndex && <meta property="og:title" content={pageTitle} />}
+    {!noIndex && <meta property="og:description" content={desc} />}
+    {!noIndex && <meta property="og:url" content={canonical} />}
+    {!noIndex && ogImage && <meta property="og:image" content={ogImage} />}
 
-    <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />
-    <meta name="twitter:title" content={pageTitle} />
-    <meta name="twitter:description" content={desc} />
-    {ogImage && <meta name="twitter:image" content={ogImage} />}
+    {!noIndex && <meta name="twitter:card" content={ogImage ? 'summary_large_image' : 'summary'} />}
+    {!noIndex && <meta name="twitter:title" content={pageTitle} />}
+    {!noIndex && <meta name="twitter:description" content={desc} />}
+    {!noIndex && ogImage && <meta name="twitter:image" content={ogImage} />}
 
     {/* Progressive image reveal, site-wide. The marker class is added in <head>,
         before any image markup is parsed, so incomplete images start on their
