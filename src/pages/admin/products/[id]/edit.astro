@@ -19,6 +19,7 @@ import { zonesRequireWeight } from '../../../../features/shipping/calculator';
 import { formatWeightValue } from '../../../../features/shipping/weight';
 import { shippingFor } from '../../../../features/shipping/effective';
 import { getIntake, getVariantSupplierBarcodes } from '../../../../features/purkins/db';
+import { reviewPurkinsDraft } from '../../../../mcp/src/purkins-gallery';
 
 // The route param is the prod_ public ID; numeric row ids are not accepted.
 const publicId = parsePublicId(Astro.params.id, 'product');
@@ -66,6 +67,8 @@ const priceStep = 1 / minorUnitsPerMajor(product.currency);
 const major = (cents: number) => toMajorUnits(cents, product.currency);
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
+const review = intake && publicId ? await reviewPurkinsDraft(env.DB, publicId) : null;
+const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
 ---
 
 <AdminLayout title={`Edit ${product.name}`} active="products">
@@ -88,46 +91,26 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       )}
     </div>
   </div>
-  {intake && (
-    <section class="mb-6 rounded-lg border border-line bg-surface p-4">
-      <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
-      {intake.status === 'draft' && (
-        <>
-          <p class="mt-1 text-xs text-muted">
-            {intake.pricing_mode === 'manual'
-              ? 'Manual price selected: purchase cost is optional, so cost recovery may be unknown. Confirm the item is complete, attach a photo and save a positive selling price before publication.'
-              : 'Cost-based pricing: save purchase cost, any required exchange rate, selling price and a photo. Publication enforces the estimated landed-cost floor.'}
-          </p>
-          <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
-            <input type="hidden" name="request_id" value={crypto.randomUUID()} />
-            <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
-            <input type="hidden" name="confirm_publish" value="true" />
-            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
-          </form>
-        </>
-      )}
-      {intake.status === 'approved' && product.active === 1 && (
-        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
-          <input type="hidden" name="request_id" value={crypto.randomUUID()} />
-          <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
-          <input type="hidden" name="confirm_unpublish" value="true" />
-          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
-            Hide listing (keep stock and photos)
+
+  <div data-purkins-editor>
+    <nav aria-label="Product editing steps" class="mb-6 overflow-x-auto rounded-lg border border-line bg-surface p-2">
+      <div class="flex min-w-max gap-1" role="tablist" aria-label="Product editing steps">
+        {[
+          ['details', '1', 'Details'],
+          ['inventory', '2', 'Pricing & stock'],
+          ['photos', '3', 'Photos'],
+          ['variants', '4', 'Variants'],
+          ['review', '5', 'Review & publish'],
+        ].map(([step, number, label]) => (
+          <button type="button" role="tab" data-editor-tab={step}
+            aria-controls={`editor-pane-${step}`} aria-selected="false"
+            class="rounded-md px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-white hover:text-brand aria-selected:bg-white aria-selected:text-brand aria-selected:shadow-sm">
+            <span class="mr-1 text-xs text-gray-400">{number}.</span> {label}
           </button>
-        </form>
-      )}
-      {purgeRetryId && purgeRetryRevision && (purgeRetryAction === 'publish' || purgeRetryAction === 'unpublish') && (
-        <form method="POST" action={`/api/admin/products/${product.public_id}/${purgeRetryAction === 'publish' ? 'approve' : 'hide'}`} class="mt-4">
-          <input type="hidden" name="request_id" value={purgeRetryId} />
-          <input type="hidden" name="expected_catalog_revision" value={purgeRetryRevision} />
-          <input type="hidden" name={purgeRetryAction === 'publish' ? 'confirm_publish' : 'confirm_unpublish'} value="true" />
-          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
-            Retry public cache purge (do not change inventory)
-          </button>
-        </form>
-      )}
-    </section>
-  )}
+        ))}
+      </div>
+    </nav>
+    <p class="mb-4 text-xs text-muted">Save details, pricing and variants with <strong>Save changes</strong>. Photos save immediately. Use Review & publish when ready.</p>
   <ProductForm
     action={`/api/admin/products/${product.public_id}`}
     submitLabel="Save changes"
@@ -143,32 +126,32 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     weightRequired={weightRequired}
   />
 
-  <section id="gallery" class="mt-12 scroll-mt-20 border-t border-line pt-8">
+  <section id="editor-pane-photos" data-editor-pane="photos" class="scroll-mt-20 border-t border-line pt-6">
+    <span id="gallery" class="sr-only" aria-hidden="true"></span>
     <div class="mb-4 flex items-baseline justify-between gap-3">
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Images</h2>
       <span class="text-xs text-gray-400">Changes here save automatically</span>
     </div>
 
-    <form
+    <form data-photo-quick-upload
       method="POST"
       action={`/api/admin/products/${product.public_id}/images`}
-      enctype="multipart/form-data"
-      class="mb-6 flex flex-wrap items-center gap-3"
+      enctype="multipart/form-data" class="mb-6"
     >
       <input type="hidden" name="_action" value="add" />
-      <input
-        type="file"
-        name="images"
-        accept="image/*"
-        multiple
-        class="block w-full text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-xs file:font-medium file:uppercase file:tracking-wider file:text-white hover:file:bg-brand-hover sm:w-auto"
-      />
-      <button
-        type="submit"
-        class="rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:border-brand hover:text-brand"
-      >
-        Add images
-      </button>
+      <label data-photo-dropzone for="product-photos"
+        class="block cursor-pointer rounded-lg border-2 border-dashed border-line bg-surface px-6 py-8 text-center hover:border-brand hover:bg-white focus-within:border-brand">
+        <span class="block text-base font-semibold">Drop photos here, or choose files</span>
+        <span class="mt-1 block text-xs text-muted">JPEG, PNG, WebP or GIF · up to 5 MB each. Photos are optimized automatically.</span>
+        <input id="product-photos" type="file" name="images"
+          accept="image/jpeg,image/png,image/webp,image/gif" multiple
+          class="mt-4 block w-full text-sm file:mr-2 file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-white sm:mx-auto sm:w-auto"
+        />
+      </label>
+      <p data-photo-upload-status role="status" aria-live="polite" class="mt-3 text-sm text-muted">
+        Choose photos once; they upload automatically and the first becomes your main photo.
+      </p>
+      <button type="submit" data-photo-upload-fallback class="mt-3 rounded-md border border-line px-4 py-2 text-sm">Upload selected photos</button>
     </form>
 
     {/* Reuse a file already in the library. The picker is outside the upload
@@ -295,7 +278,8 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     }
   </section>
 
-  <section id="options" class="mt-12 scroll-mt-20 border-t border-line pt-8">
+  <section id="editor-pane-variants" data-editor-pane="variants" class="scroll-mt-20 border-t border-line pt-6">
+    <span id="options" class="sr-only" aria-hidden="true"></span>
     <div class="mb-5">
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Variants &amp; add-ons</h2>
       <p class="mt-1 max-w-prose text-xs text-gray-500">
@@ -580,6 +564,67 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       </button>
     </div>
   </section>
+
+
+  <section id="editor-pane-review" data-editor-pane="review" class="scroll-mt-20 border-t border-line pt-6">
+    <h2 class="font-serif text-2xl">Review &amp; publish</h2>
+    <p class="mt-2 text-sm text-muted">Preview the listing exactly as shoppers will see it. Only you can see unpublished drafts.</p>
+    <a href={`/admin/products/${product.public_id}/preview`} target="_blank" rel="noopener"
+      class="mt-4 inline-block rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand">Open private preview ↗</a>
+    {intake && reviewBlockers.length > 0 && (
+      <div class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
+        <h3 class="font-semibold">Complete these before publishing</h3>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+          {reviewBlockers.map(blocker=><li>{blocker}</li>)}
+        </ul>
+      </div>
+    )}
+    {intake && reviewBlockers.length === 0 && (
+      <p class="mt-5 text-sm font-semibold text-green-700">Ready for your approval. Publication rechecks the live details.</p>
+    )}
+  {intake && (
+    <section class="mb-6 rounded-lg border border-line bg-surface p-4">
+      <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
+      {intake.status === 'draft' && (
+        <>
+          <p class="mt-1 text-xs text-muted">
+            {intake.pricing_mode === 'manual'
+              ? 'Manual price selected: purchase cost is optional, so cost recovery may be unknown. Confirm the item is complete, attach a photo and save a positive selling price before publication.'
+              : 'Cost-based pricing: save purchase cost, any required exchange rate, selling price and a photo. Publication enforces the estimated landed-cost floor.'}
+          </p>
+          <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
+            <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+            <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+            <input type="hidden" name="confirm_publish" value="true" />
+            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
+          </form>
+        </>
+      )}
+      {intake.status === 'approved' && product.active === 1 && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
+          <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+          <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+          <input type="hidden" name="confirm_unpublish" value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Hide listing (keep stock and photos)
+          </button>
+        </form>
+      )}
+      {purgeRetryId && purgeRetryRevision && (purgeRetryAction === 'publish' || purgeRetryAction === 'unpublish') && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/${purgeRetryAction === 'publish' ? 'approve' : 'hide'}`} class="mt-4">
+          <input type="hidden" name="request_id" value={purgeRetryId} />
+          <input type="hidden" name="expected_catalog_revision" value={purgeRetryRevision} />
+          <input type="hidden" name={purgeRetryAction === 'publish' ? 'confirm_publish' : 'confirm_unpublish'} value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Retry public cache purge (do not change inventory)
+          </button>
+        </form>
+      )}
+    </section>
+  )}
+
+  </section>
+  </div>
 
   {/* Progressive enhancement: every gallery action runs via fetch (no reload, no
       jump). The plain form POSTs are the no-JS fallback (they redirect to
