@@ -193,6 +193,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
                 />
                 <span
                   data-primary-badge
+                  hidden={img.image_key !== product.image_key}
                   title="Primary image"
                   class="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] text-white ring-2 ring-paper"
                 >
@@ -650,6 +651,26 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
       const action = list.dataset.action || '';
       const rows = () =>
         Array.from(list.children).filter((el) => el instanceof HTMLElement);
+      // Keep the main-image marker and reorder actions truthful after edits,
+      // even when gallery actions update without a full-page reload.
+      const refreshActions = () => {
+        const current = rows();
+        current.forEach((item, index) => {
+          for (const [selector, hide] of [
+            ['[data-primary-badge]', index !== 0],
+            ['[data-make-primary]', index === 0],
+            ['[data-up]', index === 0],
+            ['[data-down]', index === current.length - 1],
+          ]) {
+            const element = item.querySelector(selector);
+            if (element instanceof HTMLElement) {
+              element.hidden = hide;
+              element.style.display = hide ? 'none' : '';
+            }
+          }
+        });
+      };
+      refreshActions();
       const send = (params) =>
         fetch(action, {
           method: 'POST',
@@ -657,6 +678,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
           body: new URLSearchParams(params),
         });
       const persistOrder = () => {
+        refreshActions();
         const p = new URLSearchParams();
         p.set('_action', 'reorder');
         for (const li of rows()) p.append('order', li.dataset.imageId || '');
@@ -707,6 +729,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
           if (!confirm('Delete this image?')) return;
           await send({ _action: 'delete', image_id: li.dataset.imageId });
           li.remove();
+          refreshActions();
         } else if (type === 'alt') {
           await send(new FormData(form));
           const btn = form.querySelector('button[type="submit"]');
