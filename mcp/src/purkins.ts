@@ -105,6 +105,7 @@ export async function stockView(db: D1Database, product: Product) {
     description: product.description, stock: variants.length ? variants.filter((v) => v.active === 1).reduce((sum, v) => sum + v.stock, 0) : product.stock,
     price_cents: product.price_cents, currency: product.currency,
     stock_revision: (product as Product & {mcp_stock_revision?: number}).mcp_stock_revision ?? 0,
+    catalog_revision: (product as Product & {mcp_catalog_revision?: number}).mcp_catalog_revision ?? 0,
     active: product.active === 1, intake: privateIntake,
     variants: variants.map((v) => ({
       id: v.public_id, label: v.label, sku: v.sku, stock: v.stock,
