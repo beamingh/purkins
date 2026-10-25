@@ -10,7 +10,7 @@ import {
   createGuardedStockDraft, adjustGuardedDraftStock, type StockDraftInput,
 } from './stockGuard';
 
-const actor = 'owner:access:owner@example.com';
+const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const uuid = () => crypto.randomUUID();
 const form = new FormData();
 form.set('pricing_mode', 'manual');
