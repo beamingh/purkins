@@ -91,8 +91,13 @@ describe('MCP publish/hide guard against real isolated D1',()=>{
     expect(purge).toHaveBeenCalledTimes(1);
     expect(await applyGuardedPublication(db,'owner:bearer','publish',pub,purge))
       .toMatchObject({ok:false,conflict:true});
+    expect(await applyGuardedPublication(db,actor,'unpublish',{
+      request_id:uuid(),product_id:product,
+      expected_catalog_revision:(await state())!.revision,
+    },purge)).toMatchObject({ok:false,conflict:true});
+    expect(await state()).toMatchObject({active:1,status:'approved'});
     const hide={request_id:uuid(),product_id:product,
-      expected_catalog_revision:(await state())!.revision};
+      expected_catalog_revision:(await state())!.revision,confirm_unpublish:true};
     expect(await applyGuardedPublication(db,actor,'unpublish',hide,purge))
       .toMatchObject({ok:true,published:false,cache_purged:true});
     expect(await state()).toMatchObject({active:0,status:'draft'});
@@ -108,7 +113,7 @@ describe('MCP publish/hide guard against real isolated D1',()=>{
   it('reports committed-but-not-purged, then safely retries only cache invalidation',async()=>{
     const hidden=await applyGuardedPublication(db,actor,'unpublish',{
       request_id:uuid(),product_id:product,
-      expected_catalog_revision:(await state())!.revision,
+      expected_catalog_revision:(await state())!.revision,confirm_unpublish:true,
     },vi.fn(async()=>{}));
     expect(hidden).toMatchObject({ok:true,published:false,cache_purged:true});
     const input={request_id:uuid(),product_id:product,
