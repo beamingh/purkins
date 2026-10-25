@@ -38,8 +38,8 @@ function createTemplateRepository(root) {
     readFileSync(new URL('../../scripts/themes.mjs', import.meta.url), 'utf8'),
   );
   writeFileSync(
-    join(repository, '.github', 'workflows', 'verify.yml'),
-    readFileSync(new URL('../../.github/workflows/verify.yml', import.meta.url), 'utf8'),
+    join(repository, '.github', 'workflows', 'checks.yml'),
+    readFileSync(new URL('../../.github/workflows/checks.yml', import.meta.url), 'utf8'),
   );
   writeFileSync(
     join(repository, 'src', 'themes', 'default', 'ProductCard.astro'),
@@ -212,8 +212,10 @@ test('the generated repository CI matrix discovers every theme it carries', () =
   // The workflow must derive its matrix, not enumerate upstream's themes: a
   // hardcoded list can never contain a merchant's own theme, so the store's
   // retained shipped themes would break without CI noticing.
-  const workflow = readFileSync(join(result.target, '.github/workflows/verify.yml'), 'utf8');
+  const workflow = readFileSync(join(result.target, '.github/workflows/checks.yml'), 'utf8');
+  assert.equal(workflow.includes('workflow_dispatch:'), true);
   assert.equal(workflow.includes('discoverThemeIds'), true);
+  assert.equal(workflow.includes('fromJSON(needs.discover-themes.outputs.theme_matrix)'), true);
   assert.equal(workflow.includes('theme: [market, studio]'), false);
 
   // Run THE SAME discovery command the workflow runs, inside the generated
