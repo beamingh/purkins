@@ -157,7 +157,10 @@ export async function removeIntake(db: D1Database, productId: number): Promise<v
   await db.prepare('DELETE FROM purkins_intake WHERE product_id=?').bind(productId).run();
 }
 
-export async function approveIntake(
+/** Shared authoritative checks for Admin approval and guarded MCP publication.
+ * Only validation: callers MUST repeat a catalog revision check in the atomic
+ * state transition, to reject concurrent edits after this read. */
+export async function checkIntakeForApproval(
   db: D1Database,
   productId: number,
 ): Promise<string | null> {
@@ -197,6 +200,15 @@ export async function approveIntake(
     return 'An active variant price is below the estimated landed cost.';
   }
 
+  return null;
+}
+
+/** Existing protected Admin approval; MCP uses a separate revision/receipt guard. */
+export async function approveIntake(
+  db: D1Database, productId: number,
+): Promise<string | null> {
+  const validation = await checkIntakeForApproval(db, productId);
+  if (validation) return validation;
   // Batch is transactional. Approval status and public visibility move together.
   await db.batch([
     db.prepare("UPDATE purkins_intake SET status='approved', updated_at=datetime('now') WHERE product_id=?")
