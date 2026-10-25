@@ -32,7 +32,7 @@ describe('Purkins guided product editing', () => {
     expect(edit).toContain('form="product-form"');
     expect(edit).toContain('data-editor-pane="variants"');
     expect(post).toContain('const editUrl =');
-    expect(post).toContain('return redirect(editUrl, 303)');
+    expect(post).toContain('return redirect(`${editUrl}&saved=1`, 303)');
     expect(post).toContain('const editStep =');
     expect(edit).toContain("editor.addEventListener('invalid'");
   });
