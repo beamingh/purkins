@@ -55,7 +55,7 @@ describe('cross-platform Bash launcher', () => {
   it('routes npm shell scripts through this launcher instead of PATH bash', () => {
     const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
     for (const command of Object.values(pkg.scripts)) {
-      expect(command).not.toMatch(/(?:^|&&\\s*)bash\\s/);
+      expect(command).not.toMatch(/(?:^|&&\s*)bash\s/);
     }
     expect(pkg.scripts['test:integration']).toContain(
       'node scripts/run-bash-script.mjs test/integration/d1-integration.sh',
