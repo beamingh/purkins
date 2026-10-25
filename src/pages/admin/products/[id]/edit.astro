@@ -35,6 +35,7 @@ const images = await listProductImages(env.DB, product.id);
 const intake = await getIntake(env.DB, product.id);
 const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
+const justSaved = Astro.url.searchParams.get('saved') === '1';
 const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
 const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
 const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
@@ -111,6 +112,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
       </div>
     </nav>
     <p class="mb-4 text-xs text-muted">Save details, pricing and variants with <strong>Save changes</strong>. Photos save immediately. Use Review & publish when ready.</p>
+    {justSaved && <p role="status" class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Changes saved. Continue to the next step whenever you’re ready.</p>}
   <ProductForm
     action={`/api/admin/products/${product.public_id}`}
     submitLabel="Save changes"
@@ -575,7 +577,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
     <p class="mt-2 text-sm text-muted">Preview the listing exactly as shoppers will see it. Only you can see unpublished drafts.</p>
     <a href={`/admin/products/${product.public_id}/preview`} target="_blank" rel="noopener"
       class="mt-4 inline-block rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand">Open private preview ↗</a>
-    {intake && reviewBlockers.length > 0 && (
+    {intake?.status === 'draft' && reviewBlockers.length > 0 && (
       <div class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
         <h3 class="font-semibold">Complete these before publishing</h3>
         <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
@@ -583,7 +585,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
         </ul>
       </div>
     )}
-    {intake && reviewBlockers.length === 0 && (
+    {intake?.status === 'draft' && reviewBlockers.length === 0 && (
       <p class="mt-5 text-sm font-semibold text-green-700">Ready for your approval. Publication rechecks the live details.</p>
     )}
   {intake && (
