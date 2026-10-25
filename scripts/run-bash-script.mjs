@@ -3,7 +3,7 @@
 // Windows MUST invoke Git for Windows directly: plain "bash" may launch WSL.
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { dirname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { isAbsolute, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveBashExecutable } from './bash-executable.mjs';
 
