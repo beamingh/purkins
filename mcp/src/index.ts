@@ -716,7 +716,18 @@ export default {
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
       Object.assign(ctx, { props: { operator, actor, readOnly, toolPermissions } satisfies SessionProps });
-      return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
+      // Remove the URL credential before passing the request to the DO transport.
+      const transportRequest=urlCredential.kind==='token'
+        ? new Request(urlCredential.sanitizedUrl,request) : request;
+      const response=await StoreMcp.serve('/mcp', { binding: 'STORE_MCP' })
+        .fetch(transportRequest, env, ctx);
+      if(urlCredential.kind!=='token')return response;
+      const headers=new Headers(response.headers);
+      headers.set('cache-control','private, no-store');
+      headers.set('referrer-policy','no-referrer');
+      return new Response(response.body,{
+        status:response.status,statusText:response.statusText,headers,
+      });
     }
 
     return new Response(
