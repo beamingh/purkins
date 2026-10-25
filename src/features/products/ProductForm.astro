@@ -95,6 +95,9 @@ const inputClass =
     )
   }
 
+  {/* These panes are only toggled by the guided Purkins editor. On all other
+      product pages they remain visible, preserving one complete form submit. */}
+  <div id="editor-pane-details" data-editor-pane="details" class="space-y-4">
   <div>
     <label class="block text-sm font-medium" for="name">Name</label>
     <input id="name" name="name" type="text" required value={product?.name ?? ''} class={inputClass} />
@@ -127,6 +130,8 @@ const inputClass =
       <p class="mt-1 text-xs text-gray-500">Plain text or Markdown — paragraphs, lists, links, and <code>/images/…</code> media render on the product page.</p>
   </div>
 
+  </div>
+  <div id="editor-pane-inventory" data-editor-pane="inventory" class="space-y-4">
   {intakeEnabled && (
     <section class="rounded-lg border border-line bg-surface p-4 space-y-2" aria-label="Selling price method">
       <label class="block text-sm font-semibold" for="pricing_mode">How do you want to price this item?</label>
@@ -370,9 +375,10 @@ const inputClass =
     {intakeEnabled && <span class="text-xs text-muted">Purkins items are published only through price approval after saving.</span>}
   </label>
 
+  </div>
   <input type="hidden" name="currency" value={defaultCurrency} />
 
-  <div class="flex gap-3 pt-2">
+  <div data-editor-save class="flex flex-wrap gap-3 pt-4 border-t border-line">
     {intakeDesk ? (
       <>
         <button type="submit" name="after_create" value="next" class="rounded-md bg-brand px-5 py-2 font-medium text-on-brand hover:bg-brand-hover">
