@@ -4,6 +4,8 @@ import { registerPurkinsTools, registerGuardedPurkinsStockTools, registerGuarded
 import { registerPurkinsMediaTools } from './purkins-media';
 import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
+import { registerGuardedPublicationTools } from './purkins-publication';
+import { publicStorefrontCachePurger } from '../../src/features/mcp/publicCachePurge';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
@@ -345,6 +347,8 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_STOCK_WRITES_ENABLED?: string;
       PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
       PURKINS_MCP_GALLERY_WRITES_ENABLED?: string;
+      PURKINS_MCP_PUBLICATION_WRITES_ENABLED?: string;
+      PURKINS_MCP_CACHE_PURGE_SECRET?: string;
     };
     const allowWrites = canWriteAsOperator(this.props, writeEnv.PURKINS_MCP_WRITES_ENABLED);
     // Old stock/product/order/image mutators do not yet have durable per-request
@@ -380,6 +384,14 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       writeEnv.PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true' &&
       Boolean(this.props.actor);
     registerLocationTools(scopedServer, db, allowLocationWrites, this.props.actor);
+    const allowPublicationWrites = allowWrites &&
+      writeEnv.PURKINS_MCP_PUBLICATION_WRITES_ENABLED === 'true' &&
+      Boolean(this.props.actor);
+    const publicationCachePurge = publicStorefrontCachePurger(
+      this.env.STOREFRONT_URL, writeEnv.PURKINS_MCP_CACHE_PURGE_SECRET,
+    );
+    registerGuardedPublicationTools(scopedServer, db, allowPublicationWrites,
+      this.props.actor, publicationCachePurge);
     registerCategoryTools(scopedServer, db);
 
     // --- reads ---
