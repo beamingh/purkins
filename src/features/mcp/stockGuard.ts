@@ -1,3 +1,4 @@
+import { requireVerifiedOwnerActorShape } from './ownerActor';
 import type { D1Database } from '@cloudflare/workers-types';
 import { generatePublicId, parsePublicId } from '../ids/publicId';
 import { slugify } from '../products/slug';
@@ -42,11 +43,7 @@ export interface StockAdjustInput {
 }
 
 function validatedActor(actor: string): string {
-  if (!actor || actor.length > 254 ||
-      !(actor === 'owner:bearer' || /^owner:access:[^\s@]+@[^\s@]+$/.test(actor))) {
-    throw new Error('A verified owner actor is required.');
-  }
-  return actor;
+  return requireVerifiedOwnerActorShape(actor);
 }
 function requestId(input: string): string {
   if (!UUID_V4.test(input)) throw new Error('Use a valid UUIDv4 request_id.');
