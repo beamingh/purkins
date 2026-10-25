@@ -247,5 +247,5 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   }
 
   await purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
-  return redirect(editUrl, 303);
+  return redirect(`${editUrl}&saved=1`, 303);
 };
