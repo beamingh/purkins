@@ -85,6 +85,17 @@ export function hasWritePermissions(names:readonly string[]):boolean{
 export function canCreateCheckout(props:{readOnly?:boolean}|null|undefined):boolean{
   return props?.readOnly!==true;
 }
+
+/** Owner-issued tokens need explicit global write opt-in even for the public
+ * checkout creation tool; legacy shoppers/clients keep existing behavior. */
+export function canCreateScopedCheckout(
+  props:{readOnly?:boolean;toolPermissions?:readonly string[]}|null|undefined,
+  globalWriteFlag:string|undefined,
+):boolean{
+  return canCreateCheckout(props) && (
+    !props?.toolPermissions || globalWriteFlag==='true'
+  );
+}
 export function canWriteAsOperator(
   props:{readOnly?:boolean}|null|undefined, globalWriteFlag:string|undefined,
 ):boolean{
