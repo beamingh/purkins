@@ -34,6 +34,9 @@ const images = await listProductImages(env.DB, product.id);
 const intake = await getIntake(env.DB, product.id);
 const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
+const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
+const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
+const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
 
 // Variants + extras (show all, including any inactive, so the admin sees everything).
 const variants = await listVariants(env.DB, product.id, true);
@@ -91,6 +94,26 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
             <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
           </form>
         </>
+      )}
+      {intake.status === 'approved' && product.active === 1 && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
+          <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+          <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+          <input type="hidden" name="confirm_unpublish" value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Hide listing (keep stock and photos)
+          </button>
+        </form>
+      )}
+      {purgeRetryId && purgeRetryRevision && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
+          <input type="hidden" name="request_id" value={purgeRetryId} />
+          <input type="hidden" name="expected_catalog_revision" value={purgeRetryRevision} />
+          <input type="hidden" name="confirm_unpublish" value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Retry public cache purge (do not change inventory)
+          </button>
+        </form>
       )}
     </section>
   )}
