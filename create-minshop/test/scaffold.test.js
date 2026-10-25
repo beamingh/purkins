@@ -105,7 +105,12 @@ test('scaffolds a clean storefront repository', () => {
     stdio: 'pipe',
   });
 
-  assert.equal(readFileSync(join(result.target, 'store.txt'), 'utf8'), 'storefront\n');
+  // Git for Windows may convert text fixtures to CRLF on clone (core.autocrlf).
+  // This test protects scaffold CONTENT, not the platform's checkout line endings.
+  assert.equal(
+    readFileSync(join(result.target, 'store.txt'), 'utf8').replace(/\r\n/g, '\n'),
+    'storefront\n',
+  );
   assert.equal(readFileSync(join(result.target, 'package.json'), 'utf8').includes('minshop'), true);
   assert.equal(spawnSync('git', ['rev-parse', '--is-inside-work-tree'], {
     cwd: result.target,
