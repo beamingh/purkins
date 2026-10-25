@@ -26,9 +26,15 @@ function setStringVar(source, name, desired, checkPrevious = null) {
     }
     return source.replace(re, (_full, before, _previous, after) => before + desired + after);
   }
-  const anchor = /"PURKINS_MCP_WRITES_ENABLED"\s*:\s*"true"\s*,/;
+  // Some original permanent configurations end the vars object with the
+  // global write flag: its line has NO trailing comma. Insert new variables
+  // BEFORE that line rather than requiring a comma after its value. This also
+  // preserves the original property order, indentation and trailing comments.
+  const anchor = /^([ \t]*)("PURKINS_MCP_WRITES_ENABLED"[ \t]*:[ \t]*"true")(?=[ \t]*(?:,|\/\/|[\r\n}]|$))/m;
   if (!anchor.test(source)) throw new Error('Missing global MCP write variable insertion point.');
-  return source.replace(anchor, whole => whole + '\n    "' + name + '": "' + desired + '",');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  return source.replace(anchor, (_whole, indent, setting) =>
+    indent + '"' + name + '": "' + desired + '",' + newline + indent + setting);
 }
 
 export function configureGuardedMcpWrites(source) {

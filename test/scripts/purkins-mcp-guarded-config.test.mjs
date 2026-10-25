@@ -25,6 +25,25 @@ describe('permanent Purkins guarded MCP config',()=>{
     expect(config.vars.PURKINS_MCP_LEGACY_WRITES_ENABLED).toBe('false');
     for(const name of flagNames)expect(config.vars[name]).toBe('true');
   });
+  it('upgrades a pre-scope Admin config whose global flag is the final vars entry with no comma',()=>{
+    const olderAdmin = [
+      '{',
+      '  "name": "purkins-admin",',
+      '  "vars": {',
+      '    "STORE_NAME": "Purkins",',
+      '    "PURKINS_MCP_WRITES_ENABLED": "true"',
+      '  },',
+      '  "workers_dev": false',
+      '}',
+    ].join('\n');
+    const upgraded = configureGuardedMcpWrites(olderAdmin);
+    const vars = JSON.parse(upgraded).vars;
+    expect(vars.STOREFRONT_URL).toBe('https://purkins.ulwimbo.com');
+    expect(vars.PURKINS_MCP_WRITES_ENABLED).toBe('true');
+    expect(vars.PURKINS_MCP_LEGACY_WRITES_ENABLED).toBe('false');
+    for(const name of flagNames)expect(vars[name]).toBe('true');
+    expect(configureGuardedMcpWrites(upgraded)).toBe(upgraded);
+  });
   it('handles modern generated JSONC and keeps writes opt-in',()=>{
     const src=readFileSync(fileURLToPath(new URL('../../wrangler.admin.template.jsonc',import.meta.url)),'utf8');
     expect(src).toContain('"STOREFRONT_URL": "https://purkins.ulwimbo.com"');
