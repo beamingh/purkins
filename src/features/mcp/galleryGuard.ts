@@ -1,3 +1,4 @@
+import { requireVerifiedOwnerActorShape } from './ownerActor';
 import type { D1Database } from '@cloudflare/workers-types';
 import { generatePublicId, parsePublicId } from '../ids/publicId';
 
@@ -27,11 +28,7 @@ export type GalleryWriteResult =
   | { ok: false; conflict: boolean; error: string };
 
 function ownerActor(actor: string): string {
-  if (!actor || actor.length > 254 ||
-    !(actor === 'owner:bearer' || /^owner:access:[^\s@]+@[^\s@]+$/.test(actor))) {
-    throw new Error('Authenticated Purkins owner identity is required.');
-  }
-  return actor;
+  return requireVerifiedOwnerActorShape(actor);
 }
 function keyOf(value: string): string {
   if (!UUID_V4.test(value)) throw new Error('Use a UUIDv4 request_id for each change.');

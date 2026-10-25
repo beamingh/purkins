@@ -6,7 +6,7 @@ import { splitPurkinsMigrationSql } from '../purkins/migration-test-sql';
 import { applyGuardedGalleryMutation } from './galleryGuard';
 import { reviewPurkinsDraft } from '../../../mcp/src/purkins-gallery';
 
-const actor='owner:access:owner@example.com';
+const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const key=()=>crypto.randomUUID();
 const product='prod_0123456789';
 const otherProduct='prod_abcdefghjk';

@@ -1,3 +1,4 @@
+import { requireVerifiedOwnerActorShape } from './ownerActor';
 import type { D1Database } from '@cloudflare/workers-types';
 import { generatePublicId } from '../ids/publicId';
 import { slugify } from '../products/slug';
@@ -124,11 +125,7 @@ function normalizeItem(input: ClothingDraftInput): NormalizedItem {
   };
 }
 function owner(actor: string): string {
-  if (actor.length > 254 ||
-      !(actor === 'owner:bearer' || /^owner:access:[^\s@]+@[^\s@]+$/.test(actor))) {
-    throw Error('Verified owner identity is required.');
-  }
-  return actor;
+  return requireVerifiedOwnerActorShape(actor);
 }
 async function hashPayload(item: NormalizedItem): Promise<string> {
   const text = JSON.stringify({
