@@ -20,7 +20,13 @@ describe('Purkins guided product editing', () => {
     expect(edit).toContain('aria-controls={`editor-pane-${step}`}');
     expect(edit).toContain('role="tablist"');
     expect(edit).toContain('Preview listing');
-    expect(edit).toContain("from '../../../../../mcp/src/purkins-gallery'");
+    expect(edit).toContain("from '../../../../features/purkins/draftReview'");
+    expect(edit).not.toMatch(/from\s+['"][^'"]*mcp\/src\//);
+    const review = source('src/features/purkins/draftReview.ts');
+    const mcp = source('mcp/src/purkins-gallery.ts');
+    expect(review).toContain('export async function reviewPurkinsDraft');
+    expect(mcp).toContain("from '../../src/features/purkins/draftReview'");
+    expect(mcp).not.toContain('export async function reviewPurkinsDraft');
     expect(edit).toContain('refreshActions()');
   });
 
