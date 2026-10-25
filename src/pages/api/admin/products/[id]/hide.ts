@@ -41,7 +41,7 @@ export const POST:APIRoute=async({request,params,redirect,locals})=>{
     if(!result.cache_purged){
       const params=new URLSearchParams({
         error:'Product hidden in inventory but public cache purge is incomplete. Retry below.',
-        purge_request_id:request_id,purge_revision:String(revision),
+        purge_request_id:request_id,purge_revision:String(revision),purge_action:'unpublish',
       });
       return redirect(`/admin/products/${product_id}/edit?`+params,303);
     }
