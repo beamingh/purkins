@@ -85,6 +85,8 @@ const requestId=crypto.randomUUID();
 const permissionGroups=[...new Set(MCP_TOOL_PERMISSIONS.map(item=>item.group))];
 const defaultTools=new Set<string>(MCP_OWNER_READ_TOOLS);
 const mcpEndpoint=`${Astro.url.origin}/mcp`;
+const oneTimeConnectionUrl = revealedToken
+  ? mcpEndpoint+'?token='+encodeURIComponent(revealedToken) : null;
 ---
 
 <AdminLayout title="MCP connections" active="mcp">
@@ -106,7 +108,7 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     <section class="mb-8 rounded-lg border-2 border-amber-400 bg-amber-50 p-5" aria-labelledby="one-time-title">
       <h2 id="one-time-title" class="font-serif text-xl">Your token — visible only once</h2>
       <p class="mt-2 text-sm text-amber-900">
-        Copy it now and store it privately. Do not post it in chat, add it to a URL, or commit it to Git.
+        Copy it now and store it privately. Never post it in chat or commit it to Git. The combined connection URL below is also a secret; anyone who obtains it can use its granted tools until expiry or revocation.
         Reloading this page will hide it permanently; if it is lost, revoke it and generate another.
       </p>
       <div class="mt-4 flex flex-col gap-3">
@@ -117,6 +119,17 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
           class="self-start rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white">
           Copy token
         </button>
+        {oneTimeConnectionUrl&&(
+          <>
+            <label for="mcp-one-time-url" class="text-xs font-semibold uppercase tracking-wide">Combined MCP connection URL</label>
+            <textarea id="mcp-one-time-url" readonly rows="4" spellcheck="false"
+              class="w-full resize-none break-all rounded border border-amber-300 bg-white p-3 font-mono text-xs">{oneTimeConnectionUrl}</textarea>
+            <button type="button" id="copy-mcp-url"
+              class="self-start rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white">
+              Copy connection URL
+            </button>
+          </>
+        )}
       </div>
     </section>
   )}
@@ -125,13 +138,15 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     <h2 id="endpoint-title" class="font-serif text-xl">Connection details</h2>
     <dl class="mt-4 grid gap-3 text-sm">
       <div><dt class="font-semibold">MCP endpoint</dt><dd class="mt-1 break-all font-mono text-xs">{mcpEndpoint}</dd></div>
-      <div><dt class="font-semibold">Authentication</dt><dd class="mt-1">Authorization: Bearer &lt;token&gt;, plus any Cloudflare Access policy required by your client</dd></div>
+      <div><dt class="font-semibold">Authentication</dt><dd class="mt-1">For compatible MCP clients: ?token=&lt;generated pmcp_ token&gt; (Ulwimbo-compatible ?mcp_token= is also supported). Alternatively, Authorization: Bearer &lt;token&gt;. Cloudflare Access protection must permit the MCP route.</dd></div>
       <div><dt class="font-semibold">Client capabilities</dt><dd class="mt-1">Selectable individual MCP tools, with a read-only default and Full permissions shortcut. Write tools also require enabled Worker-level scope switches.</dd></div>
     </dl>
     <p class="mt-4 text-sm text-amber-900">
-      Important: These bearer tokens are not OAuth authorization codes. ChatGPT's custom
-      connector may still require Cloudflare Access Managed OAuth; do not assume a generated
-      token alone bypasses the Access login or enables direct ChatGPT connection.
+      Token-in-URL connections do not require OAuth discovery. Treat the full URL like a password:
+      avoid sharing it, bookmarking it or using it in a normal browser. Query credentials can
+      appear in proxy/access logs. A Cloudflare Access policy protecting the entire Worker
+      will still block token-only clients before they reach MCP; that policy must be scoped
+      appropriately without exposing the Admin dashboard.
     </p>
   </section>
 
@@ -302,6 +317,17 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     });
   });
   updateCount();
+  document.getElementById('copy-mcp-url')?.addEventListener('click',async()=>{
+    const textarea=document.getElementById('mcp-one-time-url') as HTMLTextAreaElement|null;
+    if(!textarea)return;
+    try{
+      await navigator.clipboard.writeText(textarea.value);
+      const button=document.getElementById('copy-mcp-url');
+      if(button)button.textContent='Copied URL';
+    }catch{
+      textarea.select();
+    }
+  });
   document.getElementById('copy-mcp-token')?.addEventListener('click',async()=>{
     const textarea=document.getElementById('mcp-one-time-token') as HTMLTextAreaElement|null;
     if(!textarea)return;

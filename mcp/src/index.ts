@@ -8,6 +8,7 @@ import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
 import { canCreateScopedCheckout, canWriteAsOperator, type McpToolName } from '../../src/features/mcp/clientScope';
+import { extractMcpUrlToken } from '../../src/features/mcp/urlToken';
 import { filterMcpToolRegistrations } from './tool-filter';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
@@ -616,7 +617,14 @@ export default {
       // MCP_TOKEN unset means the operator tier is unavailable — the store can still
       // sell to agents. That is a deliberate change from failing the whole server
       // closed: the buyer tier exposes nothing the public JSON API does not.
-      const auth = request.headers.get('Authorization');
+      const urlCredential=extractMcpUrlToken(request);
+      if(urlCredential.kind==='invalid')return new Response(
+        'Invalid MCP connection URL authentication.',{
+          status:401,headers:{'cache-control':'no-store','referrer-policy':'no-referrer'},
+        },
+      );
+      const auth = urlCredential.kind==='token'
+        ? urlCredential.bearer : request.headers.get('Authorization');
       const accessJwt = request.headers.get('Cf-Access-Jwt-Assertion');
       const accessEnv = env as Env & {
         CF_ACCESS_TEAM_DOMAIN?: string;
@@ -708,7 +716,19 @@ export default {
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
       Object.assign(ctx, { props: { operator, actor, readOnly, toolPermissions } satisfies SessionProps });
-      return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
+      // Remove the URL credential before passing the request to the DO transport.
+      const transportRequest=urlCredential.kind==='token'
+        ? new Request(urlCredential.sanitizedUrl,request) : request;
+      const response=await StoreMcp.serve('/mcp', { binding: 'STORE_MCP' })
+        .fetch(transportRequest, env, ctx);
+      // A WebSocket upgrade response (101) cannot be re-wrapped.
+      if(urlCredential.kind!=='token' || response.status===101)return response;
+      const headers=new Headers(response.headers);
+      headers.set('cache-control','private, no-store');
+      headers.set('referrer-policy','no-referrer');
+      return new Response(response.body,{
+        status:response.status,statusText:response.statusText,headers,
+      });
     }
 
     return new Response(
