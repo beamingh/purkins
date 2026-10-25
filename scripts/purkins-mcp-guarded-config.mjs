@@ -55,3 +55,17 @@ export function configureGuardedMcpWrites(source) {
   }
   return next;
 }
+
+/**
+ * Publication has its OWN explicitly confirmed local kill switch. Never
+ * silently enable it when ordinary draft/photo/location writes are enabled.
+ * Full MCP token permissions are not sufficient to bypass this gate.
+ */
+export function configurePublicationMcpWrite(source, enabled) {
+  const globals = [...source.matchAll(/"PURKINS_MCP_WRITES_ENABLED"\\s*:\\s*"([^"]*)"/g)];
+  if(globals.length!==1 || globals[0][1]!=='true'){
+    throw new Error('Global MCP writes must be explicitly enabled before publication.');
+  }
+  return setStringVar(source,'PURKINS_MCP_PUBLICATION_WRITES_ENABLED',
+    enabled ? 'true' : 'false',previous=>previous==='true'||previous==='false');
+}
