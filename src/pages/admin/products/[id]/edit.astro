@@ -69,7 +69,7 @@ const major = (cents: number) => toMajorUnits(cents, product.currency);
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
 const review = intake && publicId ? await reviewPurkinsDraft(env.DB, publicId) : null;
-const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
+const reviewBlockers: string[] = review && 'blockers' in review ? (review.blockers ?? []) : [];
 ---
 
 <AdminLayout title={`Edit ${product.name}`} active="products">
