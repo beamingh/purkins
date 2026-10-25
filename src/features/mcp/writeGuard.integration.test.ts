@@ -6,7 +6,7 @@ import { splitPurkinsMigrationSql } from '../purkins/migration-test-sql';
 import { createGuardedLocation, moveGuardedLocation } from './writeGuard';
 import { getLocation, listLocationTree, moveLocation } from '../purkins/locations';
 
-const actor = 'owner:access:owner@example.com';
+const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const uuid = () => crypto.randomUUID();
 
 describe('MCP location write guard against real isolated D1', () => {
