@@ -7,7 +7,8 @@ import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
-import { canCreateCheckout, canWriteAsOperator } from '../../src/features/mcp/clientScope';
+import { canCreateScopedCheckout, canWriteAsOperator, type McpToolName } from '../../src/features/mcp/clientScope';
+import { filterMcpToolRegistrations } from './tool-filter';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
 import { parseIntakeFields } from '../../src/features/purkins/intake';
@@ -203,9 +204,11 @@ const NUMERIC_ORDER_ERROR =
 export interface SessionProps extends Record<string, unknown> {
   operator: boolean;
   actor?: string;
-  // New dashboard-issued credentials are read-only, even if a global write
-  // scope is later enabled for the legacy bearer or verified Access owner.
+  // Safe-default owner-issued tokens are read-only. Explicitly granted write
+  // tools also require instance-level global and scoped write authorization.
   readOnly?: boolean;
+  /** Set only for hashed, owner-issued credentials. Absent for legacy/Access. */
+  toolPermissions?: readonly McpToolName[];
 }
 
 export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps> {
@@ -233,9 +236,11 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
 
   async init() {
     const db = this.env.DB;
+    // All direct and helper registrations run through the same allowlist.
+    const scopedServer = filterMcpToolRegistrations(this.server, this.props?.toolPermissions);
 
     // --- buyer tier: always registered, no token required ---
-    this.server.registerTool(
+    scopedServer.registerTool(
       'browse_products',
       {
         description:
@@ -257,7 +262,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       },
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'get_product_details',
       {
         description: 'Full public detail for one product, by its storefront slug.',
@@ -267,7 +272,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         result(await this.storefront(`/api/products/${encodeURIComponent(slug)}`)),
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'payment_methods',
       {
         description: 'Which payment rails this store accepts, and its default.',
@@ -277,7 +282,12 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     );
 
     // A read-only owner credential must not inherit the buyer checkout writer.
-    if (canCreateCheckout(this.props)) this.server.registerTool(
+    // Owner-issued tokens additionally need the global write gate before checkout.
+    // Preserve the established public-buyer checkout behavior unchanged.
+    if (canCreateScopedCheckout(
+      this.props,
+      (this.env as Env & {PURKINS_MCP_WRITES_ENABLED?:string}).PURKINS_MCP_WRITES_ENABLED,
+    )) scopedServer.registerTool(
       'create_checkout',
       {
         description:
@@ -310,7 +320,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         ),
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'check_order_status',
       {
         description:
@@ -340,14 +350,14 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     // receipts. A general write switch alone must NEVER expose them.
     const allowLegacyWrites = allowWrites &&
       writeEnv.PURKINS_MCP_LEGACY_WRITES_ENABLED === 'true';
-    registerPurkinsTools(this.server, db, allowLegacyWrites);
+    registerPurkinsTools(scopedServer, db, allowLegacyWrites);
     const allowStockWrites = allowWrites &&
       writeEnv.PURKINS_MCP_STOCK_WRITES_ENABLED === 'true' &&
       Boolean(this.props.actor);
-    registerGuardedPurkinsStockTools(this.server, db, allowStockWrites, this.props.actor);
+    registerGuardedPurkinsStockTools(scopedServer, db, allowStockWrites, this.props.actor);
     const allowClothingWrites = allowStockWrites &&
       writeEnv.PURKINS_MCP_CLOTHING_WRITES_ENABLED === 'true';
-    registerGuardedClothingIntakeTools(this.server, db, allowClothingWrites, this.props.actor);
+    registerGuardedClothingIntakeTools(scopedServer, db, allowClothingWrites, this.props.actor);
     const mediaEnv = this.env as Env & {
       BUCKET?: Parameters<typeof createR2Storage>[0];
       PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
@@ -355,7 +365,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const imageImportAllowedHosts = (mediaEnv.PURKINS_MCP_IMAGE_IMPORT_HOSTS ?? '')
       .split(',').map(host => host.trim()).filter(Boolean);
     registerPurkinsMediaTools(
-      this.server, db, mediaEnv.BUCKET, allowLegacyWrites, imageImportAllowedHosts,
+      scopedServer, db, mediaEnv.BUCKET, allowLegacyWrites, imageImportAllowedHosts,
     );
     // Gallery writes use a separate, receipt-backed D1 scope. They do NOT
     // activate the older media import/attach/alt writers.
@@ -363,16 +373,16 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       writeEnv.PURKINS_MCP_GALLERY_WRITES_ENABLED === 'true' &&
       Boolean(this.props.actor);
     registerGuardedPurkinsGalleryTools(
-      this.server, db, allowGalleryWrites, this.props.actor,
+      scopedServer, db, allowGalleryWrites, this.props.actor,
     );
     const allowLocationWrites = allowWrites &&
       writeEnv.PURKINS_MCP_LOCATION_WRITES_ENABLED === 'true' &&
       Boolean(this.props.actor);
-    registerLocationTools(this.server, db, allowLocationWrites, this.props.actor);
-    registerCategoryTools(this.server, db);
+    registerLocationTools(scopedServer, db, allowLocationWrites, this.props.actor);
+    registerCategoryTools(scopedServer, db);
 
     // --- reads ---
-    this.server.registerTool(
+    scopedServer.registerTool(
       'list_products',
       {
         description:
@@ -392,7 +402,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         }),
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'get_product',
       {
         description: 'Get one product by its prod_… public ID, or by slug as a convenience.',
@@ -405,7 +415,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       },
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'list_orders',
       {
         description:
@@ -425,7 +435,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
         }),
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'get_order',
       {
         description:
@@ -451,13 +461,13 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       },
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'order_stats',
       { description: 'Store totals: order count, net revenue (cents), refunded (cents).', inputSchema: {} },
       async () => result(await orderStats(db)),
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'daily_totals',
       {
         description: 'Orders + net revenue per day for the last N days (UTC).',
@@ -468,7 +478,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
 
     // --- writes: token AND explicit instance-level enablement required ---
     if (!allowLegacyWrites) return;
-    this.server.registerTool(
+    scopedServer.registerTool(
       'create_product',
       {
         description:
@@ -516,7 +526,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       },
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'update_product',
       {
         description:
@@ -565,7 +575,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       },
     );
 
-    this.server.registerTool(
+    scopedServer.registerTool(
       'fulfill_order',
       {
         description:
@@ -617,6 +627,7 @@ export default {
       let operator = false;
       let actor: string | undefined;
       let readOnly = false;
+      let toolPermissions: readonly McpToolName[] | undefined;
       // Legacy MCP clients with a separately provisioned operator secret.
       if (auth && env.MCP_TOKEN && await secureEqual(auth, `Bearer ${env.MCP_TOKEN}`)) {
         operator = true;
@@ -637,7 +648,8 @@ export default {
           }
           operator = true;
           actor = client.actor;
-          readOnly = true;
+          readOnly = client.readOnly;
+          toolPermissions = client.toolPermissions;
         } catch {
           return new Response('MCP credential verification unavailable.', {
             status: 503, headers: { 'cache-control': 'no-store' },
@@ -695,7 +707,7 @@ export default {
       // The SDK reads session props off the ExecutionContext (the same channel the
       // Workers OAuth Provider uses). Cloudflare's types declare `props` readonly,
       // so assign through Object.assign rather than casting the readonly away.
-      Object.assign(ctx, { props: { operator, actor, readOnly } satisfies SessionProps });
+      Object.assign(ctx, { props: { operator, actor, readOnly, toolPermissions } satisfies SessionProps });
       return StoreMcp.serve('/mcp', { binding: 'STORE_MCP' }).fetch(request, env, ctx);
     }
 

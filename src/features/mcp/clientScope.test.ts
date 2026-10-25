@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {canCreateCheckout,canWriteAsOperator,MCP_OWNER_READ_TOOLS} from './clientScope';
+import {canCreateCheckout,canCreateScopedCheckout,canWriteAsOperator,MCP_OWNER_READ_TOOLS,MCP_ALL_TOOLS} from './clientScope';
 
 describe('Purkins owner client scope',()=>{
   it('never exposes checkout or privileged writes to a dashboard token',()=>{
@@ -11,6 +11,16 @@ describe('Purkins owner client scope',()=>{
     expect(MCP_OWNER_READ_TOOLS).toContain('list_purkins_stock');
     expect(MCP_OWNER_READ_TOOLS).not.toContain('create_checkout');
     expect(MCP_OWNER_READ_TOOLS).not.toContain('approve_purkins_stock');
+  });
+
+  it('full permissions still obey the global checkout/stock kill switch',()=>{
+    expect(canCreateScopedCheckout({toolPermissions:MCP_ALL_TOOLS,readOnly:false},'false')).toBe(false);
+    expect(canCreateScopedCheckout({toolPermissions:MCP_ALL_TOOLS,readOnly:false},undefined)).toBe(false);
+    expect(canCreateScopedCheckout({toolPermissions:MCP_ALL_TOOLS,readOnly:false},'true')).toBe(true);
+    expect(canCreateScopedCheckout({toolPermissions:MCP_OWNER_READ_TOOLS,readOnly:true},'true')).toBe(false);
+    // Preexisting public buyer/legacy checkout behavior must not be regressed.
+    expect(canCreateScopedCheckout(undefined,'false')).toBe(true);
+    expect(canCreateScopedCheckout({readOnly:false},'false')).toBe(true);
   });
 
   it('preserves legacy operator boundaries and buyer checkout',()=>{

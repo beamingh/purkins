@@ -79,5 +79,79 @@ npm run build:workers
 ```
 
 No production data, remote Cloudflare routes, secrets, migrations, or write
-flags are changed by this PR. Source files and new tests need the user's
+flags were changed by PR #18. Source files and new tests need the user's
 local green run before review/merge.
+
+## Granular tool permissions (PR #20)
+
+After migration `0050_purkins_mcp_tool_permissions.sql`, connections are no
+longer constrained to read-only. The owner creation form offers:
+
+- **Safe default** (selected on first load): all known read tools and no
+  mutating tools.
+- **Full permissions** checkbox: checks the entire current tool catalog;
+  deselecting any individual tool automatically clears the Full checkbox.
+- **Individual grants**: toggle one tool at a time, including stock, location,
+  clothing intake, guarded gallery, checkout, publication and legacy editing.
+  The server validates each exact name. Unknown/duplicate grants fail closed.
+- **Restore safe default** button.
+- **Replace with different permissions** beside existing connections:
+  prefills the new-token form with that token's exact grants. Issue the
+  replacement token and revoke the old token once the new client is working.
+
+Grant lists are **immutable for the life of each token**. To drop or add
+permissions later, issue a replacement and revoke the original; existing
+Durable Object MCP sessions must not retain access to removed tools. Every
+request still verifies token revocation and expiry in D1. New tokens remain
+256-bit random secrets hashed in D1 and displayed only once.
+
+Migration 0050 adds nullable `tool_permissions_json` without recreating or
+clearing any live credential or audit tables. Existing tokens have NULL grants
+and continue using the safe read-only preset. The original `scope=read_only`
+column is retained strictly for backwards compatibility: effective permissions
+come ONLY from the validated allowlist. Never interpret that legacy column as
+authority to grant writes.
+
+### Full does not bypass the Worker kill switches
+
+The selected tools constrain each client, **on top of** the existing global
+and individually scoped Worker write flags, idempotency, draft/revision rules
+and explicit publish confirmation. The protected public `create_checkout`
+tool is additionally gated by the global write flag for these owner-issued
+tokens; preexisting public-buyer behavior is unchanged.
+
+In particular, the following must be enabled individually before they work:
+
+- `PURKINS_MCP_WRITES_ENABLED=true` (global kill switch)
+- `PURKINS_MCP_STOCK_WRITES_ENABLED=true` (guarded drafts and stock)
+- `PURKINS_MCP_CLOTHING_WRITES_ENABLED=true` (bulk clothing; also requires stock)
+- `PURKINS_MCP_LOCATION_WRITES_ENABLED=true` (locations)
+- `PURKINS_MCP_GALLERY_WRITES_ENABLED=true` (guarded photo operations)
+
+Old product/media/order tools also require
+`PURKINS_MCP_LEGACY_WRITES_ENABLED=true`. They are still NOT recommended
+because some do not have receipt-based replay protection. Checking Full does
+not change Worker configuration and never flips this legacy switch.
+
+### Local validation and release order
+
+```powershell
+git fetch origin
+git switch --track origin/feat/purkins-mcp-granular-permissions
+npm run check
+npm run mcp:check
+npx vitest run src/features/mcp/clientTokens.integration.test.ts mcp/src/tool-filter.test.ts src/features/mcp/clientScope.test.ts
+npm test
+npm run purkins:cloudflare -- build
+```
+
+After all checks pass and PR #20 is merged, apply the guarded permanent D1
+migration **0050** before deploying the existing Workers. Do not create or
+reset any infrastructure. Confirm owner credentials remain present, global
+write flag remains false during the first read-only and token-grant acceptance
+tests, and both public/Admin routes still work. Activate scoped guarded
+writes deliberately only after owner authentication and end-to-end tests.
+
+Bearer-token credentials are not OAuth. ChatGPT remote MCP authentication
+still requires its own Cloudflare Access Managed OAuth setup if the ChatGPT
+connection requires OAuth.

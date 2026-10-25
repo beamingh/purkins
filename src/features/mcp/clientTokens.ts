@@ -1,4 +1,8 @@
 import type { D1Database } from '@cloudflare/workers-types';
+import {
+  MCP_OWNER_READ_TOOLS, normalizeMcpToolPermissions, parseStoredMcpPermissions,
+  hasWritePermissions, type McpToolName,
+} from './clientScope';
 
 /**
  * Purkins owner-operated client credentials. Not an OAuth issuer.
@@ -7,8 +11,9 @@ import type { D1Database } from '@cloudflare/workers-types';
  * 256-bit random token. Revocation/expiry is checked on EVERY /mcp request,
  * even for an already initialized MCP Durable Object session.
  *
- * Deliberately READ ONLY in v1: a managed bearer client can inspect private
- * stock but cannot gain any write tools, regardless of global write flags.
+ * Per-connection immutable tool grants. Default is read-only, but the verified
+ * owner can explicitly select individual tools or all permissions. The global
+ * write gate and scoped Worker toggles still apply in addition to these grants.
  */
 const TOKEN_RE = /^pmcp_[A-Za-z0-9_-]{43}$/;
 const UUID_RE = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i;
@@ -19,7 +24,8 @@ export interface McpClientTokenRow {
   name: string;
   token_prefix: string;
   accountable_email: string;
-  scope: 'read_only';
+  scope: 'read_only'; // legacy D1 column, retained for compatibility
+  tool_permissions_json: string | null;
   created_at: number;
   expires_at: number;
   revoked_at: number | null;
@@ -49,7 +55,7 @@ export async function hashClientToken(token: string): Promise<string> {
 export async function listMcpClientTokens(db: D1Database): Promise<McpClientTokenRow[]> {
   const r=await db.prepare(
     'SELECT id,name,token_prefix,accountable_email,scope,created_at,expires_at,'+
-    'revoked_at,last_used_at,call_count FROM purkins_mcp_client_tokens '+
+    'revoked_at,last_used_at,call_count,tool_permissions_json FROM purkins_mcp_client_tokens '+
     'ORDER BY created_at DESC,id DESC LIMIT 100'
   ).all<McpClientTokenRow>();
   return r.results??[];
@@ -71,7 +77,7 @@ export type IssueClientTokenResult =
 
 export async function issueMcpClientToken(
   db: D1Database,
-  opts:{name:string;ownerEmail:string;expiryDays:number;requestId:string;now?:number},
+  opts:{name:string;ownerEmail:string;expiryDays:number;requestId:string;toolPermissions?:readonly string[];now?:number},
 ):Promise<IssueClientTokenResult> {
   const owner=normalizeOwnerEmail(opts.ownerEmail);
   if(!owner) return {ok:false,message:'Verified owner email is required.'};
@@ -85,6 +91,9 @@ export async function issueMcpClientToken(
   if(!UUID_RE.test(opts.requestId)){
     return {ok:false,message:'Missing or invalid request identifier.'};
   }
+  // An absent selection is a safe read-only preset (also for older callers).
+  const tools = normalizeMcpToolPermissions(opts.toolPermissions ?? MCP_OWNER_READ_TOOLS);
+  if (!tools) return {ok:false,message:'Unknown, repeated or excessive MCP permissions.'};
   const now=opts.now??Math.floor(Date.now()/1000);
   const raw=newRawToken();
   const digest=await hashClientToken(raw);
@@ -94,9 +103,9 @@ export async function issueMcpClientToken(
     await db.batch([
       db.prepare(
         'INSERT INTO purkins_mcp_client_tokens '+
-        '(id,name,token_prefix,token_hash,accountable_email,scope,request_id,created_at,expires_at) '+
-        "VALUES(?,?,?,?,?,'read_only',?,?,?)"
-      ).bind(id,name,raw.slice(0,13),digest,owner,opts.requestId.toLowerCase(),now,expiry),
+        '(id,name,token_prefix,token_hash,accountable_email,scope,request_id,created_at,expires_at,tool_permissions_json) '+
+        "VALUES(?,?,?,?,?,'read_only',?,?,?,?)"
+      ).bind(id,name,raw.slice(0,13),digest,owner,opts.requestId.toLowerCase(),now,expiry,JSON.stringify(tools)),
       db.prepare('INSERT INTO purkins_mcp_client_token_events '+
         '(id,token_id,actor_email,action,occurred_at) VALUES(?,?,?,\'created\',?)'
       ).bind(crypto.randomUUID(),id,owner,now),
@@ -140,7 +149,7 @@ export async function revokeMcpClientToken(
 export async function authenticateMcpClientToken(
   db:D1Database,header:string|null,configuredOwnerEmail:string|undefined,
   now=Math.floor(Date.now()/1000),
-):Promise<{id:string;actor:string;readOnly:true}|null>{
+):Promise<{id:string;actor:string;readOnly:boolean;toolPermissions:McpToolName[]}|null>{
   const owner=normalizeOwnerEmail(configuredOwnerEmail);
   if(!owner||!header?.startsWith('Bearer '))return null;
   const raw=header.slice(7);
@@ -151,9 +160,15 @@ export async function authenticateMcpClientToken(
   const result=await db.prepare(
     'UPDATE purkins_mcp_client_tokens SET last_used_at=?,call_count=call_count+1 '+
     'WHERE token_hash=? AND accountable_email=? AND scope=\'read_only\' '+
-    'AND revoked_at IS NULL AND expires_at>? RETURNING id'
-  ).bind(now,digest,owner,now).first<{id:string}>();
-  return result?{id:result.id,actor:'owner:client:'+result.id,readOnly:true}:null;
+    'AND revoked_at IS NULL AND expires_at>? RETURNING id,tool_permissions_json'
+  ).bind(now,digest,owner,now).first<{id:string;tool_permissions_json:string|null}>();
+  if(!result)return null;
+  const tools=parseStoredMcpPermissions(result.tool_permissions_json);
+  if(!tools)return null; // corruption/unknown grants fail closed
+  return {
+    id:result.id,actor:'owner:client:'+result.id,readOnly:!hasWritePermissions(tools),
+    toolPermissions:tools,
+  };
 }
 
 export const MCP_CLIENT_TOKEN_DAYS = [30,90,180,365] as const;
