@@ -30,7 +30,7 @@ export function registerGuardedPublicationTools(
       request_id:requestKey,product_id:prodId,expected_catalog_revision:version,
       confirm_unpublish:z.literal(true),
     },
-  },async({confirm_unpublish:_confirmation,...args})=>{
+  },async(args)=>{
     try{return reply(await applyGuardedPublication(db,actor,'unpublish',args,purgePublicCache));}
     catch{return reply({error:'Unpublication outcome uncertain. Refresh product and retry SAME request_id and input. Do not assume visibility changed.'});}
   });
