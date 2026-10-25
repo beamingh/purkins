@@ -13,6 +13,7 @@ type Receipt={
 export interface PublicationInput {
   request_id:string;product_id:string;expected_catalog_revision:number;
   confirm_publish?:boolean;
+  confirm_unpublish?:boolean;
 }
 export type PublicationResult=
   | {ok:true;product_id:string;published:boolean;applied:boolean;
@@ -52,9 +53,13 @@ export async function applyGuardedPublication(
   if(action==='publish' && input.confirm_publish!==true) {
     return conflict('Explicit confirm_publish: true is required before publication.');
   }
+  if(action==='unpublish' && input.confirm_unpublish!==true) {
+    return conflict('Explicit confirm_unpublish: true is required before hiding a listing.');
+  }
   if(!purgePublicCache)return conflict('Public storefront cache purge is not configured. Publication disabled.');
   const hash=await sha({action,product,revision:input.expected_catalog_revision,
-    confirm_publish:action==='publish'?true:undefined});
+    confirm_publish:action==='publish'?true:undefined,
+    confirm_unpublish:action==='unpublish'?true:undefined});
   const prior=await receipt(db,id);
   if(prior && (prior.actor!==actor || prior.action!==action ||
      prior.payload_sha256!==hash || prior.product_public_id!==product)) {
