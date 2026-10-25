@@ -8,6 +8,7 @@ import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
 import { canCreateScopedCheckout, canWriteAsOperator, type McpToolName } from '../../src/features/mcp/clientScope';
+import { extractMcpUrlToken } from '../../src/features/mcp/urlToken';
 import { filterMcpToolRegistrations } from './tool-filter';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
