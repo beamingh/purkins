@@ -19,6 +19,7 @@ import {
 import { assignIntakeLocation, getLocation, resolveLegacyLocation } from '../../src/features/purkins/locations';
 import { createGuardedStockDraft, adjustGuardedDraftStock } from '../../src/features/mcp/stockGuard';
 import { createGuardedClothingBatch } from '../../src/features/mcp/clothingIntake';
+import { reconcileGuardedVariant } from '../../src/features/mcp/variantReconcile';
 
 // Never send private cost, location or supplier codes to the buyer tier.
 // These registrations are invoked ONLY behind the MCP operator-token gate.
@@ -452,5 +453,32 @@ export function registerGuardedClothingIntakeTools(
     } catch (error) {
       return reply({ error: error instanceof Error ? error.message : 'Invalid clothing intake request.' });
     }
+  });
+}
+
+/** Guarded correction of existing unpublished size/colour records. No sales. */
+export function registerGuardedVariantReconcileTools(
+  server: McpServer, db: D1Database, allowWrites = false, actor?: string,
+): void {
+  if (!allowWrites || !actor) return;
+  server.registerTool('reconcile_guarded_purkins_variant', {
+    description: 'Correct ONE existing UNPUBLISHED Purkins clothing size: stock, ZMW price and private barcode in one atomic transaction that reconciles parent stock. Requires a fresh read of both parent and variant revisions, stocks, expected ZMW price and supplier barcode. Retry SAME request_id after an uncertain failure. Never publishes or records a sale.',
+    inputSchema: {
+      request_id: z.string().uuid(),
+      product_id: z.string().min(1),
+      variant_id: z.string().min(1),
+      expected_parent_stock: z.number().int().min(0).max(1_000_000),
+      expected_parent_revision: z.number().int().nonnegative(),
+      expected_variant_stock: z.number().int().min(0).max(1_000_000),
+      expected_variant_revision: z.number().int().nonnegative(),
+      expected_price_cents: money,
+      expected_supplier_barcode: z.string().max(80).nullable(),
+      new_stock: z.number().int().min(0).max(1_000_000),
+      new_price_cents: money,
+      new_supplier_barcode: z.string().max(80).nullable(),
+    },
+  }, async (args) => {
+    try { return reply(await reconcileGuardedVariant(db, actor, args)); }
+    catch { return reply({error:'Variant reconciliation outcome uncertain. Refresh and retry SAME request_id and payload.'}); }
   });
 }
