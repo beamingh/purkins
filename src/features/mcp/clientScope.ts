@@ -31,6 +31,7 @@ export const MCP_TOOL_PERMISSIONS = [
   {name:'create_guarded_purkins_draft',group:'Guarded stock drafts',label:"Create one private draft with idempotency",safety:'guarded'},
   {name:'adjust_guarded_purkins_stock',group:'Guarded stock drafts',label:"Reconcile draft stock with revision check",safety:'guarded'},
   {name:'bulk_create_guarded_clothing_drafts',group:'Guarded stock drafts',label:"Bulk clothing sizes and barcodes",safety:'guarded'},
+  {name:'reconcile_guarded_purkins_variant',group:'Guarded stock drafts',label:"Correct clothing variant stock/price/barcode",safety:'guarded'},
   {name:'create_purkins_location',group:'Guarded locations and photos',label:"Create stock location",safety:'guarded'},
   {name:'move_purkins_location',group:'Guarded locations and photos',label:"Move stock location",safety:'guarded'},
   {name:'attach_guarded_purkins_photo',group:'Guarded locations and photos',label:"Attach draft photo",safety:'guarded'},
