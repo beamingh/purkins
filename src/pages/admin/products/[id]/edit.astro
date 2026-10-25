@@ -982,7 +982,7 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
             'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
           };
           const files = pasted.map((file, index) =>
-            new File([file], file.name && /\\.(?:png|jpe?g|webp|gif)$/i.test(file.name)
+            new File([file], file.name && /\.(?:png|jpe?g|webp|gif)$/i.test(file.name)
               ? file.name : `purkins-pasted-${Date.now()}-${index + 1}.${extension[file.type] || 'png'}`,
               { type: file.type }),
           );
