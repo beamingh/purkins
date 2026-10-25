@@ -35,7 +35,7 @@ describe('permanent Purkins guarded MCP config',()=>{
       '  },',
       '  "workers_dev": false',
       '}',
-    ].join('\\n');
+    ].join('\n');
     const upgraded = configureGuardedMcpWrites(olderAdmin);
     const vars = JSON.parse(upgraded).vars;
     expect(vars.STOREFRONT_URL).toBe('https://purkins.ulwimbo.com');
