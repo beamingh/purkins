@@ -155,3 +155,79 @@ writes deliberately only after owner authentication and end-to-end tests.
 Bearer-token credentials are not OAuth. ChatGPT remote MCP authentication
 still requires its own Cloudflare Access Managed OAuth setup if the ChatGPT
 connection requires OAuth.
+
+## Combined URL token authentication (PR #22)
+
+Purkins supports the Ulwimbo-style MCP connection URL approach without
+requiring OAuth discovery. Admin -> MCP Connections now reveals TWO one-time
+secrets after issuance: the raw `pmcp_` credential and the combined URL:
+
+```text
+https://admin.purkins.ulwimbo.com/mcp?token=pmcp_<one-time-value>
+```
+
+The Ulwimbo-compatible alias `?mcp_token=` also works. A URL token is **only**
+a hashed, expiring/revocable `pmcp_` client credential, and has exactly the
+immutable tool grants chosen in the Admin UI (safe read default, Full, or any
+individual selection). Existing `Authorization: Bearer pmcp_...` works
+unchanged. The legacy `MCP_TOKEN` Worker secret is deliberately not accepted
+in query parameters.
+
+When present, URL authentication is validated by the existing D1 lookup on
+**every** request, including SSE GET and MCP POST. Duplicate/conflicting URL
+parameters, malformed tokens, and a URL token combined with an Authorization
+header are rejected (401). Expiry/revocation applies to an already initialized
+MCP session on the next request. The MCP transport receives a reconstructed
+request with the token removed from its URL and no-store/no-referrer response
+headers; no query token is logged by application code.
+
+### IMPORTANT: existing Cloudflare Access Worker-level protection
+
+The current Purkins Access application `Purkins Admin - Owner Only` protects
+the **entire** `purkins-admin` Worker via a Worker destination. Cloudflare
+Access may reject non-browser ChatGPT MCP requests before the new URL token
+can reach our app. A combined URL by itself does NOT bypass Access.
+
+Before end-to-end token-only testing, **separately** arrange Access protection
+that matches only Admin paths (at minimum `/admin`, `/admin/*`,
+`/api/admin`, `/api/admin/*`) on the Admin hostname, while letting exactly
+`/mcp` and `/mcp/*` reach the Worker for its own token validation. Cloudflare
+supports hostname/path scoped Access applications. Do not delete or relax the
+existing Worker-level policy until replacement Access protection has been
+configured and independently tested; avoid any unprotected Admin transition.
+If changing the Access application's audience, update `CF_ACCESS_AUD` before
+testing the owner-managed connections page: its JWT verification is
+independent. Worker custom domain is intentionally the only reachable
+hostname (`workers_dev=false`, previews disabled). Keep the MCP handler's
+operator-only, fail-closed gate on every request.
+
+Do NOT configure a broad Allow/Bypass policy on the whole Admin Worker and do
+not assume having a URL token implies owner Cloudflare Access authentication.
+
+### URL-token security trade-off
+
+Treat the **complete URL as a password**. A query token can be recorded by
+the connecting client, proxies/CDNs, request analytics, log systems, browser
+history and shared screenshots **before the request reaches our Worker**.
+Removing the query from downstream transport and setting no-store/no-referrer
+limits accidental further exposure but cannot prevent the edge or client from
+seeing it. Prefer a short-lived, narrowly scoped token; revoke immediately
+after any accidental exposure. Do not paste a real combined URL in an issue,
+chat, browser or shared logs.
+
+### Validate the PR
+
+```powershell
+git fetch origin
+git switch --track origin/feat/purkins-mcp-url-token-auth
+npx vitest run src/features/mcp/urlToken.test.ts src/features/mcp/clientTokens.integration.test.ts
+npm run check
+npm run mcp:check
+npm test
+npm run purkins:cloudflare -- build
+```
+
+After green acceptance, merge and deploy through the existing two-Worker
+permanent guard. **No D1 migration, Access modification, secret or write
+toggle is executed by this PR.** URL-auth HTTP 200/tool registration cannot
+be proven end to end while existing Worker-level Access is still in place.
