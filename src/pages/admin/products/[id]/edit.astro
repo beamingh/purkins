@@ -68,14 +68,21 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
   <a href="/admin/products" class="text-sm text-gray-500 hover:text-brand">&larr; Back to products</a>
   <div class="mt-4 mb-6 flex items-center justify-between gap-4">
     <h1 class="text-2xl font-bold">Edit product</h1>
-    <a
-      href={`/products/${product.slug}`}
-      target="_blank"
-      rel="noopener"
-      class="text-sm text-accent hover:underline"
-    >
-      View on store ↗
-    </a>
+    <div class="flex items-center gap-4">
+      <a
+        href={`/admin/products/${product.public_id}/preview`}
+        target="_blank"
+        rel="noopener"
+        class="text-sm font-semibold text-accent hover:underline"
+      >
+        Preview listing ↗
+      </a>
+      {product.active === 1 && (
+        <a href={`/products/${product.slug}`} target="_blank" rel="noopener" class="text-sm text-accent hover:underline">
+          View on store ↗
+        </a>
+      )}
+    </div>
   </div>
   {intake && (
     <section class="mb-6 rounded-lg border border-line bg-surface p-4">
