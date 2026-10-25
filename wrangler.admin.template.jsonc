@@ -11,6 +11,7 @@
   // protection before attaching an Admin hostname. Admin MCP is operator-only.
   "vars": {
     "STORE_NAME": "Purkins",
+    "STOREFRONT_URL": "https://purkins.ulwimbo.com",
     "TIME_ZONE": "Africa/Lusaka",
     "PRELAUNCH_NOINDEX": "true",
     "PURKINS_MCP_WRITES_ENABLED": "false",
