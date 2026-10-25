@@ -7,7 +7,7 @@ import { registerLocationTools } from './locations';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
 import { authenticateMcpClientToken } from '../../src/features/mcp/clientTokens';
-import { canCreateCheckout, canWriteAsOperator, type McpToolName } from '../../src/features/mcp/clientScope';
+import { canCreateScopedCheckout, canWriteAsOperator, type McpToolName } from '../../src/features/mcp/clientScope';
 import { filterMcpToolRegistrations } from './tool-filter';
 import type { createR2Storage } from '../../src/features/storage/r2';
 import { getIntake, insertIntake, saveIntakeDraft } from '../../src/features/purkins/db';
@@ -284,9 +284,10 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     // A read-only owner credential must not inherit the buyer checkout writer.
     // Owner-issued tokens additionally need the global write gate before checkout.
     // Preserve the established public-buyer checkout behavior unchanged.
-    const checkoutAllowed = !this.props?.toolPermissions ||
-      (this.env as Env & {PURKINS_MCP_WRITES_ENABLED?:string}).PURKINS_MCP_WRITES_ENABLED==='true';
-    if (canCreateCheckout(this.props) && checkoutAllowed) scopedServer.registerTool(
+    if (canCreateScopedCheckout(
+      this.props,
+      (this.env as Env & {PURKINS_MCP_WRITES_ENABLED?:string}).PURKINS_MCP_WRITES_ENABLED,
+    )) scopedServer.registerTool(
       'create_checkout',
       {
         description:
