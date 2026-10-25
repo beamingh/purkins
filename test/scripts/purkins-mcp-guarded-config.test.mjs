@@ -42,9 +42,9 @@ describe('permanent Purkins guarded MCP config',()=>{
     expect(()=>configureGuardedMcpWrites(fixture.replace('"true"','"false"'))).toThrow(/global/);
     expect(()=>configureGuardedMcpWrites(fixture.replace(
       '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"',
-      '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "true"'))).toThrow(/legacy/);
+      '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "true"'))).toThrow(/PURKINS_MCP_LEGACY_WRITES_ENABLED/);
     expect(()=>configureGuardedMcpWrites(fixture.replace(
-      '"STORE_NAME": "Purkins",','"STORE_NAME": "Purkins", "STOREFRONT_URL": "https://attacker.test",'))).toThrow(/storefront/);
+      '"STORE_NAME": "Purkins",','"STORE_NAME": "Purkins", "STOREFRONT_URL": "https://attacker.test",'))).toThrow(/STOREFRONT_URL/);
     expect(()=>configureGuardedMcpWrites(fixture.replace(
       '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"',
       '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "false", "PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"'))).toThrow(/Duplicate/);
