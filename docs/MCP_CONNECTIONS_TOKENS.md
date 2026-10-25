@@ -231,3 +231,41 @@ After green acceptance, merge and deploy through the existing two-Worker
 permanent guard. **No D1 migration, Access modification, secret or write
 toggle is executed by this PR.** URL-auth HTTP 200/tool registration cannot
 be proven end to end while existing Worker-level Access is still in place.
+
+## Admin Worker storefront URL and guarded write activation
+
+The live Admin Worker originally lacked STOREFRONT_URL and had global
+MCP writes off. A Full permissions token alone cannot register write
+tools without that separate Worker opt-in.
+
+This change sets the default Admin Worker STOREFRONT_URL to
+https://purkins.ulwimbo.com. The existing confirmed local command
+
+```powershell
+npm run purkins:cloudflare -- mcp-writes-on --confirm=ENABLE-PURKINS-MCP-WRITES
+```
+
+now upgrades previously provisioned, gitignored Admin Wrangler config
+with the same storefront URL and enables only receipt-backed stock,
+clothing intake, location and gallery write scopes. It refuses an
+unexpected existing storefront address or already-enabled legacy flag.
+It does not touch Cloudflare until separately confirmed deployment.
+
+Legacy product edits, publication, image imports and order fulfillment
+remain off; they require a separately implemented safe workflow.
+A full-grants token may also expose buyer checkout after the global
+switch is enabled. The emergency mcp-writes-off command still disables
+all operations at the global gate and needs deployment to take effect.
+
+Validate on the feature branch:
+
+```powershell
+npx vitest run test/scripts/purkins-mcp-guarded-config.test.mjs test/scripts/purkins-permanent.test.mjs
+npm run check
+npm run mcp:check
+npm test
+npm run purkins:cloudflare -- build
+```
+
+The error "blocked by platform safety checks" occurs outside Purkins
+and is not corrected by granting more token permissions.
