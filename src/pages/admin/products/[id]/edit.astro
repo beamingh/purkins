@@ -145,9 +145,10 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
       <input id="new-photo-alt" type="text" name="photo_alt" maxlength="300"
         value={`${product.name} — product photograph`}
         class="mb-4 w-full max-w-lg rounded-md border border-line bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none" />
-      <label data-photo-dropzone for="product-photos"
-        class="block cursor-pointer rounded-lg border-2 border-dashed border-line bg-surface px-6 py-8 text-center hover:border-brand hover:bg-white focus-within:border-brand">
-        <span class="block text-base font-semibold">Drop photos here, or choose files</span>
+      <label data-photo-dropzone for="product-photos" tabindex="0"
+        class="block cursor-pointer rounded-lg border-2 border-dashed border-line bg-surface px-6 py-8 text-center hover:border-brand hover:bg-white focus:border-brand focus:outline-none focus-within:border-brand">
+        <span class="block text-base font-semibold">Drop, paste, or choose photos</span>
+        <span class="mt-1 block text-sm text-muted">Copy an image or screenshot, then press Ctrl+V (Cmd+V on Mac) here or anywhere on this Photos step.</span>
         <span class="mt-1 block text-xs text-muted">JPEG, PNG, WebP or GIF · up to 5 MB each. Photos are optimized automatically.</span>
         <input id="product-photos" type="file" name="images"
           accept="image/jpeg,image/png,image/webp,image/gif" multiple
@@ -939,6 +940,20 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
           photoInput.disabled = false;
           photoForm.requestSubmit();
         };
+        // Both drag/drop and clipboard paste use the same native multipart
+        // product-image upload. No browser image bytes are sent to any third
+        // party, and the no-JavaScript upload button remains available.
+        const queueFiles = (files: File[]) => {
+          if (!files.length) return;
+          try {
+            const transfer = new DataTransfer();
+            for (const file of files) transfer.items.add(file);
+            photoInput.files = transfer.files;
+            send();
+          } catch {
+            if (status) status.textContent = 'Could not accept the pasted image. Use Choose files instead.';
+          }
+        };
         photoInput.addEventListener('change', send);
         zone?.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('border-brand'); });
         zone?.addEventListener('dragleave', () => zone.classList.remove('border-brand'));
@@ -946,8 +961,32 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
           event.preventDefault();
           zone.classList.remove('border-brand');
           if (!event.dataTransfer?.files.length) return;
-          photoInput.files = event.dataTransfer.files;
-          send();
+          queueFiles(Array.from(event.dataTransfer.files));
+        });
+        // Paste screenshots or copied images while the Photos step is active.
+        // Never intercept text paste into the alt-description input or other
+        // editable controls, and never take over paste in other editor steps.
+        document.addEventListener('paste', event => {
+          const photosPane = editor.querySelector<HTMLElement>('[data-editor-pane="photos"]');
+          if (!photosPane || photosPane.hidden || started) return;
+          const target = event.target;
+          if (target instanceof Element && target.closest('input:not([type="file"]), textarea, select, [contenteditable="true"]')) return;
+          const clipboard = event.clipboardData;
+          if (!clipboard) return;
+          const imageItems = Array.from(clipboard.items)
+            .filter(item => item.kind === 'file' && item.type.startsWith('image/'));
+          const pasted = imageItems.map(item => item.getAsFile()).filter((file): file is File => file instanceof File);
+          if (!pasted.length) return;
+          event.preventDefault();
+          const extension: Record<string, string> = {
+            'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+          };
+          const files = pasted.map((file, index) =>
+            new File([file], file.name && /\\.(?:png|jpe?g|webp|gif)$/i.test(file.name)
+              ? file.name : `purkins-pasted-${Date.now()}-${index + 1}.${extension[file.type] || 'png'}`,
+              { type: file.type }),
+          );
+          queueFiles(files);
         });
       }
     }
