@@ -21,8 +21,15 @@ export default {
       // This Worker is operator-only: never expose the legacy anonymous buyer
       // MCP tier here. Authenticated operator calls also undergo the MCP
       // handler's constant-time bearer token verification.
+      // URL-token clients have no Authorization header. Only the MCP
+      // handler validates the hashed, scoped credential and rejects invalid
+      // / expired / revoked values. Merely having ?token never grants access.
+      const url = new URL(request.url);
+      const hasUrlCredential = url.searchParams.has('token') ||
+        url.searchParams.has('mcp_token');
       if (!request.headers.get('Authorization') &&
-          !request.headers.get('Cf-Access-Jwt-Assertion')) {
+          !request.headers.get('Cf-Access-Jwt-Assertion') &&
+          !hasUrlCredential) {
         return new Response('Operator MCP authorization required.', {
           status: 401, headers: { 'cache-control': 'no-store' },
         });
