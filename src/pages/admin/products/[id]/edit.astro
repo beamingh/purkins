@@ -19,7 +19,7 @@ import { zonesRequireWeight } from '../../../../features/shipping/calculator';
 import { formatWeightValue } from '../../../../features/shipping/weight';
 import { shippingFor } from '../../../../features/shipping/effective';
 import { getIntake, getVariantSupplierBarcodes } from '../../../../features/purkins/db';
-import { reviewPurkinsDraft } from '../../../../../mcp/src/purkins-gallery';
+import { reviewPurkinsDraft } from '../../../../features/purkins/draftReview';
 
 // The route param is the prod_ public ID; numeric row ids are not accepted.
 const publicId = parsePublicId(Astro.params.id, 'product');
