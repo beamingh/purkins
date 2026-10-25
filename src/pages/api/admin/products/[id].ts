@@ -127,8 +127,12 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     return redirect('/admin/products', 303);
   }
 
+  // Return to the step the owner was editing, including validation errors.
+  const requestedStep = String(form.get('_editor_step') ?? 'details');
+  const editStep = ['details', 'inventory', 'variants'].includes(requestedStep) ? requestedStep : 'details';
+  const editUrl = `/admin/products/${publicId}/edit?step=${editStep}`;
   const fail = (msg: string) =>
-    redirect(`/admin/products/${publicId}/edit?error=${encodeURIComponent(msg)}`, 303);
+    redirect(`${editUrl}&error=${encodeURIComponent(msg)}`, 303);
 
   // The store's display unit, plus whether a blank weight would make this product
   // unsellable (every enabled zone prices by weight). Both come from settings the
@@ -243,5 +247,5 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   }
 
   await purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
-  return redirect('/admin/products', 303);
+  return redirect(`${editUrl}&saved=1`, 303);
 };

@@ -19,6 +19,7 @@ import { zonesRequireWeight } from '../../../../features/shipping/calculator';
 import { formatWeightValue } from '../../../../features/shipping/weight';
 import { shippingFor } from '../../../../features/shipping/effective';
 import { getIntake, getVariantSupplierBarcodes } from '../../../../features/purkins/db';
+import { reviewPurkinsDraft } from '../../../../features/purkins/draftReview';
 
 // The route param is the prod_ public ID; numeric row ids are not accepted.
 const publicId = parsePublicId(Astro.params.id, 'product');
@@ -34,6 +35,7 @@ const images = await listProductImages(env.DB, product.id);
 const intake = await getIntake(env.DB, product.id);
 const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
+const justSaved = Astro.url.searchParams.get('saved') === '1';
 const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
 const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
 const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
@@ -66,6 +68,8 @@ const priceStep = 1 / minorUnitsPerMajor(product.currency);
 const major = (cents: number) => toMajorUnits(cents, product.currency);
 const weightUnit = Astro.locals.settings?.weightUnit ?? 'g';
 const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).config);
+const review = intake && publicId ? await reviewPurkinsDraft(env.DB, publicId) : null;
+const reviewBlockers: string[] = review && 'blockers' in review ? (review.blockers ?? []) : [];
 ---
 
 <AdminLayout title={`Edit ${product.name}`} active="products">
@@ -88,46 +92,27 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       )}
     </div>
   </div>
-  {intake && (
-    <section class="mb-6 rounded-lg border border-line bg-surface p-4">
-      <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
-      {intake.status === 'draft' && (
-        <>
-          <p class="mt-1 text-xs text-muted">
-            {intake.pricing_mode === 'manual'
-              ? 'Manual price selected: purchase cost is optional, so cost recovery may be unknown. Confirm the item is complete, attach a photo and save a positive selling price before publication.'
-              : 'Cost-based pricing: save purchase cost, any required exchange rate, selling price and a photo. Publication enforces the estimated landed-cost floor.'}
-          </p>
-          <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
-            <input type="hidden" name="request_id" value={crypto.randomUUID()} />
-            <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
-            <input type="hidden" name="confirm_publish" value="true" />
-            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
-          </form>
-        </>
-      )}
-      {intake.status === 'approved' && product.active === 1 && (
-        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
-          <input type="hidden" name="request_id" value={crypto.randomUUID()} />
-          <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
-          <input type="hidden" name="confirm_unpublish" value="true" />
-          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
-            Hide listing (keep stock and photos)
+
+  <div data-purkins-editor>
+    <nav aria-label="Product editing steps" class="mb-6 overflow-x-auto rounded-lg border border-line bg-surface p-2">
+      <div class="flex min-w-max gap-1" role="tablist" aria-label="Product editing steps">
+        {[
+          ['details', '1', 'Details'],
+          ['inventory', '2', 'Pricing & stock'],
+          ['photos', '3', 'Photos'],
+          ['variants', '4', 'Variants'],
+          ['review', '5', 'Review & publish'],
+        ].map(([step, number, label]) => (
+          <button type="button" role="tab" data-editor-tab={step}
+            aria-controls={`editor-pane-${step}`} aria-selected="false"
+            class="rounded-md px-3 py-2 text-sm font-semibold text-gray-600 hover:bg-white hover:text-brand aria-selected:bg-white aria-selected:text-brand aria-selected:shadow-sm">
+            <span class="mr-1 text-xs text-gray-400">{number}.</span> {label}
           </button>
-        </form>
-      )}
-      {purgeRetryId && purgeRetryRevision && (purgeRetryAction === 'publish' || purgeRetryAction === 'unpublish') && (
-        <form method="POST" action={`/api/admin/products/${product.public_id}/${purgeRetryAction === 'publish' ? 'approve' : 'hide'}`} class="mt-4">
-          <input type="hidden" name="request_id" value={purgeRetryId} />
-          <input type="hidden" name="expected_catalog_revision" value={purgeRetryRevision} />
-          <input type="hidden" name={purgeRetryAction === 'publish' ? 'confirm_publish' : 'confirm_unpublish'} value="true" />
-          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
-            Retry public cache purge (do not change inventory)
-          </button>
-        </form>
-      )}
-    </section>
-  )}
+        ))}
+      </div>
+    </nav>
+    <p class="mb-4 text-xs text-muted">Save details, pricing and variants with <strong>Save changes</strong>. Photos save immediately. Use Review & publish when ready.</p>
+    {justSaved && <p role="status" class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Changes saved. Continue to the next step whenever you’re ready.</p>}
   <ProductForm
     action={`/api/admin/products/${product.public_id}`}
     submitLabel="Save changes"
@@ -143,32 +128,37 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     weightRequired={weightRequired}
   />
 
-  <section id="gallery" class="mt-12 scroll-mt-20 border-t border-line pt-8">
+  <section id="editor-pane-photos" data-editor-pane="photos" class="scroll-mt-20 border-t border-line pt-6">
+    <span id="gallery" class="sr-only" aria-hidden="true"></span>
     <div class="mb-4 flex items-baseline justify-between gap-3">
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Images</h2>
       <span class="text-xs text-gray-400">Changes here save automatically</span>
     </div>
 
-    <form
+    <form data-photo-quick-upload
       method="POST"
       action={`/api/admin/products/${product.public_id}/images`}
-      enctype="multipart/form-data"
-      class="mb-6 flex flex-wrap items-center gap-3"
+      enctype="multipart/form-data" class="mb-6"
     >
       <input type="hidden" name="_action" value="add" />
-      <input
-        type="file"
-        name="images"
-        accept="image/*"
-        multiple
-        class="block w-full text-sm text-gray-600 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-xs file:font-medium file:uppercase file:tracking-wider file:text-white hover:file:bg-brand-hover sm:w-auto"
-      />
-      <button
-        type="submit"
-        class="rounded-md border border-line px-4 py-2 text-xs font-medium uppercase tracking-wider text-gray-700 hover:border-brand hover:text-brand"
-      >
-        Add images
-      </button>
+      <label for="new-photo-alt" class="mb-2 block text-sm font-medium">Photo description <span class="font-normal text-muted">(optional — editable later in Admin or MCP)</span></label>
+      <input id="new-photo-alt" type="text" name="photo_alt" maxlength="300"
+        value={`${product.name} — product photograph`}
+        class="mb-4 w-full max-w-lg rounded-md border border-line bg-white px-3 py-2 text-sm focus:border-brand focus:outline-none" />
+      <label data-photo-dropzone for="product-photos" tabindex="0"
+        class="block cursor-pointer rounded-lg border-2 border-dashed border-line bg-surface px-6 py-8 text-center hover:border-brand hover:bg-white focus:border-brand focus:outline-none focus-within:border-brand">
+        <span class="block text-base font-semibold">Drop, paste, or choose photos</span>
+        <span class="mt-1 block text-sm text-muted">Copy an image or screenshot, then press Ctrl+V (Cmd+V on Mac) here or anywhere on this Photos step.</span>
+        <span class="mt-1 block text-xs text-muted">JPEG, PNG, WebP or GIF · up to 5 MB each. Photos are optimized automatically.</span>
+        <input id="product-photos" type="file" name="images"
+          accept="image/jpeg,image/png,image/webp,image/gif" multiple
+          class="mt-4 block w-full text-sm file:mr-2 file:rounded-md file:border-0 file:bg-brand file:px-4 file:py-2 file:text-white sm:mx-auto sm:w-auto"
+        />
+      </label>
+      <p data-photo-upload-status role="status" aria-live="polite" class="mt-3 text-sm text-muted">
+        Choose photos once; they upload automatically and the first becomes your main photo.
+      </p>
+      <button type="submit" data-photo-upload-fallback class="mt-3 rounded-md border border-line px-4 py-2 text-sm">Upload selected photos</button>
     </form>
 
     {/* Reuse a file already in the library. The picker is outside the upload
@@ -191,7 +181,55 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       images.length > 0 && (
         <ul data-gallery data-action={`/api/admin/products/${product.public_id}/images`} class="mb-6">
           {imageViews.map((img) => (
-            <li data-image-id={img.public_id} class="flex items-center gap-4 py-3">
+            <li data-image-id={img.public_id} class="mb-3 flex flex-wrap items-center gap-4 rounded-lg border border-line bg-white p-4">
+              {/* Thumbnail with the Primary badge overlaid, so the badge never shifts
+                  the alt fields out of horizontal alignment. */}
+              <div class="relative shrink-0">
+                <img
+                  src={img.sources.src}
+                  srcset={img.sources.srcset}
+                  sizes={img.sources.sizes}
+                  alt={img.alt ?? ''}
+                  class="h-14 w-14 rounded object-cover"
+                />
+                <span
+                  data-primary-badge
+                  hidden={img.image_key !== product.image_key}
+                  title="Primary image"
+                  class="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] text-white ring-2 ring-paper"
+                >
+                  ★
+                </span>
+              </div>
+
+              <form
+                data-js-action="alt"
+                method="POST"
+                action={`/api/admin/products/${product.public_id}/images`}
+                class="flex flex-1 items-center gap-2"
+              >
+                <input type="hidden" name="_action" value="alt" />
+                <input type="hidden" name="image_id" value={img.public_id} />
+                <input
+                  type="text"
+                  name="alt"
+                  value={img.alt ?? ''}
+                  draggable="false"
+                  placeholder="Alt text — describe the image"
+                  class="w-full border-b border-line bg-transparent py-1 text-sm focus:border-brand focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  class="shrink-0 text-xs uppercase tracking-widest text-gray-400 hover:text-brand"
+                >
+                  Save
+                </button>
+              </form>
+
+
+              <details class="w-full border-t border-line pt-3 text-sm">
+                <summary class="cursor-pointer font-medium text-brand">More photo actions · reorder, choose primary or remove</summary>
+                <div class="mt-3 flex flex-wrap items-center gap-4">
               {/* Drag handle — the grip icon + grab cursor signal the row is draggable. */}
               <span
                 data-handle
@@ -229,48 +267,6 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
                 </form>
               </div>
 
-              {/* Thumbnail with the Primary badge overlaid, so the badge never shifts
-                  the alt fields out of horizontal alignment. */}
-              <div class="relative shrink-0">
-                <img
-                  src={img.sources.src}
-                  srcset={img.sources.srcset}
-                  sizes={img.sources.sizes}
-                  alt={img.alt ?? ''}
-                  class="h-14 w-14 rounded object-cover"
-                />
-                <span
-                  data-primary-badge
-                  title="Primary image"
-                  class="absolute -left-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-[11px] text-white ring-2 ring-paper"
-                >
-                  ★
-                </span>
-              </div>
-
-              <form
-                data-js-action="alt"
-                method="POST"
-                action={`/api/admin/products/${product.public_id}/images`}
-                class="flex flex-1 items-center gap-2"
-              >
-                <input type="hidden" name="_action" value="alt" />
-                <input type="hidden" name="image_id" value={img.public_id} />
-                <input
-                  type="text"
-                  name="alt"
-                  value={img.alt ?? ''}
-                  draggable="false"
-                  placeholder="Alt text — describe the image"
-                  class="w-full border-b border-line bg-transparent py-1 text-sm focus:border-brand focus:outline-none"
-                />
-                <button
-                  type="submit"
-                  class="shrink-0 text-xs uppercase tracking-widest text-gray-400 hover:text-brand"
-                >
-                  Save
-                </button>
-              </form>
 
               <div class="flex shrink-0 items-center gap-3 text-xs uppercase tracking-widest">
                 <form data-js-action="primary" method="POST" action={`/api/admin/products/${product.public_id}/images`}>
@@ -288,6 +284,8 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
                   </button>
                 </form>
               </div>
+                </div>
+              </details>
             </li>
           ))}
         </ul>
@@ -295,7 +293,8 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     }
   </section>
 
-  <section id="options" class="mt-12 scroll-mt-20 border-t border-line pt-8">
+  <section id="editor-pane-variants" data-editor-pane="variants" class="scroll-mt-20 border-t border-line pt-6">
+    <span id="options" class="sr-only" aria-hidden="true"></span>
     <div class="mb-5">
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Variants &amp; add-ons</h2>
       <p class="mt-1 max-w-prose text-xs text-gray-500">
@@ -581,6 +580,67 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
     </div>
   </section>
 
+
+  <section id="editor-pane-review" data-editor-pane="review" class="scroll-mt-20 border-t border-line pt-6">
+    <h2 class="font-serif text-2xl">Review &amp; publish</h2>
+    <p class="mt-2 text-sm text-muted">Preview the listing exactly as shoppers will see it. Only you can see unpublished drafts.</p>
+    <a href={`/admin/products/${product.public_id}/preview`} target="_blank" rel="noopener"
+      class="mt-4 inline-block rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand">Open private preview ↗</a>
+    {intake?.status === 'draft' && reviewBlockers.length > 0 && (
+      <div class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
+        <h3 class="font-semibold">Complete these before publishing</h3>
+        <ul class="mt-2 list-disc space-y-1 pl-5 text-sm">
+          {reviewBlockers.map(blocker=><li>{blocker}</li>)}
+        </ul>
+      </div>
+    )}
+    {intake?.status === 'draft' && reviewBlockers.length === 0 && (
+      <p class="mt-5 text-sm font-semibold text-green-700">Ready for your approval. Publication rechecks the live details.</p>
+    )}
+  {intake && (
+    <section class="mb-6 rounded-lg border border-line bg-surface p-4">
+      <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
+      {intake.status === 'draft' && (
+        <>
+          <p class="mt-1 text-xs text-muted">
+            {intake.pricing_mode === 'manual'
+              ? 'Manual price selected: purchase cost is optional, so cost recovery may be unknown. Confirm the item is complete, attach a photo and save a positive selling price before publication.'
+              : 'Cost-based pricing: save purchase cost, any required exchange rate, selling price and a photo. Publication enforces the estimated landed-cost floor.'}
+          </p>
+          <form method="POST" action={`/api/admin/products/${product.public_id}/approve`} class="mt-3">
+            <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+            <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+            <input type="hidden" name="confirm_publish" value="true" />
+            <button type="submit" class="rounded-md bg-brand px-4 py-2 text-sm font-medium text-on-brand">{intake.pricing_mode === 'manual' ? 'Approve manual price & publish' : 'Approve selling price & publish'}</button>
+          </form>
+        </>
+      )}
+      {intake.status === 'approved' && product.active === 1 && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/hide`} class="mt-4">
+          <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+          <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+          <input type="hidden" name="confirm_unpublish" value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Hide listing (keep stock and photos)
+          </button>
+        </form>
+      )}
+      {purgeRetryId && purgeRetryRevision && (purgeRetryAction === 'publish' || purgeRetryAction === 'unpublish') && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/${purgeRetryAction === 'publish' ? 'approve' : 'hide'}`} class="mt-4">
+          <input type="hidden" name="request_id" value={purgeRetryId} />
+          <input type="hidden" name="expected_catalog_revision" value={purgeRetryRevision} />
+          <input type="hidden" name={purgeRetryAction === 'publish' ? 'confirm_publish' : 'confirm_unpublish'} value="true" />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Retry public cache purge (do not change inventory)
+          </button>
+        </form>
+      )}
+    </section>
+  )}
+
+  </section>
+  </div>
+
   {/* Progressive enhancement: every gallery action runs via fetch (no reload, no
       jump). The plain form POSTs are the no-JS fallback (they redirect to
       #gallery). Primary badge + ↑/↓ visibility are CSS-driven, so they
@@ -592,6 +652,26 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       const action = list.dataset.action || '';
       const rows = () =>
         Array.from(list.children).filter((el) => el instanceof HTMLElement);
+      // Keep the main-image marker and reorder actions truthful after edits,
+      // even when gallery actions update without a full-page reload.
+      const refreshActions = () => {
+        const current = rows();
+        current.forEach((item, index) => {
+          for (const [selector, hide] of [
+            ['[data-primary-badge]', index !== 0],
+            ['[data-make-primary]', index === 0],
+            ['[data-up]', index === 0],
+            ['[data-down]', index === current.length - 1],
+          ]) {
+            const element = item.querySelector(selector);
+            if (element instanceof HTMLElement) {
+              element.hidden = hide;
+              element.style.display = hide ? 'none' : '';
+            }
+          }
+        });
+      };
+      refreshActions();
       const send = (params) =>
         fetch(action, {
           method: 'POST',
@@ -599,6 +679,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
           body: new URLSearchParams(params),
         });
       const persistOrder = () => {
+        refreshActions();
         const p = new URLSearchParams();
         p.set('_action', 'reorder');
         for (const li of rows()) p.append('order', li.dataset.imageId || '');
@@ -649,6 +730,7 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
           if (!confirm('Delete this image?')) return;
           await send({ _action: 'delete', image_id: li.dataset.imageId });
           li.remove();
+          refreshActions();
         } else if (type === 'alt') {
           await send(new FormData(form));
           const btn = form.querySelector('button[type="submit"]');
@@ -782,6 +864,132 @@ const weightRequired = zonesRequireWeight(shippingFor(Astro.locals.settings).con
       if (el && el.closest('[data-palette], [data-photo-trigger]')) return;
       closeAllPalettes();
     });
+  </script>
+
+  <script>
+    // Progressive enhancement: the form and all gallery operations remain
+    // functional without JS; the guided steps simply reduce visual clutter.
+    const editor = document.querySelector<HTMLElement>('[data-purkins-editor]');
+    if (editor) {
+      const order = ['details', 'inventory', 'photos', 'variants', 'review'];
+      const buttons = Array.from(editor.querySelectorAll<HTMLButtonElement>('[data-editor-tab]'));
+      const panes = Array.from(editor.querySelectorAll<HTMLElement>('[data-editor-pane]'));
+      const save = editor.querySelector<HTMLElement>('[data-editor-save]');
+      const stepField = editor.querySelector<HTMLInputElement>('input[name="_editor_step"]');
+      const paneFor = (s: string) => order.includes(s) ? s : 'details';
+      function selectStep(next: string, updateHash = false) {
+        const step = paneFor(next);
+        for (const pane of panes) pane.hidden = pane.dataset.editorPane !== step;
+        for (const button of buttons) {
+          const selected = button.dataset.editorTab === step;
+          button.setAttribute('aria-selected', String(selected));
+          button.tabIndex = selected ? 0 : -1;
+        }
+        if (save) save.hidden = !['details', 'inventory'].includes(step);
+        if (stepField) stepField.value = step;
+        if (updateHash) history.replaceState(null, '', '#' + step);
+      }
+      const requested = new URLSearchParams(location.search).get('step');
+      const fromHash = () => {
+        const hash = location.hash.substring(1);
+        return hash === 'gallery' ? 'photos' : hash === 'options' ? 'variants' : hash;
+      };
+      selectStep(requested || fromHash());
+      buttons.forEach((button, i) => {
+        button.addEventListener('click', () => selectStep(button.dataset.editorTab || 'details', true));
+        button.addEventListener('keydown', event => {
+          const next = event.key === 'ArrowRight' ? (i + 1) % order.length
+            : event.key === 'ArrowLeft' ? (i + order.length - 1) % order.length
+            : event.key === 'Home' ? 0
+            : event.key === 'End' ? order.length - 1 : -1;
+          if (next < 0) return;
+          event.preventDefault();
+          const target = buttons[next];
+          if (target) {
+            selectStep(target.dataset.editorTab || 'details', true);
+            target.focus();
+          }
+        });
+      });
+      window.addEventListener('hashchange', () => selectStep(fromHash()));
+      // Browser form validation must never target a control in a hidden pane.
+      editor.addEventListener('invalid', event => {
+        const invalid = event.target;
+        if (!(invalid instanceof HTMLElement)) return;
+        const container = invalid.closest<HTMLElement>('[data-editor-pane]');
+        if (container?.dataset.editorPane) selectStep(container.dataset.editorPane, true);
+      }, true);
+      const photoForm = editor.querySelector<HTMLFormElement>('[data-photo-quick-upload]');
+      const photoInput = photoForm?.querySelector<HTMLInputElement>('input[type="file"]');
+      const zone = photoForm?.querySelector<HTMLElement>('[data-photo-dropzone]');
+      const status = photoForm?.querySelector<HTMLElement>('[data-photo-upload-status]');
+      const fallback = photoForm?.querySelector<HTMLButtonElement>('[data-photo-upload-fallback]');
+      if (photoForm && photoInput) {
+        if (fallback) fallback.hidden = true;
+        let started = false;
+        const send = () => {
+          const selected = Array.from(photoInput.files || []);
+          if (!selected.length || started) return;
+          if (selected.some(file => !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+            if (status) status.textContent = 'Use JPEG, PNG, WebP or GIF files smaller than 5 MB each.';
+            photoInput.value = '';
+            return;
+          }
+          started = true;
+          if (status) status.textContent = `Uploading ${selected.length} photo${selected.length === 1 ? '' : 's'}…`;
+          photoInput.disabled = false;
+          photoForm.requestSubmit();
+        };
+        // Both drag/drop and clipboard paste use the same native multipart
+        // product-image upload. No browser image bytes are sent to any third
+        // party, and the no-JavaScript upload button remains available.
+        const queueFiles = (files: File[]) => {
+          if (!files.length) return;
+          try {
+            const transfer = new DataTransfer();
+            for (const file of files) transfer.items.add(file);
+            photoInput.files = transfer.files;
+            send();
+          } catch {
+            if (status) status.textContent = 'Could not accept the pasted image. Use Choose files instead.';
+          }
+        };
+        photoInput.addEventListener('change', send);
+        zone?.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('border-brand'); });
+        zone?.addEventListener('dragleave', () => zone.classList.remove('border-brand'));
+        zone?.addEventListener('drop', event => {
+          event.preventDefault();
+          zone.classList.remove('border-brand');
+          if (!event.dataTransfer?.files.length) return;
+          queueFiles(Array.from(event.dataTransfer.files));
+        });
+        // Paste screenshots or copied images while the Photos step is active.
+        // Never intercept text paste into the alt-description input or other
+        // editable controls, and never take over paste in other editor steps.
+        document.addEventListener('paste', event => {
+          const photosPane = editor.querySelector<HTMLElement>('[data-editor-pane="photos"]');
+          if (!photosPane || photosPane.hidden || started) return;
+          const target = event.target;
+          if (target instanceof Element && target.closest('input:not([type="file"]), textarea, select, [contenteditable="true"]')) return;
+          const clipboard = event.clipboardData;
+          if (!clipboard) return;
+          const imageItems = Array.from(clipboard.items)
+            .filter(item => item.kind === 'file' && item.type.startsWith('image/'));
+          const pasted = imageItems.map(item => item.getAsFile()).filter((file): file is File => file instanceof File);
+          if (!pasted.length) return;
+          event.preventDefault();
+          const extension: Record<string, string> = {
+            'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif',
+          };
+          const files = pasted.map((file, index) =>
+            new File([file], file.name && /\.(?:png|jpe?g|webp|gif)$/i.test(file.name)
+              ? file.name : `purkins-pasted-${Date.now()}-${index + 1}.${extension[file.type] || 'png'}`,
+              { type: file.type }),
+          );
+          queueFiles(files);
+        });
+      }
+    }
   </script>
 </AdminLayout>
 
