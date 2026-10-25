@@ -376,6 +376,7 @@ const inputClass =
   </label>
 
   </div>
+  {formId === 'product-form' && <input type="hidden" name="_editor_step" value="details" />}
   <input type="hidden" name="currency" value={defaultCurrency} />
 
   <div data-editor-save class="flex flex-wrap gap-3 pt-4 border-t border-line">
