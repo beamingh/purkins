@@ -108,12 +108,14 @@ describe('Purkins route-level Worker isolation', () => {
     expect(publicWorker).toContain("path.startsWith('/mcp/')");
     expect(adminWorker).toContain("pathname.startsWith('/api/admin/')");
     expect(adminWorker).toContain("pathname.startsWith('/mcp/')");
-    // The Admin Worker accepts two transport credentials: a bearer token
-    // or a Cloudflare Access JWT. A request with NEITHER must be rejected
-    // before reaching the MCP handler. This replaced the old bearer-only
-    // assertion when Access-backed owner connections were introduced.
+    // A request with no bearer header, no verified Access identity and no
+    // URL-token candidate is rejected before entering the MCP handler. Query
+    // presence only passes the request through; the MCP handler must reject
+    // invalid, expired or revoked pmcp_ tokens independently.
+    expect(adminWorker).toContain("url.searchParams.has('token')");
+    expect(adminWorker).toContain("url.searchParams.has('mcp_token')");
     expect(adminWorker).toMatch(
-      /if \(!request\.headers\.get\('Authorization'\)\s*&&\s*!request\.headers\.get\('Cf-Access-Jwt-Assertion'\)\)/,
+      /if \(!request\.headers\.get\('Authorization'\)\s*&&\s*!request\.headers\.get\('Cf-Access-Jwt-Assertion'\)\s*&&\s*!hasUrlCredential\)/,
     );
     expect(adminWorker).toContain("status: 401");
     expect(adminWorker).toContain('return mcpHandler.fetch(request, env as never, ctx)');
