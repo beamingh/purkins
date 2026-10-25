@@ -9,7 +9,7 @@ import { getProductByPublicId, getProductBySlug } from '../products/db';
 import { stockView } from '../../../mcp/src/purkins';
 import { createGuardedClothingBatch, createGuardedClothingDraft, type ClothingDraftInput } from './clothingIntake';
 
-const actor = 'owner:access:owner@example.com';
+const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const uuid = () => crypto.randomUUID();
 const intakeForm = new FormData();
 intakeForm.set('pricing_mode','manual');
