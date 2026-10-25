@@ -62,6 +62,10 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
       const media = await uploadMedia(env.DB, storage, await optimizeUpload(file), file.name);
       const attached = await attachMediaToProduct(env.DB, id, media.id);
       if (!attached.ok) return back(attached.error);
+      // Give new photos meaningful default alternative text immediately. Owners
+      // can refine it in the gallery or through guarded MCP metadata tools.
+      await env.DB.prepare('UPDATE product_images SET alt=? WHERE product_id=? AND image_key=?')
+        .bind(`${product.name} — product photograph`, id, attached.imageKey).run();
     }
     await syncPrimaryImage(env.DB, id); // first image stays primary
     await purgeProduct();
