@@ -204,8 +204,8 @@ const NUMERIC_ORDER_ERROR =
 export interface SessionProps extends Record<string, unknown> {
   operator: boolean;
   actor?: string;
-  // New dashboard-issued credentials are read-only, even if a global write
-  // scope is later enabled for the legacy bearer or verified Access owner.
+  // Safe-default owner-issued tokens are read-only. Explicitly granted write
+  // tools also require instance-level global and scoped write authorization.
   readOnly?: boolean;
   /** Set only for hashed, owner-issued credentials. Absent for legacy/Access. */
   toolPermissions?: readonly McpToolName[];
