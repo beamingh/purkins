@@ -54,18 +54,20 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
 
   if (action === 'add') {
     const files = form.getAll('images').filter((f): f is File => f instanceof File && f.size > 0);
+    const requestedAlt = String(form.get('photo_alt') ?? '').trim();
+    if (requestedAlt.length > 300) return back('Photo description must be 300 characters or shorter.');
     for (const file of files) {
       const imgErr = validateImage(file);
       if (imgErr) return back(imgErr);
     }
-    for (const file of files) {
+    for (const [index, file] of files.entries()) {
       const media = await uploadMedia(env.DB, storage, await optimizeUpload(file), file.name);
       const attached = await attachMediaToProduct(env.DB, id, media.id);
       if (!attached.ok) return back(attached.error);
       // Give new photos meaningful default alternative text immediately. Owners
       // can refine it in the gallery or through guarded MCP metadata tools.
       await env.DB.prepare('UPDATE product_images SET alt=? WHERE product_id=? AND image_key=?')
-        .bind(`${product.name} — product photograph`, id, attached.imageKey).run();
+        .bind((requestedAlt || `${product.name} — product photograph`) + (files.length > 1 ? ` (${index + 1})` : ''), id, attached.imageKey).run();
     }
     await syncPrimaryImage(env.DB, id); // first image stays primary
     await purgeProduct();
