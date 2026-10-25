@@ -20,6 +20,8 @@ describe('Purkins guided product editing', () => {
     expect(edit).toContain('aria-controls={`editor-pane-${step}`}');
     expect(edit).toContain('role="tablist"');
     expect(edit).toContain('Preview listing');
+    expect(edit).toContain("from '../../../../../mcp/src/purkins-gallery'");
+    expect(edit).toContain('refreshActions()');
   });
 
   it('does not break existing product or variant saving semantics', () => {
