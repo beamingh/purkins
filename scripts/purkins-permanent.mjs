@@ -30,6 +30,7 @@ import {
   TARGET, parseAccounts, detectCollisions, renderPermanentConfigs,
   assertUuid, assertApiList, latestMigrationFilename, isMigrationReady,
 } from './purkins-permanent-core.mjs';
+import { configureGuardedMcpWrites } from './purkins-mcp-guarded-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const instanceDir = join(root, '.instances');
@@ -254,7 +255,11 @@ function setMcpWrites(enabled) {
   const from = '"PURKINS_MCP_WRITES_ENABLED": "' + previous + '"';
   const to = '"PURKINS_MCP_WRITES_ENABLED": "' + (enabled ? 'true' : 'false') + '"';
   if (!current.includes(from)) fail('Permanent Admin write switch was not found in expected state.');
-  const nextConfig = current.replace(from, to);
+  let nextConfig = current.replace(from, to);
+  // Full token grants alone never activate writes. On the explicit owner
+  // opt-in, configure only the receipt-backed draft/location/gallery paths.
+  // Existing older permanent configs may lack these newer bindings entirely.
+  if (enabled) nextConfig = configureGuardedMcpWrites(nextConfig);
   writeFileSync(adminGenerated, nextConfig, { mode: 0o600 });
   try {
     writeFileSync(stateFile, JSON.stringify({
