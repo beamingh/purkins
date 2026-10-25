@@ -13,7 +13,11 @@ import {
 export const prerender = false;
 
 Astro.response.headers.set('Cache-Control','private, no-store');
-Astro.response.headers.set('Referrer-Policy','no-referrer');
+// The native POST forms require an accurate Origin for the middleware CSRF
+// check. Referrer-Policy: no-referrer can cause browsers to send Origin: null
+// on navigate-mode form submissions. same-origin hides referrers from other
+// websites without suppressing Origin for our own form POSTs.
+Astro.response.headers.set('Referrer-Policy','same-origin');
 
 const owner=await authorizedMcpOwner(
   Astro.request.headers.get('Cf-Access-Jwt-Assertion'),env,
