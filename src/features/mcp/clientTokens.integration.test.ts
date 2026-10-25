@@ -2,6 +2,7 @@ import { beforeAll, afterAll, describe, it, expect } from 'vitest';
 import { Miniflare } from 'miniflare';
 import { readFileSync } from 'node:fs';
 import { splitPurkinsMigrationSql } from '../purkins/migration-test-sql';
+import { MCP_ALL_TOOLS, MCP_OWNER_READ_TOOLS } from './clientScope';
 import type { D1Database } from '@cloudflare/workers-types';
 import {
   issueMcpClientToken, authenticateMcpClientToken, revokeMcpClientToken,
@@ -22,6 +23,10 @@ describe('Owner MCP client credentials (real isolated D1)',()=>{
     db=await mf.getD1Database('DB');
     const sql=readFileSync(new URL('../../../migrations/0049_purkins_mcp_connections.sql',import.meta.url),'utf8');
     for (const statement of splitPurkinsMigrationSql(sql)) {
+      await db.prepare(statement).run();
+    }
+    const scoped=readFileSync(new URL('../../../migrations/0050_purkins_mcp_tool_permissions.sql',import.meta.url),'utf8');
+    for (const statement of splitPurkinsMigrationSql(scoped)) {
       await db.prepare(statement).run();
     }
   },30000);
@@ -49,7 +54,10 @@ describe('Owner MCP client credentials (real isolated D1)',()=>{
     expect(JSON.stringify(listing)).not.toContain(row?.token_hash);
     expect((await listMcpClientTokenEvents(db))[0]?.action).toBe('created');
     const auth=await authenticateMcpClientToken(db,'Bearer '+response.token,owner,1_800_000_001);
-    expect(auth).toEqual({id:response.id,actor:'owner:client:'+response.id,readOnly:true});
+    expect(auth).toEqual({
+      id:response.id,actor:'owner:client:'+response.id,readOnly:true,
+      toolPermissions:[...MCP_OWNER_READ_TOOLS],
+    });
     expect(await authenticateMcpClientToken(db,'Bearer '+response.token,owner,1_800_000_002))
       .toMatchObject({readOnly:true});
     const updated=await db.prepare('SELECT call_count,last_used_at FROM purkins_mcp_client_tokens WHERE id=?')
@@ -93,6 +101,49 @@ describe('Owner MCP client credentials (real isolated D1)',()=>{
     expect((await issueMcpClientToken(db,{...args,requestId:rid(),expiryDays:366})).ok).toBe(false);
     expect((await issueMcpClientToken(db,{...args,requestId:rid(),name:'x'})).ok).toBe(false);
     expect((await issueMcpClientToken(db,{...args,requestId:'not-a-uuid'})).ok).toBe(false);
+  });
+
+  it('grants the full checkbox all named tools, yet only to the issued token',async()=>{
+    const full=await issueMcpClientToken(db,{
+      ownerEmail:owner,name:'Explicit full permissions',expiryDays:30,
+      requestId:rid(),now:1_800_400_000,toolPermissions:MCP_ALL_TOOLS,
+    });
+    if(!full.ok)throw Error(full.message);
+    const auth=await authenticateMcpClientToken(db,'Bearer '+full.token,owner,1_800_400_001);
+    expect(auth?.readOnly).toBe(false);
+    expect(auth?.toolPermissions).toEqual(MCP_ALL_TOOLS);
+    expect(auth?.toolPermissions).toContain('bulk_create_guarded_clothing_drafts');
+    expect(auth?.toolPermissions).toContain('create_checkout');
+    expect(auth?.toolPermissions).toContain('approve_purkins_stock');
+  });
+
+  it('allows adding and dropping any individual tools before issuance',async()=>{
+    const selected=[MCP_OWNER_READ_TOOLS[0]!, 'create_guarded_purkins_draft','attach_guarded_purkins_photo'];
+    const partial=await issueMcpClientToken(db,{
+      ownerEmail:owner,name:'Specific stock drafts',expiryDays:90,
+      requestId:rid(),now:1_800_500_000,toolPermissions:selected,
+    });
+    if(!partial.ok)throw Error(partial.message);
+    const auth=await authenticateMcpClientToken(db,'Bearer '+partial.token,owner,1_800_500_001);
+    expect(auth?.toolPermissions).toEqual(selected);
+    expect(auth?.readOnly).toBe(false);
+    expect(auth?.toolPermissions).not.toContain('list_orders');
+    expect(auth?.toolPermissions).not.toContain('bulk_create_guarded_clothing_drafts');
+  });
+
+  it('fails closed on unknown or corrupted permissions, retains safe legacy defaults',async()=>{
+    const input={ownerEmail:owner,name:'Legacy compatibility',expiryDays:30,requestId:rid(),now:1_800_600_000};
+    expect((await issueMcpClientToken(db,{...input,requestId:rid(),toolPermissions:['new_unreviewed_tool']})).ok).toBe(false);
+    expect((await issueMcpClientToken(db,{...input,requestId:rid(),toolPermissions:['get_product','get_product']})).ok).toBe(false);
+    const legacy=await issueMcpClientToken(db,input);
+    if(!legacy.ok)throw Error(legacy.message);
+    await db.prepare('UPDATE purkins_mcp_client_tokens SET tool_permissions_json=NULL WHERE id=?').bind(legacy.id).run();
+    const auth=await authenticateMcpClientToken(db,'Bearer '+legacy.token,owner,1_800_600_001);
+    expect(auth?.readOnly).toBe(true);
+    expect(auth?.toolPermissions).toEqual(MCP_OWNER_READ_TOOLS);
+    await db.prepare('UPDATE purkins_mcp_client_tokens SET tool_permissions_json=? WHERE id=?')
+      .bind(JSON.stringify(['unreviewed_future_tool']),legacy.id).run();
+    expect(await authenticateMcpClientToken(db,'Bearer '+legacy.token,owner,1_800_600_002)).toBeNull();
   });
 
   it('keeps separate owner credentials distinct',async()=>{
