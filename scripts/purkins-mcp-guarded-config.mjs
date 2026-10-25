@@ -62,7 +62,7 @@ export function configureGuardedMcpWrites(source) {
  * Full MCP token permissions are not sufficient to bypass this gate.
  */
 export function configurePublicationMcpWrite(source, enabled) {
-  const globals = [...source.matchAll(/"PURKINS_MCP_WRITES_ENABLED"\\s*:\\s*"([^"]*)"/g)];
+  const globals = [...source.matchAll(/"PURKINS_MCP_WRITES_ENABLED"\s*:\s*"([^"]*)"/g)];
   if(globals.length!==1 || globals[0][1]!=='true'){
     throw new Error('Global MCP writes must be explicitly enabled before publication.');
   }
