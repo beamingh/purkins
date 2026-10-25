@@ -1,3 +1,4 @@
+import { requireVerifiedOwnerActorShape } from './ownerActor';
 import type { D1Database } from '@cloudflare/workers-types';
 import {
   getLocation, listLocationTree, locationIdValid, locationKind,
@@ -23,11 +24,7 @@ export type GuardedLocationResult =
 
 /** A stable, non-credential actor label; never accept identity from MCP tool args. */
 function ownerActor(actor: string): string {
-  if (!actor || actor.length > 254 ||
-      !(actor === 'owner:bearer' || /^owner:access:[^\s@]+@[^\s@]+$/.test(actor))) {
-    throw new Error('Authenticated owner identity is required for guarded writes.');
-  }
-  return actor;
+  return requireVerifiedOwnerActorShape(actor);
 }
 
 function requestId(raw: string): string {
