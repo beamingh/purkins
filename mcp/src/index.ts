@@ -721,7 +721,8 @@ export default {
         ? new Request(urlCredential.sanitizedUrl,request) : request;
       const response=await StoreMcp.serve('/mcp', { binding: 'STORE_MCP' })
         .fetch(transportRequest, env, ctx);
-      if(urlCredential.kind!=='token')return response;
+      // A WebSocket upgrade response (101) cannot be re-wrapped.
+      if(urlCredential.kind!=='token' || response.status===101)return response;
       const headers=new Headers(response.headers);
       headers.set('cache-control','private, no-store');
       headers.set('referrer-policy','no-referrer');
