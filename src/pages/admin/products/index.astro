@@ -160,13 +160,23 @@ const arrow = (col: string) => (sort === col ? (dir === 'asc' ? ' ↑' : ' ↓')
             <td data-label="" class="py-3 text-right">
               <div class="flex justify-end gap-4 text-xs uppercase tracking-widest">
                 <a
-                  href={`/products/${p.slug}`}
+                  href={`/admin/products/${p.public_id}/preview`}
                   target="_blank"
                   rel="noopener"
                   class="text-gray-500 hover:text-brand"
                 >
-                  View ↗
+                  Preview ↗
                 </a>
+                {p.active === 1 && (
+                  <a
+                    href={`/products/${p.slug}`}
+                    target="_blank"
+                    rel="noopener"
+                    class="text-gray-500 hover:text-brand"
+                  >
+                    View live ↗
+                  </a>
+                )}
                 <a href={`/admin/products/${p.public_id}/edit`} class="text-accent hover:underline">
                   Edit
                 </a>
