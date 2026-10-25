@@ -44,6 +44,14 @@ describe('Purkins guided product editing', () => {
     const images = source('src/pages/api/admin/products/[id]/images.ts');
     expect(edit).toContain('data-photo-quick-upload');
     expect(edit).toContain('data-photo-dropzone');
+    expect(edit).toContain('tabindex="0"');
+    expect(edit).toContain('Drop, paste, or choose photos');
+    expect(edit).toContain("document.addEventListener('paste'");
+    expect(edit).toContain("item.kind === 'file' && item.type.startsWith('image/')");
+    expect(edit).toContain('event.preventDefault()');
+    expect(edit).toContain('input:not([type="file"]), textarea, select, [contenteditable="true"]');
+    expect(edit).toContain('photoInput.files = transfer.files');
+    expect(edit).toContain('zone?.addEventListener(\'drop\'');
     expect(edit).toContain('name="photo_alt"');
     expect(edit).toContain('photoForm.requestSubmit()');
     expect(edit).toContain('data-photo-upload-fallback');
