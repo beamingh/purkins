@@ -126,8 +126,12 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
     const product=await getProductByPublicId(db,created.id);
     const view=await stockView(db,product!);
     const v=view!.variants[2]!;
+    // The database DTO allows a missing public ID, but reconciliation never does.
+    // Assert the test fixture has the persisted public ID before invoking the guard.
+    const variantId = v.id;
+    if (!variantId) throw Error('Variant fixture has no public ID.');
     const input={
-      request_id:uuid(),product_id:created.id,variant_id:v.id,
+      request_id:uuid(),product_id:created.id,variant_id:variantId,
       expected_parent_stock:11,expected_parent_revision:0,
       expected_variant_stock:v.stock,expected_variant_revision:0,
       expected_price_cents:v.price_cents,expected_supplier_barcode:null,
