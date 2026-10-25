@@ -295,7 +295,7 @@ function setMcpPublication(enabled) {
     writeFileSync(stateFile, JSON.stringify({
       ...state, mcpPublicationEnabled: enabled,
       mcpPublicationSwitchUpdatedAt: new Date().toISOString(),
-    }, null, 2) + '\\n', { mode: 0o600 });
+  }, null, 2) + '\n', { mode: 0o600 });
   } catch (error) {
     writeFileSync(adminGenerated, current, { mode: 0o600 });
     throw error;
