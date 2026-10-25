@@ -22,7 +22,8 @@
   // idempotency and concurrency gates have been reviewed and tested.
   "vars": {
     "STOREFRONT_URL": "https://__NAME__.workers.dev",
-    "PURKINS_MCP_WRITES_ENABLED": "false"
+    "PURKINS_MCP_WRITES_ENABLED": "false",
+    "PURKINS_MCP_PUBLICATION_WRITES_ENABLED": "false"
   },
   // The buyer tier is unauthenticated, and this Worker is the only place the
   // real client IP is visible (buyer tools proxy the storefront server-side).

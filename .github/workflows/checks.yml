@@ -37,3 +37,45 @@ jobs:
         run: npm run mcp:check
       - name: Check MCP production dependency advisories
         run: npm audit --prefix mcp --omit=dev --audit-level=high
+
+  # Manual-only workflow, like the main storefront job. The configured store
+  # theme is already tested by 'storefront'; discover every OTHER committed
+  # theme dynamically instead of maintaining a brittle hardcoded matrix.
+  discover-themes:
+    name: Discover other committed themes
+    runs-on: ubuntu-latest
+    outputs:
+      theme_matrix: ${{ steps.list.outputs.theme_matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute theme matrix
+        id: list
+        shell: bash
+        run: |
+          themes="$(node --input-type=module -e "import { discoverThemeIds, resolveConfiguredTheme } from './scripts/themes.mjs'; const configured = resolveConfiguredTheme().id; console.log(JSON.stringify(discoverThemeIds().filter((id) => id !== configured)));")"
+          echo "theme_matrix=$themes" >> "$GITHUB_OUTPUT"
+
+  verify-other-themes:
+    name: Build extra theme / ${{ matrix.theme }}
+    needs: discover-themes
+    if: ${{ needs.discover-themes.outputs.theme_matrix != '[]' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        theme: ${{ fromJSON(needs.discover-themes.outputs.theme_matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build selected theme without changing committed store configuration
+        env:
+          THEME: ${{ matrix.theme }}
+        run: |
+          npm run build
+          node scripts/check-built-css.mjs

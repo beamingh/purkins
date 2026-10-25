@@ -101,7 +101,7 @@ const galleryRow = (overrides: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  rows.product = { ...rows.product, public_id: 'prod_k7m2qx8vn6' };
+  rows.product = { ...rows.product, public_id: 'prod_k7m2qx8vn6', active: 1 };
   rows.variants = [];
   rows.extras = [];
   rows.images = [];
@@ -154,6 +154,32 @@ describe('loadProductDetail public-ID policy', () => {
     rows.variants = [variant({ image_id: 11 })];
 
     await expect(load()).rejects.toThrow(/product image row 11 has no public_id/);
+  });
+
+  it('never renders an unpublished draft on the public HTML detail route', async () => {
+    rows.product = { ...rows.product, active: 0 };
+    await expect(load()).resolves.toEqual({ status: 'not_found' });
+  });
+
+  it('allows unpublished preview only under an explicit admin-only option, with purchase disabled', async () => {
+    rows.product = { ...rows.product, active: 0 };
+    const result = await loadProductDetail({} as D1Database, {
+      slug: 'sample-tee',
+      searchParams: new URLSearchParams(),
+      settings: undefined,
+      imageBaseUrl: '',
+      delivery: undefined,
+      currency: 'usd',
+      origin: 'https://shop.example.com',
+      pathname: '/admin/products/prod_k7m2qx8vn6/preview',
+      adminPreview: true,
+    });
+    expect(result.status).toBe('ok');
+    if (result.status !== 'ok') return;
+    expect(result.purchase.showAddToCart).toBe(false);
+    expect(result.purchase.showBuyNow).toBe(false);
+    expect(result.model.related).toHaveLength(0);
+    expect(result.backfillRelated).toBeNull();
   });
 
   it('reports not_found rather than throwing for a missing slug', async () => {

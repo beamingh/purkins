@@ -15,7 +15,11 @@ describe('Purkins single-deployment prelaunch wiring', () => {
     expect(middleware).toContain("'x-robots-tag': PRELAUNCH_ROBOTS_HEADER");
     expect(middleware).toContain("target.set('cache-control', 'private, no-store')");
     expect(middleware).toContain("target.delete('x-robots-tag')");
-    expect(layout).toContain('<meta name="robots" content={PRELAUNCH_ROBOTS_HEADER} />');
+    // Preview pages have a stricter noindex override, while all ordinary
+    // public pages still honour the PRELAUNCH_NOINDEX runtime switch.
+    expect(layout).toContain('isPrelaunchNoindex(env.PRELAUNCH_NOINDEX)');
+    expect(layout).toContain("noIndex ? 'noindex,nofollow,noarchive' : PRELAUNCH_ROBOTS_HEADER");
+    expect(layout).toContain('!noIndex && <link rel="canonical"');
     expect(robots).toContain('publicRobotsTxt(origin, isPrelaunchNoindex(env.PRELAUNCH_NOINDEX))');
     expect(sitemap).toContain('if (isPrelaunchNoindex(env.PRELAUNCH_NOINDEX))');
     expect(agents).toContain('if (isPrelaunchNoindex(env.PRELAUNCH_NOINDEX))');
