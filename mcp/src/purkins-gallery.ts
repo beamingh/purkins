@@ -59,6 +59,7 @@ export async function reviewPurkinsDraft(db: D1Database, productId: string) {
     purchase_cost_minor:intake.purchase_cost_minor, landed_cost_zwm_cents:landed,
     selling_price_zwm_cents:product.price_cents,
     gallery_revision:(product as typeof product & {mcp_gallery_revision?:number}).mcp_gallery_revision??0,
+    catalog_revision:(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0,
     photo_count:images.length, primary_photo_present:Boolean(product.image_key),
     size_variant_count:variants.length, total_size_units:active.reduce((n,v)=>n+v.stock,0),
     blockers,notes,potentially_ready_for_owner_review:blockers.length===0,
