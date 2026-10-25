@@ -828,6 +828,94 @@ const reviewBlockers = review && 'blockers' in review ? review.blockers : [];
       closeAllPalettes();
     });
   </script>
+
+  <script>
+    // Progressive enhancement: the form and all gallery operations remain
+    // functional without JS; the guided steps simply reduce visual clutter.
+    const editor = document.querySelector<HTMLElement>('[data-purkins-editor]');
+    if (editor) {
+      const order = ['details', 'inventory', 'photos', 'variants', 'review'];
+      const buttons = Array.from(editor.querySelectorAll<HTMLButtonElement>('[data-editor-tab]'));
+      const panes = Array.from(editor.querySelectorAll<HTMLElement>('[data-editor-pane]'));
+      const save = editor.querySelector<HTMLElement>('[data-editor-save]');
+      const stepField = editor.querySelector<HTMLInputElement>('input[name="_editor_step"]');
+      const paneFor = (s: string) => order.includes(s) ? s : 'details';
+      function selectStep(next: string, updateHash = false) {
+        const step = paneFor(next);
+        for (const pane of panes) pane.hidden = pane.dataset.editorPane !== step;
+        for (const button of buttons) {
+          const selected = button.dataset.editorTab === step;
+          button.setAttribute('aria-selected', String(selected));
+          button.tabIndex = selected ? 0 : -1;
+        }
+        if (save) save.hidden = !['details', 'inventory'].includes(step);
+        if (stepField) stepField.value = step;
+        if (updateHash) history.replaceState(null, '', '#' + step);
+      }
+      const requested = new URLSearchParams(location.search).get('step');
+      const fromHash = () => {
+        const hash = location.hash.substring(1);
+        return hash === 'gallery' ? 'photos' : hash === 'options' ? 'variants' : hash;
+      };
+      selectStep(requested || fromHash());
+      buttons.forEach((button, i) => {
+        button.addEventListener('click', () => selectStep(button.dataset.editorTab || 'details', true));
+        button.addEventListener('keydown', event => {
+          const next = event.key === 'ArrowRight' ? (i + 1) % order.length
+            : event.key === 'ArrowLeft' ? (i + order.length - 1) % order.length
+            : event.key === 'Home' ? 0
+            : event.key === 'End' ? order.length - 1 : -1;
+          if (next < 0) return;
+          event.preventDefault();
+          const target = buttons[next];
+          if (target) {
+            selectStep(target.dataset.editorTab || 'details', true);
+            target.focus();
+          }
+        });
+      });
+      window.addEventListener('hashchange', () => selectStep(fromHash()));
+      // Browser form validation must never target a control in a hidden pane.
+      editor.addEventListener('invalid', event => {
+        const invalid = event.target;
+        if (!(invalid instanceof HTMLElement)) return;
+        const container = invalid.closest<HTMLElement>('[data-editor-pane]');
+        if (container?.dataset.editorPane) selectStep(container.dataset.editorPane, true);
+      }, true);
+      const photoForm = editor.querySelector<HTMLFormElement>('[data-photo-quick-upload]');
+      const photoInput = photoForm?.querySelector<HTMLInputElement>('input[type="file"]');
+      const zone = photoForm?.querySelector<HTMLElement>('[data-photo-dropzone]');
+      const status = photoForm?.querySelector<HTMLElement>('[data-photo-upload-status]');
+      const fallback = photoForm?.querySelector<HTMLButtonElement>('[data-photo-upload-fallback]');
+      if (photoForm && photoInput) {
+        if (fallback) fallback.hidden = true;
+        let started = false;
+        const send = () => {
+          const selected = Array.from(photoInput.files || []);
+          if (!selected.length || started) return;
+          if (selected.some(file => !['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+            if (status) status.textContent = 'Use JPEG, PNG, WebP or GIF files smaller than 5 MB each.';
+            photoInput.value = '';
+            return;
+          }
+          started = true;
+          if (status) status.textContent = `Uploading ${selected.length} photo${selected.length === 1 ? '' : 's'}…`;
+          photoInput.disabled = false;
+          photoForm.requestSubmit();
+        };
+        photoInput.addEventListener('change', send);
+        zone?.addEventListener('dragover', event => { event.preventDefault(); zone.classList.add('border-brand'); });
+        zone?.addEventListener('dragleave', () => zone.classList.remove('border-brand'));
+        zone?.addEventListener('drop', event => {
+          event.preventDefault();
+          zone.classList.remove('border-brand');
+          if (!event.dataTransfer?.files.length) return;
+          photoInput.files = event.dataTransfer.files;
+          send();
+        });
+      }
+    }
+  </script>
 </AdminLayout>
 
 <script>
