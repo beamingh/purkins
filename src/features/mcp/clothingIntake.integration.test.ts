@@ -8,6 +8,8 @@ import { getIntake } from '../purkins/db';
 import { getProductByPublicId, getProductBySlug } from '../products/db';
 import { stockView } from '../../../mcp/src/purkins';
 import { createGuardedClothingBatch, createGuardedClothingDraft, type ClothingDraftInput } from './clothingIntake';
+import { issueMcpClientToken, authenticateMcpClientToken, revokeMcpClientToken } from './clientTokens';
+import { canWriteAsOperator } from './clientScope';
 
 const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const uuid = () => crypto.randomUUID();
@@ -62,9 +64,59 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
     for(const name of ['0040_purkins_intake.sql','0041_purkins_cataloguing.sql',
       '0042_purkins_manual_pricing.sql','0043_purkins_location_tree.sql',
       '0045_purkins_mcp_write_guard.sql','0046_purkins_mcp_stock_guard.sql',
-      '0047_purkins_mcp_clothing_intake.sql']) await migrate(name);
+      '0047_purkins_mcp_clothing_intake.sql','0049_purkins_mcp_connections.sql',
+      '0050_purkins_mcp_tool_permissions.sql']) await migrate(name);
   },30_000);
   afterAll(async () => { await mf?.dispose(); });
+
+  it('authenticates a real owner-issued client token before writing one private draft', async () => {
+    const now=Math.floor(Date.now()/1000);
+    const issued=await issueMcpClientToken(db,{
+      ownerEmail:'owner@example.com',name:'Guarded MCP smoke',expiryDays:30,
+      requestId:uuid(),now,
+      toolPermissions:['get_purkins_stock','bulk_create_guarded_clothing_drafts'],
+    });
+    expect(issued.ok).toBe(true);
+    if(!issued.ok)throw Error(issued.message);
+    const authenticated=await authenticateMcpClientToken(
+      db,'Bearer '+issued.token,'owner@example.com',now+1,
+    );
+    expect(authenticated?.actor).toBe('owner:client:'+issued.id);
+    expect(authenticated?.toolPermissions).toContain('bulk_create_guarded_clothing_drafts');
+    expect(canWriteAsOperator(authenticated,'true')).toBe(true);
+    if(!authenticated)throw Error('Owner token authentication failed');
+    const input=clothing('Authenticated Owner Token Clothing');
+    const created=await createGuardedClothingDraft(db,authenticated.actor,input);
+    expect(created).toMatchObject({ok:true,total_units:11,replayed:false});
+    if(!created.ok)throw Error(created.error);
+    expect(await getProductByPublicId(db,created.id)).toMatchObject({active:0,stock:11});
+    expect(await createGuardedClothingDraft(db,authenticated.actor,input))
+      .toMatchObject({ok:true,id:created.id,replayed:true});
+    const audit=await db.prepare(
+      'SELECT actor FROM purkins_mcp_clothing_receipts WHERE request_id=?'
+    ).bind(input.request_id).first<{actor:string}>();
+    expect(audit?.actor).toBe(authenticated.actor);
+
+    const readOnly=await issueMcpClientToken(db,{
+      ownerEmail:'owner@example.com',name:'Read-only smoke',expiryDays:30,
+      requestId:uuid(),now,
+    });
+    if(!readOnly.ok)throw Error(readOnly.message);
+    const reader=await authenticateMcpClientToken(
+      db,'Bearer '+readOnly.token,'owner@example.com',now+1,
+    );
+    expect(reader?.readOnly).toBe(true);
+    expect(reader?.toolPermissions).not.toContain('bulk_create_guarded_clothing_drafts');
+    expect(canWriteAsOperator(reader,'true')).toBe(false);
+
+    const revoked=await revokeMcpClientToken(db,{
+      id:issued.id,ownerEmail:'owner@example.com',now:now+2,
+    });
+    expect(revoked.ok).toBe(true);
+    expect(await authenticateMcpClientToken(
+      db,'Bearer '+issued.token,'owner@example.com',now+3,
+    )).toBeNull();
+  });
 
   it('commits all three size variants with private tags, barcodes, costs and a single draft', async () => {
     const input=clothing('Grey Three-Size Babygrow');
