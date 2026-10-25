@@ -30,7 +30,7 @@ import {
   TARGET, parseAccounts, detectCollisions, renderPermanentConfigs,
   assertUuid, assertApiList, latestMigrationFilename, isMigrationReady,
 } from './purkins-permanent-core.mjs';
-import { configureGuardedMcpWrites } from './purkins-mcp-guarded-config.mjs';
+import { configureGuardedMcpWrites, configurePublicationMcpWrite } from './purkins-mcp-guarded-config.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const instanceDir = join(root, '.instances');
@@ -45,6 +45,8 @@ const expected = {
   deploy: 'DEPLOY-PURKINS-WORKERS',
   'mcp-writes-on': 'ENABLE-PURKINS-MCP-WRITES',
   'mcp-writes-off': 'DISABLE-PURKINS-MCP-WRITES',
+  'mcp-publication-on': 'ENABLE-PURKINS-MCP-PUBLICATION',
+  'mcp-publication-off': 'DISABLE-PURKINS-MCP-PUBLICATION',
 };
 const command = process.argv[2] || 'plan';
 const confirm = process.argv.slice(3).find((arg) => arg.startsWith('--confirm='))?.slice(10) ?? '';
@@ -274,6 +276,34 @@ function setMcpWrites(enabled) {
   console.log('No remote change. Run the separately confirmed build/deploy to apply it.');
 }
 
+/**
+ * Explicit local activation for the NEW guarded publish/hide tools only.
+ * No Cloudflare mutation; enable only after shared public cache purge secret
+ * is provisioned and its signed endpoint is tested.
+ */
+function setMcpPublication(enabled) {
+  requireConfirmation(enabled ? 'mcp-publication-on' : 'mcp-publication-off');
+  ensureSafeLocal();
+  const state = readState();
+  if (enabled && !isMigrationReady(state, latestMigration())) {
+    fail('Apply current Purkins D1 migrations before enabling publication.');
+  }
+  const current = readFileSync(adminGenerated, 'utf8');
+  const nextConfig = configurePublicationMcpWrite(current, enabled);
+  writeFileSync(adminGenerated, nextConfig, { mode: 0o600 });
+  try {
+    writeFileSync(stateFile, JSON.stringify({
+      ...state, mcpPublicationEnabled: enabled,
+      mcpPublicationSwitchUpdatedAt: new Date().toISOString(),
+  }, null, 2) + '\n', { mode: 0o600 });
+  } catch (error) {
+    writeFileSync(adminGenerated, current, { mode: 0o600 });
+    throw error;
+  }
+  console.log('Local guarded MCP publish/hide:', enabled ? 'ON' : 'OFF');
+  console.log('No remote change. Run the separately confirmed build/deploy to apply it.');
+}
+
 function remoteMigrate() {
   requireConfirmation('migrate');
   ensureSafeLocal();
@@ -302,8 +332,8 @@ function deployPermanentWorkers() {
 }
 
 try {
-  if (!['plan', 'create', 'build', 'migrate', 'deploy', 'mcp-writes-on', 'mcp-writes-off'].includes(command)) {
-    fail('Usage: npm run purkins:cloudflare -- [plan|create|build|migrate|deploy|mcp-writes-on|mcp-writes-off] [--confirm=...]');
+  if (!['plan', 'create', 'build', 'migrate', 'deploy', 'mcp-writes-on', 'mcp-writes-off', 'mcp-publication-on', 'mcp-publication-off'].includes(command)) {
+    fail('Usage: npm run purkins:cloudflare -- [plan|create|build|migrate|deploy|mcp-writes-on|mcp-writes-off|mcp-publication-on|mcp-publication-off] [--confirm=...]');
   }
   if (command === 'plan') await preflight();
   if (command === 'create') await create();
@@ -312,6 +342,8 @@ try {
   if (command === 'deploy') deployPermanentWorkers();
   if (command === 'mcp-writes-on') setMcpWrites(true);
   if (command === 'mcp-writes-off') setMcpWrites(false);
+  if (command === 'mcp-publication-on') setMcpPublication(true);
+  if (command === 'mcp-publication-off') setMcpPublication(false);
 } catch (error) {
   console.error('Purkins provisioning stopped:', error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

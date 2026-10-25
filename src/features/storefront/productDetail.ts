@@ -62,6 +62,8 @@ export interface ProductDetailOptions {
   /** Absolute origin for SEO URLs. */
   origin: string;
   pathname: string;
+  /** Only the authenticated /admin preview route may opt into unpublished products. */
+  adminPreview?: boolean;
 }
 
 function heroImage(
@@ -89,7 +91,11 @@ export async function loadProductDetail(
   options: ProductDetailOptions,
 ): Promise<LoadedProductDetail> {
   const product = options.slug ? await getProductBySlug(db, options.slug) : null;
-  if (!product) return { status: 'not_found' };
+  // The public HTML detail route must enforce the same visibility boundary as
+  // buyer MCP and catalog APIs. A guessed draft slug must never render publicly.
+  if (!product || (product.active !== 1 && options.adminPreview !== true)) {
+    return { status: 'not_found' };
+  }
 
   // Independent once the product is known. Run together so an uncached render
   // pays one concurrent wait instead of a serial chain.
@@ -186,7 +192,7 @@ export async function loadProductDetail(
     status: 'ok',
     cacheTagIds: [product.public_id, ...related.map((candidate) => candidate.public_id)],
     backfillRelated:
-      storedRelated === null ? () => storeRelatedIds(product.id, RELATED_TARGET) : null,
+      !options.adminPreview && storedRelated === null ? () => storeRelatedIds(product.id, RELATED_TARGET) : null,
     seo: {
       title: product.name,
       // Meta/og description: plain text, truncated on a word boundary.
@@ -217,7 +223,7 @@ export async function loadProductDetail(
       })),
       images,
       heroImage: heroImage(product, options),
-      related: related.map((candidate) =>
+      related: (options.adminPreview ? [] : related).map((candidate) =>
         buildProductCard(candidate, {
           baseUrl: options.imageBaseUrl,
           delivery: options.delivery,
@@ -225,7 +231,7 @@ export async function loadProductDetail(
           sizes: RELATED_CARD_SIZES,
         }),
       ),
-      backHref: catalogPath(options.settings?.homePage),
+      backHref: options.adminPreview ? `/admin/products/${product.public_id}/edit` : catalogPath(options.settings?.homePage),
       error: options.searchParams.get('error'),
     },
     purchase: {
@@ -234,10 +240,10 @@ export async function loadProductDetail(
       expressAction: '/express',
       hasOptions: hasVariants || extras.length > 0,
       soldOut,
-      showAddToCart: cartEnabled,
+      showAddToCart: !options.adminPreview && cartEnabled,
       // Buy now is express (it skips the cart), so it survives the cart being
       // switched off — but not the absence of any rail that can take money.
-      showBuyNow: buyNowEnabled && canCheckout,
+      showBuyNow: !options.adminPreview && buyNowEnabled && canCheckout,
       variantLabel: product.variant_label,
       variants: variants.map((variant, index) => ({
         id: requirePublicId(variant.public_id, variant.id, 'variant'),

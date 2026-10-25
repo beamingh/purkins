@@ -1,0 +1,48 @@
+---
+import { env } from 'cloudflare:workers';
+import Layout from '../../../../layouts/Layout.astro';
+import ProductDetail from '#theme/ProductDetail.astro';
+import { getProductByPublicId } from '../../../../features/products/db';
+import { parsePublicId } from '../../../../features/ids/publicId';
+import { loadProductDetail } from '../../../../features/storefront/productDetail';
+import { getConfig } from '../../../../config';
+import { publicOrigin } from '../../../../features/http/origin';
+
+// Authentication and explicit private/no-store cache policy come from the
+// existing middleware's /admin/* gate, on the isolated Admin Worker only.
+// There is no preview token or public ?preview= escape hatch.
+const id = parsePublicId(Astro.params.id, 'product');
+const product = id ? await getProductByPublicId(env.DB, id) : null;
+if (!product) return new Response('Not found', { status: 404 });
+const loaded = await loadProductDetail(env.DB, {
+  slug: product.slug,
+  searchParams: new URLSearchParams(),
+  settings: Astro.locals.settings,
+  imageBaseUrl: getConfig().images.baseUrl,
+  delivery: Astro.locals.settings?.imageDelivery,
+  currency: getConfig().currency,
+  origin: publicOrigin(Astro.url.origin, env.CANONICAL_ORIGIN),
+  pathname: Astro.url.pathname,
+  adminPreview: true,
+});
+if (loaded.status !== 'ok') return new Response('Not found', { status: 404 });
+// Belt and suspenders: this authenticated response must not be indexed even if
+// a future layout/template change drops its meta robots tag.
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow, noarchive');
+const { model, purchase } = loaded;
+const editor = `/admin/products/${id}/edit`;
+---
+
+<Layout title={`PRIVATE PREVIEW · ${product.name}`} noIndex>
+  <div role="status" class="sticky top-0 z-30 mb-6 rounded-md border-2 border-amber-500 bg-amber-50 px-4 py-3 text-sm text-amber-950 shadow-sm">
+    <strong>Private admin preview — {product.active === 1 ? 'published item' : 'unpublished draft'}</strong>
+    <p class="mt-1">This is how the listing will look with its currently saved photos and prices. Buying is disabled here. The public product URL does not expose drafts.</p>
+    <a href={editor} class="mt-2 inline-block font-semibold underline">Return to editor</a>
+  </div>
+  <ProductDetail model={model} purchase={{...purchase, showAddToCart: false, showBuyNow: false}} />
+  {product.price_cents === 0 && (
+    <p class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+      The selling price is not set. This item cannot be published with a zero price.
+    </p>
+  )}
+</Layout>

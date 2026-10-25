@@ -1,7 +1,7 @@
 import {describe,expect,it} from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { configureGuardedMcpWrites } from '../../scripts/purkins-mcp-guarded-config.mjs';
+import { configureGuardedMcpWrites,configurePublicationMcpWrite } from '../../scripts/purkins-mcp-guarded-config.mjs';
 
 const fixture=`{
   "vars":{
@@ -67,6 +67,20 @@ describe('permanent Purkins guarded MCP config',()=>{
     expect(()=>configureGuardedMcpWrites(fixture.replace(
       '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"',
       '"PURKINS_MCP_LEGACY_WRITES_ENABLED": "false", "PURKINS_MCP_LEGACY_WRITES_ENABLED": "false"'))).toThrow(/Duplicate/);
+  });
+  it('never enables publication with normal MCP writes and independently toggles publication',()=>{
+    const normal=configureGuardedMcpWrites(fixture);
+    expect(normal).not.toContain('"PURKINS_MCP_PUBLICATION_WRITES_ENABLED": "true"');
+    const enabled=configurePublicationMcpWrite(normal,true);
+    expect(JSON.parse(enabled).vars.PURKINS_MCP_PUBLICATION_WRITES_ENABLED).toBe('true');
+    expect(configurePublicationMcpWrite(enabled,true)).toBe(enabled);
+    const disabled=configurePublicationMcpWrite(enabled,false);
+    expect(JSON.parse(disabled).vars.PURKINS_MCP_PUBLICATION_WRITES_ENABLED).toBe('false');
+    expect(()=>configurePublicationMcpWrite(fixture.replace('"true"','"false"'),true))
+      .toThrow(/Global MCP writes/);
+    const permanent=readFileSync(fileURLToPath(new URL('../../scripts/purkins-permanent.mjs',import.meta.url)),'utf8');
+    expect(permanent).toContain("mcp-publication-on");
+    expect(permanent).toContain("ENABLE-PURKINS-MCP-PUBLICATION");
   });
   it('has an explicit guarded local activation path, not any remote auto-enable',()=>{
     const s=readFileSync(fileURLToPath(new URL('../../scripts/purkins-permanent.mjs',import.meta.url)),'utf8');

@@ -10,6 +10,7 @@ import { stockView } from '../../../mcp/src/purkins';
 import { createGuardedClothingBatch, createGuardedClothingDraft, type ClothingDraftInput } from './clothingIntake';
 import { issueMcpClientToken, authenticateMcpClientToken, revokeMcpClientToken } from './clientTokens';
 import { canWriteAsOperator } from './clientScope';
+import { reconcileGuardedVariant } from './variantReconcile';
 
 const actor = 'owner:client:8da8ea6f-6d5f-4391-8cce-21312f76ca01';
 const uuid = () => crypto.randomUUID();
@@ -65,7 +66,8 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
       '0042_purkins_manual_pricing.sql','0043_purkins_location_tree.sql',
       '0045_purkins_mcp_write_guard.sql','0046_purkins_mcp_stock_guard.sql',
       '0047_purkins_mcp_clothing_intake.sql','0049_purkins_mcp_connections.sql',
-      '0050_purkins_mcp_tool_permissions.sql']) await migrate(name);
+      '0050_purkins_mcp_tool_permissions.sql',
+      '0051_purkins_mcp_variant_reconcile.sql']) await migrate(name);
   },30_000);
   afterAll(async () => { await mf?.dispose(); });
 
@@ -116,6 +118,48 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
     expect(await authenticateMcpClientToken(
       db,'Bearer '+issued.token,'owner@example.com',now+3,
     )).toBeNull();
+  });
+
+  it('atomically reconciles a draft size count, parent total, price and private barcode', async () => {
+    const created=await createGuardedClothingDraft(db,actor,clothing('Variant Reconcile Fixture'));
+    if(!created.ok)throw Error(created.error);
+    const product=await getProductByPublicId(db,created.id);
+    const view=await stockView(db,product!);
+    const v=view!.variants[2]!;
+    const input={
+      request_id:uuid(),product_id:created.id,variant_id:v.id,
+      expected_parent_stock:11,expected_parent_revision:0,
+      expected_variant_stock:v.stock,expected_variant_revision:0,
+      expected_price_cents:v.price_cents,expected_supplier_barcode:null,
+      new_stock:8,new_price_cents:16000,new_supplier_barcode:'001234567890',
+    };
+    const changed=await reconcileGuardedVariant(db,actor,input);
+    expect(changed).toMatchObject({ok:true,parent_stock:12,variant_stock:8,replayed:false});
+    expect(await getProductByPublicId(db,created.id)).toMatchObject({stock:12,active:0});
+    const reread=await stockView(db,(await getProductByPublicId(db,created.id))!);
+    expect(reread?.variants[2]).toMatchObject({
+      stock:8,price_cents:16000,supplier_barcode:'001234567890',
+    });
+    expect(await reconcileGuardedVariant(db,actor,input))
+      .toMatchObject({ok:true,replayed:true,parent_stock:12,variant_stock:8});
+    expect(await reconcileGuardedVariant(db,actor,{
+      ...input,request_id:uuid(),
+    })).toMatchObject({ok:false,conflict:true});
+    expect(await reconcileGuardedVariant(db,'owner:bearer',input))
+      .toMatchObject({ok:false,conflict:true});
+    const receipts=await db.prepare(
+      'SELECT COUNT(*) AS n FROM purkins_mcp_variant_reconcile_receipts WHERE completed=1 AND product_public_id=?'
+    ).bind(created.id).first<{n:number}>();
+    expect(receipts?.n).toBe(1);
+    await db.prepare('UPDATE products SET active=1 WHERE public_id=?').bind(created.id).run();
+    const stale=await reconcileGuardedVariant(db,actor,{
+      ...input,request_id:uuid(),expected_parent_stock:12,expected_parent_revision:1,
+      expected_variant_stock:8,expected_variant_revision:1,
+      expected_price_cents:16000,expected_supplier_barcode:'001234567890',
+      new_stock:9,new_price_cents:17000,
+    });
+    expect(stale).toMatchObject({ok:false,conflict:true});
+    expect((await getProductByPublicId(db,created.id))?.stock).toBe(12);
   });
 
   it('commits all three size variants with private tags, barcodes, costs and a single draft', async () => {
