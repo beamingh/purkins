@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
-import { registerPurkinsTools, registerGuardedPurkinsStockTools, registerGuardedClothingIntakeTools } from './purkins';
+import { registerPurkinsTools, registerGuardedPurkinsStockTools, registerGuardedClothingIntakeTools, registerGuardedVariantReconcileTools } from './purkins';
 import { registerPurkinsMediaTools } from './purkins-media';
 import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
@@ -359,6 +359,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     const allowClothingWrites = allowStockWrites &&
       writeEnv.PURKINS_MCP_CLOTHING_WRITES_ENABLED === 'true';
     registerGuardedClothingIntakeTools(scopedServer, db, allowClothingWrites, this.props.actor);
+    registerGuardedVariantReconcileTools(scopedServer, db, allowClothingWrites, this.props.actor);
     const mediaEnv = this.env as Env & {
       BUCKET?: Parameters<typeof createR2Storage>[0];
       PURKINS_MCP_IMAGE_IMPORT_HOSTS?: string;
