@@ -11,7 +11,7 @@ describe('MCP per-connection tool registration',()=>{
   it('catalogs every actual MCP tool exactly once',()=>{
     const sources=[
       './index.ts','./purkins.ts','./purkins-media.ts','./purkins-gallery.ts',
-      './locations.ts','./categories.ts',
+      './locations.ts','./categories.ts','./purkins-publication.ts',
     ];
     const found=new Set<string>();
     for(const path of sources){
@@ -55,7 +55,7 @@ describe('MCP per-connection tool registration',()=>{
     for (const helper of [
       'registerPurkinsTools','registerGuardedPurkinsStockTools','registerGuardedClothingIntakeTools',
       'registerPurkinsMediaTools','registerGuardedPurkinsGalleryTools',
-      'registerLocationTools','registerCategoryTools',
+      'registerLocationTools','registerCategoryTools','registerGuardedPublicationTools',
     ]) {
       expect(source).toContain(helper);
     }
