@@ -33,6 +33,7 @@ export const POST:APIRoute=async({request,params,redirect,locals})=>{
   try{
     const result=await applyGuardedPublication(env.DB,owner,'unpublish',{
       request_id,product_id,expected_catalog_revision:revision,
+      confirm_unpublish:true,
     },purge);
     if(!result.ok){
       return redirect(`/admin/products/${product_id}/edit?error=`+
