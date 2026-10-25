@@ -2,7 +2,9 @@
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
 import { authorizedMcpOwner } from '../../features/mcp/ownerGate';
-import { MCP_OWNER_READ_TOOLS } from '../../features/mcp/clientScope';
+import {
+  MCP_TOOL_PERMISSIONS, MCP_ALL_TOOLS, MCP_OWNER_READ_TOOLS, parseStoredMcpPermissions,
+} from '../../features/mcp/clientScope';
 import {
   issueMcpClientToken, revokeMcpClientToken, listMcpClientTokens,
   listMcpClientTokenEvents, MCP_CLIENT_TOKEN_DAYS,
@@ -41,6 +43,12 @@ if(Astro.request.method==='POST'){
           name:String(form.get('name')??''),
           expiryDays:Number(form.get('expires_days')??''),
           requestId:String(form.get('request_id')??''),
+          // The full checkbox is a server-side preset as well as a JS shortcut.
+          // If a single checkbox is subsequently dropped the browser script
+          // clears full_permissions, preserving every individual selection.
+          toolPermissions:form.get('full_permissions')==='1'
+            ? MCP_ALL_TOOLS
+            : form.getAll('tool_permission').map(value=>String(value)),
         });
         if(issued.ok){
           revealedToken=issued.token;
@@ -70,6 +78,8 @@ const format=(seconds:number|null)=>seconds===null?'Never':new Date(seconds*1000
   timeZone:'Africa/Lusaka',day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit',
 });
 const requestId=crypto.randomUUID();
+const permissionGroups=[...new Set(MCP_TOOL_PERMISSIONS.map(item=>item.group))];
+const defaultTools=new Set<string>(MCP_OWNER_READ_TOOLS);
 const mcpEndpoint=`${Astro.url.origin}/mcp`;
 ---
 
@@ -78,9 +88,10 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     <p class="mb-2 text-xs uppercase tracking-widest text-gray-500">Private / Owner only</p>
     <h1 class="font-serif text-3xl">MCP connections &amp; tokens</h1>
     <p class="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">
-      Create expiring credentials for reading your Purkins catalogue and stock with MCP clients.
-      New dashboard-issued tokens are always <strong>read-only</strong>, even when separate owner
-      write permissions are enabled. Keep the existing Cloudflare Access owner policy in place.
+      Create expiring, owner-controlled credentials with precisely selected MCP permissions.
+      New connections start with safe, read-only access. Select <strong>Full permissions</strong>
+      or add and remove individual tools for stock intake, media, locations and other operations.
+      Worker-level write safeguards, confirmation and audit requirements still apply.
     </p>
   </header>
 
@@ -111,7 +122,7 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
     <dl class="mt-4 grid gap-3 text-sm">
       <div><dt class="font-semibold">MCP endpoint</dt><dd class="mt-1 break-all font-mono text-xs">{mcpEndpoint}</dd></div>
       <div><dt class="font-semibold">Authentication</dt><dd class="mt-1">Authorization: Bearer &lt;token&gt;, plus any Cloudflare Access policy required by your client</dd></div>
-      <div><dt class="font-semibold">Client capabilities</dt><dd class="mt-1">Private owner reads only; no product changes, publication, sales or refunds</dd></div>
+      <div><dt class="font-semibold">Client capabilities</dt><dd class="mt-1">Selectable individual MCP tools, with a read-only default and Full permissions shortcut. Write tools also require enabled Worker-level scope switches.</dd></div>
     </dl>
     <p class="mt-4 text-sm text-amber-900">
       Important: These bearer tokens are not OAuth authorization codes. ChatGPT's custom
@@ -139,7 +150,43 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
           {MCP_CLIENT_TOKEN_DAYS.map(days=><option value={days} selected={days===90}>{days} days</option>)}
         </select>
       </div>
-      <p class="text-xs text-gray-600">Accountable owner: {owner}. Scope: read-only (fixed).</p>
+      <fieldset class="rounded-lg border border-line p-4" id="mcp-permission-editor">
+        <legend class="px-2 font-medium">Tool permissions</legend>
+        <label class="mt-2 flex cursor-pointer items-center gap-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+          <input id="mcp-full-permissions" type="checkbox" name="full_permissions" value="1" class="size-4" />
+          <span><strong>Full permissions</strong><small class="block text-gray-700">Select every supported tool. Includes sensitive operations; server-side write protections still apply.</small></span>
+        </label>
+        <div class="my-3 flex flex-wrap items-center justify-between gap-2">
+          <p id="mcp-selected-count" aria-live="polite" class="text-xs text-gray-600">Safe default: {MCP_OWNER_READ_TOOLS.length} read-only tools</p>
+          <button id="mcp-reset-readonly" type="button" class="rounded border border-line px-3 py-2 text-xs hover:bg-gray-100">Restore safe default</button>
+        </div>
+        {permissionGroups.map(group=>(
+          <details class="mt-3 rounded-md border border-line bg-gray-50 p-3" open={group==='Private catalog reads'||group==='Guarded stock drafts'}>
+            <summary class="cursor-pointer text-sm font-semibold">{group}</summary>
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              {MCP_TOOL_PERMISSIONS.filter(tool=>tool.group===group).map(tool=>(
+                <label class="flex cursor-pointer items-start gap-2 text-sm">
+                  <input type="checkbox" name="tool_permission" value={tool.name}
+                    data-mcp-permission={tool.name}
+                    data-default-read={tool.safety==='read'?'1':'0'}
+                    checked={defaultTools.has(tool.name)}
+                    class="mt-1 size-4 shrink-0" />
+                  <span><strong class="block text-xs">{tool.label}</strong>
+                    <code class="block break-all text-[0.68rem] text-gray-500">{tool.name}</code>
+                    {tool.safety!=='read'&&<small class="text-amber-800">Write access · {tool.safety==='legacy'?'legacy gate':tool.safety==='commerce'?'commerce': 'guarded'}</small>}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </details>
+        ))}
+        <p class="mt-4 text-xs text-gray-600">
+          Grants are fixed when a token is issued. To change them, issue a replacement token
+          and revoke the old one. An existing MCP session cannot silently keep removed permissions.
+          Full access never overrides emergency write-disable flags or required confirmations.
+        </p>
+      </fieldset>
+      <p class="text-xs text-gray-600">Accountable owner: {owner}. The current global write switch remains independent of token grants.</p>
       <button type="submit" class="self-start rounded-md bg-gray-900 px-5 py-3 text-sm font-medium text-white">
         Generate one-time token
       </button>
@@ -147,17 +194,11 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
   </section>
 
   <section class="mb-10 rounded-lg border border-line bg-white p-5" aria-labelledby="tools-title">
-    <h2 id="tools-title" class="font-serif text-xl">Read-only tool registry</h2>
+    <h2 id="tools-title" class="font-serif text-xl">Available MCP tool registry</h2>
     <p class="mt-2 text-sm text-gray-600">
-      The tools new tokens are eligible to call after the connection authenticates.
-      Checkout creation, drafts, publication, sales, refunds and settings mutations are excluded.
-      Individual tools still follow their existing data and access checks.
+      {MCP_OWNER_READ_TOOLS.length} safe read tools · {MCP_ALL_TOOLS.length-MCP_OWNER_READ_TOOLS.length} additional write tools.
+      Each connection receives only the tools you select; the global Worker switches may restrict write access further.
     </p>
-    <ul class="mt-4 grid gap-2 sm:grid-cols-2">
-      {MCP_OWNER_READ_TOOLS.map(name=>(
-        <li class="rounded border border-line bg-gray-50 px-3 py-2 font-mono text-xs">{name}</li>
-      ))}
-    </ul>
   </section>
 
   <section class="mb-10" aria-labelledby="list-title">
@@ -173,7 +214,21 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
               <td class="p-3">
                 <strong class="block">{row.name}</strong>
                 <code class="text-xs text-gray-500">{row.token_prefix}…</code>
-                <span class="block text-xs text-gray-500">Read only · {row.accountable_email}</span>
+                <span class="block text-xs text-gray-500">{(parseStoredMcpPermissions(row.tool_permissions_json)??[]).length}/{MCP_ALL_TOOLS.length} tools · {row.accountable_email}</span>
+                <details class="mt-2 text-xs text-gray-600">
+                  <summary class="cursor-pointer">Granted tools</summary>
+                  <div class="mt-2 flex flex-wrap gap-1">
+                    {(parseStoredMcpPermissions(row.tool_permissions_json)??[]).map(tool=>(
+                      <code class="rounded bg-gray-100 px-2 py-1">{tool}</code>
+                    ))}
+                  </div>
+                </details>
+                {row.revoked_at===null&&row.expires_at>now&&(
+                  <button type="button" data-mcp-copy-permissions={row.id}
+                    data-mcp-existing-name={row.name}
+                    data-mcp-existing-permissions={JSON.stringify(parseStoredMcpPermissions(row.tool_permissions_json)??[])}
+                    class="mt-2 text-xs text-brand underline">Replace with different permissions</button>
+                )}
               </td>
               <td class="p-3">{status(row)}</td>
               <td class="p-3 whitespace-nowrap text-xs">{format(row.expires_at)}</td>
@@ -215,6 +270,34 @@ const mcpEndpoint=`${Astro.url.origin}/mcp`;
 </AdminLayout>
 
 <script>
+  const permissionBoxes=[...document.querySelectorAll<HTMLInputElement>('[name="tool_permission"]')];
+  const full=document.getElementById('mcp-full-permissions') as HTMLInputElement|null;
+  const count=document.getElementById('mcp-selected-count');
+  const updateCount=()=>{
+    const selected=permissionBoxes.filter(box=>box.checked).length;
+    if(full)full.checked=selected===permissionBoxes.length;
+    if(count)count.textContent=`${selected}/${permissionBoxes.length} tools selected`;
+  };
+  full?.addEventListener('change',()=>{
+    permissionBoxes.forEach(box=>{box.checked=!!full.checked;});
+    updateCount();
+  });
+  permissionBoxes.forEach(box=>box.addEventListener('change',updateCount));
+  document.getElementById('mcp-reset-readonly')?.addEventListener('click',()=>{
+    permissionBoxes.forEach(box=>{box.checked=box.dataset.defaultRead==='1';});
+    updateCount();
+  });
+  document.querySelectorAll<HTMLButtonElement>('[data-mcp-copy-permissions]').forEach(button=>{
+    button.addEventListener('click',()=>{
+      const selected=new Set(JSON.parse(button.dataset.mcpExistingPermissions??'[]') as string[]);
+      permissionBoxes.forEach(box=>{box.checked=selected.has(box.value);});
+      const name=document.getElementById('token-name') as HTMLInputElement|null;
+      if(name)name.value=(button.dataset.mcpExistingName??'Purkins MCP')+' replacement';
+      updateCount();
+      document.getElementById('mcp-permission-editor')?.scrollIntoView({behavior:'smooth',block:'start'});
+    });
+  });
+  updateCount();
   document.getElementById('copy-mcp-token')?.addEventListener('click',async()=>{
     const textarea=document.getElementById('mcp-one-time-token') as HTMLTextAreaElement|null;
     if(!textarea)return;
