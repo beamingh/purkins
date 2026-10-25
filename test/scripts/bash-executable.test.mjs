@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { win32 } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { resolveBashExecutable } from '../../scripts/bash-executable.mjs';
 
 describe('cross-platform Bash launcher', () => {
@@ -49,6 +50,16 @@ describe('cross-platform Bash launcher', () => {
       env: { GIT_BASH_EXE: 'C:\\Windows\\System32\\bash.exe' },
       exists: () => true,
     })).toThrow('does NOT require WSL');
+  });
+
+  it('routes npm shell scripts through this launcher instead of PATH bash', () => {
+    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+    for (const command of Object.values(pkg.scripts)) {
+      expect(command).not.toMatch(/(?:^|&&\\s*)bash\\s/);
+    }
+    expect(pkg.scripts['test:integration']).toContain(
+      'node scripts/run-bash-script.mjs test/integration/d1-integration.sh',
+    );
   });
 
   it('explains how to install Git Bash instead of asking for WSL', () => {
