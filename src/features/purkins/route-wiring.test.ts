@@ -19,10 +19,18 @@ describe('Purkins inventory route and form safety wiring', () => {
     expect(edit).toContain('await saveIntakeDraft(env.DB, id, parsedIntake.data)');
   });
 
-  it('uses an explicit approval endpoint and never publishes on product creation', () => {
-    const route = source('../../pages/api/admin/products/[id]/approve.ts');
-    expect(route).toContain('await approveIntake(env.DB, product.id)');
+  it('uses explicit guarded Admin publish and hide, not a direct visibility flip', () => {
+    const publish = source('../../pages/api/admin/products/[id]/approve.ts');
+    const hide = source('../../pages/api/admin/products/[id]/hide.ts');
     const create = source('../../pages/api/admin/products.ts');
+    for (const route of [publish, hide]) {
+      expect(route).toContain('applyGuardedPublication(env.DB');
+      expect(route).toContain('publicStorefrontCachePurger(');
+      expect(route).not.toContain('approveIntake(');
+      expect(route).not.toContain('UPDATE products SET active');
+    }
+    expect(publish).toContain("String(form.get('confirm_publish')) !== 'true'");
+    expect(hide).toContain("String(form.get('confirm_unpublish'))!=='true'");
     expect(create).not.toContain('approveIntake(');
   });
 
