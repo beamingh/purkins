@@ -48,6 +48,19 @@ describe('MCP per-connection tool registration',()=>{
     expect(parseStoredMcpPermissions('{}')).toBeNull();
   });
 
+  it('the MCP handler never bypasses the scoped registerTool proxy',()=>{
+    const source=readFileSync(fileURLToPath(new URL('./index.ts',import.meta.url)),'utf8');
+    expect(source).toContain('filterMcpToolRegistrations(this.server, this.props?.toolPermissions)');
+    expect(source).not.toMatch(/this\\.server\\.registerTool\\s*\\(/);
+    for (const helper of [
+      'registerPurkinsTools','registerGuardedPurkinsStockTools','registerGuardedClothingIntakeTools',
+      'registerPurkinsMediaTools','registerGuardedPurkinsGalleryTools',
+      'registerLocationTools','registerCategoryTools',
+    ]) {
+      expect(source).toContain(helper);
+    }
+  });
+
   it('registration proxy hides unselected tools from the MCP registry',()=>{
     const seen:string[]=[];
     const mock={
