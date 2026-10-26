@@ -19,7 +19,12 @@ CREATE TABLE IF NOT EXISTS purkins_request_deliveries (
   courier_fee_cents INTEGER CHECK(courier_fee_cents >= 0),
   courier_fee_payer TEXT NOT NULL CHECK(courier_fee_payer IN
     ('customer_to_rider','purkins','not_agreed')),
+  courier_fee_state TEXT NOT NULL DEFAULT 'unconfirmed' CHECK(courier_fee_state IN
+    ('unconfirmed','customer_reports_paid','purkins_paid')),
   operator_note TEXT,
+  CHECK ((courier_fee_state='unconfirmed') OR
+    (courier_fee_state='customer_reports_paid' AND courier_fee_payer='customer_to_rider') OR
+    (courier_fee_state='purkins_paid' AND courier_fee_payer='purkins')),
   change_nonce TEXT NOT NULL,
   updated_by TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -42,6 +47,7 @@ CREATE TABLE IF NOT EXISTS purkins_request_delivery_events (
   booking_reference TEXT,
   courier_fee_cents INTEGER,
   courier_fee_payer TEXT NOT NULL,
+  courier_fee_state TEXT NOT NULL,
   operator_note TEXT,
   changed_by TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
