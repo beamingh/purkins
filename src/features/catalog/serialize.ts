@@ -43,6 +43,8 @@ export interface CatalogProduct {
   name: string;
   description: string | null;
   price: { amount: number; cents: number; currency: string };
+  /** Optional real former price, never the actual checkout amount. */
+  compare_at_price?: { amount: number; cents: number; currency: string };
   in_stock: boolean;
   variant_label: string | null;
   categories: string[];
@@ -80,6 +82,10 @@ export function toCatalogProduct(
     name: p.name,
     description: p.description,
     price: money(p.price_cents, p.currency),
+    ...(!p.variant_label && !hasVariants &&
+        p.compare_at_price_cents != null &&
+        p.compare_at_price_cents > p.price_cents
+        ? { compare_at_price: money(p.compare_at_price_cents, p.currency) } : {}),
     // With variants, availability comes from them (the variant is the SKU).
     in_stock: hasVariants ? variants!.some((v) => v.stock > 0) : p.stock > 0,
     variant_label: p.variant_label,
