@@ -103,6 +103,9 @@ const conflictOrders = new Map(
       .map(async (e) => [e.order_id!, await getOrder(env.DB, e.order_id!)] as const),
   ),
 );
+const requestCount = (await env.DB.prepare(
+  "SELECT COUNT(*) AS n FROM purkins_order_requests WHERE status != 'cancelled'"
+).first<{ n: number }>())?.n ?? 0;
 const listError = Astro.url.searchParams.get('error');
 ---
 
@@ -205,6 +208,10 @@ const listError = Astro.url.searchParams.get('error');
   <div class="mb-8 flex flex-wrap items-center justify-between gap-4">
     <h1 class="font-serif text-3xl tracking-tight">Orders</h1>
     <div class="flex flex-wrap items-center gap-3">
+      <a href="/admin/order-requests"
+        class="rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/5">
+        Order requests ({requestCount})
+      </a>
       <a href="/admin/orders/new" class="rounded bg-brand px-4 py-2 text-sm font-semibold text-white">+ Record paid sale</a>
       {/* Lookup accepts the customer reference in any form it was communicated:
           the bare 10-char token, the full ord_ ID, or a legacy calculated
