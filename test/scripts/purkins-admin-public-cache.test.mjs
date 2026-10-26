@@ -13,6 +13,7 @@ const ADMIN_MUTATIONS = [
   'src/pages/api/admin/products/[id]/images.ts',
   'src/pages/api/admin/orders/manual.ts',
   'src/pages/admin/settings.astro',
+  'src/pages/admin/shipping.astro',
 ];
 
 describe('Purkins split-Worker Admin cache invalidation', () => {
@@ -21,6 +22,13 @@ describe('Purkins split-Worker Admin cache invalidation', () => {
     expect(file).toContain('purgePublicAfterAdminMutation');
     expect(file).not.toMatch(/\bpurgeCacheTags\s*\(/);
     expect(file).not.toContain("from '../../../features/cache/purge'");
+  });
+
+  it('only purges shipping caches after successful settings save', () => {
+    const shipping = source('src/pages/admin/shipping.astro');
+    expect(shipping).toContain('if (result.ok) {');
+    expect(shipping).toContain('await purgePublicAfterAdminMutation();');
+    expect(shipping).toContain("return Astro.redirect('/admin/shipping?saved=1', 303)");
   });
 
   it('uses the authenticated public-Worker invalidation endpoint', () => {
