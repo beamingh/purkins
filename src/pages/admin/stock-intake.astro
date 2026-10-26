@@ -35,7 +35,10 @@ const { results: recentDrafts } = await env.DB.prepare(
       <p class="text-xs uppercase tracking-widest text-muted">Purkins / Private inventory</p>
       <h1 class="mt-2 font-serif text-3xl tracking-tight">Rapid Stock Intake</h1>
     </div>
-    <a href="/admin/products" class="rounded-md border border-line px-4 py-2 text-sm hover:bg-surface">View all stock</a>
+    <div class="flex flex-wrap gap-2">
+      <a href="/admin/products" class="rounded-md border border-line px-4 py-2 text-sm hover:bg-surface">View all stock</a>
+      <a href="/admin/stock-valuation" class="rounded-md border border-line px-4 py-2 text-sm hover:bg-surface">Stock valuation</a>
+    </div>
   </div>
   <p class="mb-5 max-w-2xl text-sm text-muted">
     Photograph an item, record what you know, and save it as an unpublished draft.
