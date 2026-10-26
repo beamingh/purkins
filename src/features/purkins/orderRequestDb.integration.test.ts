@@ -17,7 +17,7 @@ const line = (qty = 2): CartLine => ({
     currency:'zmw',active:1,stock:4,price_cents:95000},
   variant:null,extras:[],qty,unitPriceCents:95000,
   lineTotalCents:95000*qty,availableStock:4,key:'prod_0123456789',
-} as CartLine);
+} as unknown as CartLine);
 
 describe('Unpaid Purkins order request ledger (isolated Miniflare D1)',()=>{
   let mf: Miniflare;
