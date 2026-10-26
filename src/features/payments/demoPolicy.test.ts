@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { StoreSettings } from '../settings/db';
 import {
-  enabledMethods, isMethodAvailable, offeredMethods, paymentsInDemoMode,
+  enabledMethods, isMethodAvailable, offeredMethods,
 } from './index';
 import { isDemoCheckoutEnabledFlag } from './demoPolicy';
 
