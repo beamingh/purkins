@@ -15,7 +15,8 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   const next = String(form.get('status') ?? '');
   const note = String(form.get('operator_note') ?? '').trim();
   const back = '/admin/order-requests/' + id;
-  if (!(expected in REQUEST_STATUSES) || !(next in REQUEST_STATUSES) || note.length > 1000) {
+  if (!Object.prototype.hasOwnProperty.call(REQUEST_STATUSES, expected) ||
+      !Object.prototype.hasOwnProperty.call(REQUEST_STATUSES, next) || note.length > 1000) {
     return redirect(back + '?error=' + encodeURIComponent('Invalid status or note.'),303);
   }
   const saved = await updateOrderRequestStatus(
