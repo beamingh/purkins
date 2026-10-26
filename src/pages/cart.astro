@@ -161,9 +161,18 @@ const shopHref = catalogPath(Astro.locals.settings?.homePage);
               <span class="text-lg tabular-nums">{formatPrice(subtotalCents)}</span>
             </div>
 
+            <a href="/request-order"
+              class="mt-4 flex w-full items-center justify-between gap-3 rounded-lg bg-brand px-5 py-3 text-sm font-semibold text-on-brand hover:bg-brand-hover">
+              <span>Request order · Pay on delivery or arrange payment</span>
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+            <p class="mt-2 text-xs text-muted">
+              No payment is taken now. Purkins will confirm availability,
+              delivery costs and payment arrangements with you.
+            </p>
             {methods.length === 0 ? (
               <p class="mt-4 rounded-lg border border-dashed border-line px-5 py-4 text-center text-sm text-muted">
-                Checkout is currently unavailable.
+                Online payment is not available yet. You can still submit an order request above.
               </p>
             ) : (
             <form method="POST" action="/api/checkout" class="mt-4 space-y-2">

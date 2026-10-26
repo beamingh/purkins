@@ -1,0 +1,37 @@
+---
+export const prerender = false;
+import { env } from 'cloudflare:workers';
+import Layout from '../../layouts/Layout.astro';
+import { getOrderRequest } from '../../features/purkins/orderRequestDb';
+import { REQUEST_PAYMENT_OPTIONS } from '../../features/purkins/orderRequests';
+import { formatPrice } from '../../config';
+import { catalogPath } from '../../features/settings/home';
+
+Astro.response.headers.set('cache-control','private, no-store');
+Astro.response.headers.set('referrer-policy','no-referrer');
+Astro.response.headers.set('x-robots-tag','noindex,nofollow');
+const ref = Astro.url.searchParams.get('ref') ?? '';
+const request = await getOrderRequest(env.DB, ref);
+if (!request) return new Response('Request not found.', { status:404 });
+const shopHref = catalogPath(Astro.locals.settings?.homePage);
+---
+<Layout title="Purkins order request received">
+  <section class="mx-auto max-w-xl py-12">
+    <div class="rounded-lg border border-line bg-surface p-6">
+      <h1 class="font-serif text-3xl">Order request received</h1>
+      <p class="mt-3 text-muted">
+        Thank you. Purkins has received your request and will contact you using
+        the phone number supplied to confirm the order and any delivery arrangements.
+      </p>
+      <p class="mt-4 text-sm"><strong>Reference:</strong> <code>{request.public_id}</code></p>
+      <p class="mt-2 text-sm"><strong>Product subtotal:</strong> {formatPrice(request.subtotal_cents,request.currency)}</p>
+      <p class="mt-2 text-sm"><strong>Payment preference:</strong> {REQUEST_PAYMENT_OPTIONS[request.payment_preference]}</p>
+      <div class="mt-5 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+        This is <strong>not yet a confirmed purchase or paid order</strong>.
+        Please do not send money until Purkins confirms availability, delivery
+        charges and the correct payment details.
+      </div>
+      <a href={shopHref} class="mt-6 inline-block text-brand underline">Continue shopping</a>
+    </div>
+  </section>
+</Layout>

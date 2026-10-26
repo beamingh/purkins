@@ -1,0 +1,55 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { formatPrice, formatDate, getConfig } from '../../../config';
+import { listOrderRequests } from '../../../features/purkins/orderRequestDb';
+import { REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES } from '../../../features/purkins/orderRequests';
+
+const requests = await listOrderRequests(env.DB,100);
+const open = requests.filter(r => r.status !== 'cancelled');
+const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
+---
+<AdminLayout title="Order requests" active="orders">
+  <header class="mb-6">
+    <a href="/admin/orders" class="text-xs text-gray-500 hover:text-brand">&larr; Paid orders</a>
+    <h1 class="mt-2 text-2xl font-bold">Customer order requests</h1>
+    <p class="mt-1 text-sm text-gray-600">
+      Customers requesting pay-on-delivery, payment instructions or a callback.
+      These are <strong>unpaid enquiries</strong>, not sales. Submitting does not deduct stock.
+    </p>
+  </header>
+  <div class="mb-5 flex flex-wrap gap-3">
+    <span class="rounded-md border border-gray-200 bg-white px-4 py-3 text-sm font-semibold">{open.length} active requests (up to 100 shown)</span>
+    <a href="/admin/orders/new" class="rounded-md border border-gray-300 px-4 py-3 text-sm font-semibold hover:border-brand">Record a verified paid sale</a>
+  </div>
+  <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <table class="w-full min-w-[700px] text-left text-sm">
+      <thead class="bg-gray-50 text-gray-600">
+        <tr>
+          <th class="px-4 py-3">Reference / date</th>
+          <th class="px-4 py-3">Customer</th>
+          <th class="px-4 py-3">Payment preference</th>
+          <th class="px-4 py-3">Subtotal</th>
+          <th class="px-4 py-3">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {requests.map(request => (
+          <tr class="border-t border-gray-100">
+            <td class="px-4 py-3">
+              <a class="font-semibold text-brand underline" href={'/admin/order-requests/' + request.public_id}>
+                {request.public_id}
+              </a>
+              <p class="mt-1 text-xs text-gray-500">{formatDate(request.created_at,undefined,timeZone)}</p>
+            </td>
+            <td class="px-4 py-3">{request.buyer_name}<p class="text-xs text-gray-500">{request.phone}</p></td>
+            <td class="px-4 py-3">{REQUEST_PAYMENT_OPTIONS[request.payment_preference]}</td>
+            <td class="px-4 py-3 tabular-nums">{formatPrice(request.subtotal_cents,request.currency)}</td>
+            <td class="px-4 py-3">{REQUEST_STATUSES[request.status]}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    {requests.length === 0 && <p class="p-5 text-sm text-gray-600">No customer order requests have been submitted yet.</p>}
+  </div>
+</AdminLayout>
