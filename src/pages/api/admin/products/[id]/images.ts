@@ -51,7 +51,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
           headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, no-store' },
         })
       : redirect(
-          `/admin/products/${publicId}/edit${msg ? `?error=${encodeURIComponent(msg)}` : ''}#gallery`,
+          `/admin/products/${publicId}/edit${msg ? `?error=${encodeURIComponent(msg)}` : '?gallery_saved=1'}#gallery`,
           303,
         );
 
