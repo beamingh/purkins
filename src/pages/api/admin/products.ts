@@ -21,8 +21,7 @@ import { attachMediaToProduct } from '../../../features/media/db';
 import { getStorage, getFileStorage } from '../../../features/storage';
 import { uploadDigitalFile, validateDigitalFile } from '../../../features/products/digitalFile.ts';
 import { attachmentActive } from '../../../features/digitalDelivery/rollout.ts';
-import { CACHE_TAG } from '../../../features/cache/tags';
-import { purgeCacheTags } from '../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../features/cache/purgePublicAdmin';
 import { parseIntakeFields } from '../../../features/purkins/intake';
 import { insertIntake, removeIntake } from '../../../features/purkins/db';
 import { intakeCreateErrorUrl, intakeCreateSuccessUrl } from '../../../features/purkins/intakeDesk';
@@ -116,9 +115,6 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
     console.error('Search index (create) failed:', err);
   }
 
-  await purgeCacheTags([
-    CACHE_TAG.catalog,
-    ...(created?.public_id ? [CACHE_TAG.product(created.public_id)] : []),
-  ]);
+  await purgePublicAfterAdminMutation();
   return redirect(intakeCreateSuccessUrl(isIntakeDesk, created?.public_id), 303);
 };
