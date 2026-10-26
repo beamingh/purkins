@@ -6,7 +6,7 @@ import {
   DISPATCH_BUCKETS, DISPATCH_ORDER, getDispatchOverview,
   type DispatchBucket,
 } from '../../../features/purkins/dispatchOverview';
-import { DELIVERY_STATUSES, DELIVERY_SOURCES, COURIER_FEE_PAYERS, COURIER_FEE_STATES } from '../../../features/purkins/courierDelivery';
+import { DELIVERY_STATUSES, COURIER_FEE_PAYERS, COURIER_FEE_STATES } from '../../../features/purkins/courierDelivery';
 
 const overview=await getDispatchOverview(env.DB);
 const filter=Astro.url.searchParams.get('view')??'all';
