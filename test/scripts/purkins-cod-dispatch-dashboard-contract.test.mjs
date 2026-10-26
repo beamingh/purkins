@@ -18,7 +18,7 @@ describe('Purkins courier dispatch dashboard contracts',()=>{
     const source=read('src/features/purkins/dispatchOverview.ts');
     const page=read('src/pages/admin/order-requests/dispatch.astro');
     expect(source).toContain('not recorded verified payment');
-    expect(source).toContain("delivery_status:'delivered'").toBe(false);
+    expect(source).not.toContain("UPDATE purkins_offline_settlements");
     expect(page).toContain('Dispatch and delivery are not proof of payment');
     expect(page).toContain('Payment not recorded');
     expect(page).toContain('Courier fee');
