@@ -40,11 +40,15 @@ npx wrangler d1 execute DB --local --persist-to "$state_dir" --file ./seed.sql >
 npx wrangler d1 execute DB --local --persist-to "$state_dir" \
   --file ./test/fixtures/storefront-states.sql >/dev/null
 
+# Test-only override: this is an isolated, throwaway local D1. Keep the
+# historical demo checkout HTML baseline without enabling public production
+# demo checkout, which reserves real stock and is now OFF by default.
 npx wrangler dev \
   --config dist/server/wrangler.json \
   --persist-to "$state_dir" \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
+  --var PURKINS_DEMO_CHECKOUT_ENABLED:true \
   --ip 127.0.0.1 \
   --port "$test_port" >"$worker_log" 2>&1 &
 worker_pid="$!"
