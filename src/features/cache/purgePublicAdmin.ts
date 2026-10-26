@@ -5,7 +5,7 @@ import { publicStorefrontCachePurger } from '../mcp/publicCachePurge';
  * Product/category/page/navigation updates are made on the ADMIN Worker, but
  * public HTML and catalog APIs are cached by the separate STOREFRONT Worker.
  *
- * Calling purgeCacheTags() inside an Admin handler purges the wrong Worker's
+ * Calling the local tag-purge helper inside an Admin handler clears the wrong Worker's
  * cache; the page can then remain stale even though its D1 row is updated.
  *
  * Reuse the signed public-origin purge already required for guarded MCP/Admin
