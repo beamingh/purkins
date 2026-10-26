@@ -8,6 +8,7 @@ import { getOrderByPublicId } from '../../features/orders/db';
 import { isLegacyPublicId } from '../../features/ids/publicId.ts';
 import { isAccessToken } from '../../features/ids/token.ts';
 import { resolveAccessToken } from '../../features/orders/guestAccess.ts';
+import { isDemoCheckoutEnabled } from '../../features/payments/demoPolicy';
 import DemoCheckout from '../../features/payments/checkout/DemoCheckout.astro';
 import LightningPay from '../../features/payments/checkout/LightningPay.astro';
 import {
@@ -47,6 +48,15 @@ if (!pending) return new Response('Not found', { status: 404 });
 
 const isDemo = pending.backend === 'demo';
 const isLightning = pending.backend === 'lnbits' || pending.backend === 'phoenixd';
+// A stale capability URL must not settle a simulated order after demo is
+// disabled. This is intentionally enforced before rendering and POST handling.
+if (isDemo && (!isDemoCheckoutEnabled() ||
+    (Astro.locals.settings?.disabledPaymentMethods.includes('demo') ?? false))) {
+  return new Response('Demo checkout is currently unavailable.', {
+    status: 410,
+    headers: { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer' },
+  });
+}
 // An unexpected backend landing here → just show the order page.
 if (!isDemo && !isLightning) return Astro.redirect(`/order/${guestParam}`, 303);
 
