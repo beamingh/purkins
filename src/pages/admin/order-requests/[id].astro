@@ -22,6 +22,8 @@ const settlement = await getOfflineSettlement(env.DB,request.id);
 const courierDelivery = await getCourierDelivery(env.DB,request.id);
 const deliveryEvents = courierDelivery ? await listCourierDeliveryEvents(env.DB,request.id) : [];
 const deliverySaved = Astro.url.searchParams.get('delivery_saved') === '1';
+const intakeSource = Object.entries(DELIVERY_SOURCES).find(([,label]) =>
+  request.customer_note?.startsWith('Sales source: ' + label))?.[0] ?? 'website';
 const isHeld = allocation?.status === 'held';
 const holdSaved = Astro.url.searchParams.get('hold_saved') === '1';
 const holdReleased = Astro.url.searchParams.get('hold_released') === '1';
@@ -287,7 +289,7 @@ const saved = Astro.url.searchParams.get('saved') === '1';
         <label class="block text-sm">Where did the sale come from?
           <select name="source_channel" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
             {Object.entries(DELIVERY_SOURCES).map(([value,label])=>(
-              <option value={value} selected={courierDelivery?.source_channel===value || (!courierDelivery&&value==='facebook_page')}>{label}</option>
+              <option value={value} selected={courierDelivery?.source_channel===value || (!courierDelivery&&value===intakeSource)}>{label}</option>
             ))}
           </select>
         </label>
