@@ -21,7 +21,7 @@ const item = (qty: number, stock = 4): CartLine => ({
   product: { id: 1, name: 'TY-899',currency:'zmw',stock,active:1,price_cents:95000 },
   variant: null, extras: [], qty,
   unitPriceCents: 95000, lineTotalCents:95000*qty,availableStock:stock,key:'prod_1234567890',
-} as CartLine);
+} as unknown as CartLine);
 
 describe('Purkins unpaid order-request validation',()=>{
   it('accepts pay on delivery, phone, and a delivery area',()=>{
@@ -38,11 +38,14 @@ describe('Purkins unpaid order-request validation',()=>{
     }
   });
   it('rejects fake acknowledgements, bad phone, missing area and spam honeypots',()=>{
-    for(const fields of [
+    const invalidCases: Record<string, string>[] = [
       {acknowledge:'no'}, {phone:'abc'}, {area:''},
       {website:'https://spam.example'}, {payment_preference:'paid'},
       {customer_name:'a'}, {request_id:'invalid'},
-    ])expect(parseOrderRequestForm(requestForm(fields)).ok).toBe(false);
+    ];
+    for (const fields of invalidCases) {
+      expect(parseOrderRequestForm(requestForm(fields)).ok).toBe(false);
+    }
   });
   it('validates stock and subtotal using server-resolved item prices',()=>{
     expect(validateRequestCart([item(2)],190000)).toBeNull();
