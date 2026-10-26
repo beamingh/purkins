@@ -58,9 +58,17 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   }
   if (form.get('_action') === 'release_hold') {
     const reason = String(form.get('release_reason') ?? '').trim();
-    const outcome = await releaseOfflineRequestStock(
-      env.DB,id,reason,locals.adminEmail ?? 'admin-session',
-    );
+    let outcome: Awaited<ReturnType<typeof releaseOfflineRequestStock>>;
+    try {
+      outcome = await releaseOfflineRequestStock(
+        env.DB,id,reason,locals.adminEmail ?? 'admin-session',
+      );
+    } catch (error) {
+      if (String(error).includes('Paid stock cannot be released')) {
+        return fail('The items were already sold through the linked paid order. Use the paid order for refunds or returns.');
+      }
+      throw error;
+    }
     if (!outcome.ok) return fail(outcome.error);
     try { await purgePublicAfterAdminMutation(); }
     catch (e) { console.error('Offline stock released but cache purge requires attention:',e); }
@@ -102,6 +110,9 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   } catch (e) {
     if (String(e).includes('Release allocated stock before cancelling request')) {
       return fail('Release the allocated stock before cancelling this request.');
+    }
+    if (String(e).includes('Paid request cannot be changed')) {
+      return fail('This request has already been converted to a paid order. Update the paid order instead.');
     }
     throw e;
   }
