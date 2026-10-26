@@ -37,6 +37,10 @@ const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
 const justSaved = Astro.url.searchParams.get('saved') === '1';
 const gallerySaved = Astro.url.searchParams.get('gallery_saved') === '1';
+const liveSaved = Astro.url.searchParams.get('live_saved') === '1';
+const liveError = Astro.url.searchParams.get('live_error');
+const liveRetryId = Astro.url.searchParams.get('live_retry_id');
+
 const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
 const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
 const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
@@ -602,6 +606,63 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
     {intake?.status === 'draft' && reviewBlockers.length === 0 && (
       <p class="mt-5 text-sm font-semibold text-green-700">Ready for your approval. Publication rechecks the live details.</p>
     )}
+  {intake?.status === 'approved' && product.active === 1 && (
+    <section aria-label="Live listing updates" class="my-6 rounded-lg border border-line bg-surface p-4">
+      <h3 class="text-base font-semibold">Live listing updates</h3>
+      <p class="mt-1 text-sm text-muted">
+        Update the customer-facing description or optional original price without taking this
+        approved product offline. The selling price remains <strong>K{major(product.price_cents).toFixed(2)}</strong>;
+        stock and approval are unchanged. Other product edits still require a fresh approval.
+      </p>
+      {liveSaved && (
+        <p role="status" class="mt-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm font-semibold text-green-800">
+          Live changes saved and the public storefront cache refreshed ✓
+        </p>
+      )}
+      {liveError && (
+        <p role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {liveError}
+        </p>
+      )}
+      {liveRetryId && (
+        <form method="POST" action={`/api/admin/products/${product.public_id}/live-copy`} class="mt-3">
+          <input type="hidden" name="_action" value="purge_retry" />
+          <input type="hidden" name="request_id" value={liveRetryId} />
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-800">
+            Retry public cache refresh — do not resave the listing
+          </button>
+        </form>
+      )}
+      <form method="POST" action={`/api/admin/products/${product.public_id}/live-copy`}
+        class="mt-4 space-y-4">
+        <input type="hidden" name="_action" value="save" />
+        <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+        <input type="hidden" name="expected_catalog_revision" value={catalogRevision} />
+        <label class="block text-sm font-medium">
+          Customer-facing description
+          <textarea name="description" rows="6" maxlength="8000"
+            class="mt-2 block w-full rounded-md border border-line bg-white p-3 text-sm text-gray-900 focus:border-brand focus:outline-none"
+          >{product.description ?? ''}</textarea>
+        </label>
+        <label class="block text-sm font-medium">
+          Optional original price ({product.currency.toUpperCase()})
+          <input type="number" name="compare_at_price" inputmode="decimal"
+            step={priceStep} min="0"
+            value={product.compare_at_price_cents != null ? major(product.compare_at_price_cents).toFixed(2) : ''}
+            placeholder="Leave blank to remove crossed-out price"
+            class="mt-2 block w-full max-w-xs rounded-md border border-line bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none" />
+        </label>
+        <p class="text-xs text-muted">
+          A displayed original price must be genuinely higher than the K{major(product.price_cents).toFixed(2)}
+          selling price. To change the selling price, quantities, variants or inspection status,
+          use the normal editor and approve the listing again.
+        </p>
+        <button type="submit" class="rounded-md bg-brand px-5 py-2 font-semibold text-on-brand hover:bg-brand-hover">
+          Save live changes
+        </button>
+      </form>
+    </section>
+  )}
   {intake && (
     <section class="mb-6 rounded-lg border border-line bg-surface p-4">
       <p class="text-sm font-medium">Purkins item {intake.sku} · {intake.status === 'approved' ? 'Approved and published' : 'Unpublished draft'}</p>
