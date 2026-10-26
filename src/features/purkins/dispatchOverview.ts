@@ -97,7 +97,15 @@ export async function getDispatchOverview(db:D1Database):Promise<DispatchOvervie
     'LEFT JOIN purkins_offline_settlements s ON s.request_id=r.id '+
     'LEFT JOIN orders o ON o.id=s.order_id '+
     "WHERE q.fulfillment_method='delivery' AND (a.status='held' OR d.request_id IS NOT NULL) "+
-    'ORDER BY COALESCE(d.updated_at,a.held_at) DESC,r.id DESC LIMIT 251',
+    // Prioritize urgent unpaid arrivals and failed deliveries even if older.
+    "ORDER BY CASE WHEN d.status='delivery_failed' OR "+
+    "(d.status='delivered' AND (s.order_id IS NULL OR o.fulfillment_status!='fulfilled')) OR "+
+    "(d.status='returned' AND a.status='held' AND s.order_id IS NULL) THEN 0 "+
+    "WHEN d.status='dispatched' THEN 1 "+
+    "WHEN d.status IS NULL OR d.status='planned' THEN 2 "+
+    "WHEN d.status='delivered' THEN 3 "+
+    "WHEN d.status='returned' THEN 4 ELSE 5 END, "+
+    'COALESCE(d.updated_at,a.held_at) DESC,r.id DESC LIMIT 251',
   ).all<DispatchQueueRow>();
   const fetched=rows.results??[];
   const items=fetched.slice(0,250).map(categorizeDispatch)
