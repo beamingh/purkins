@@ -20,7 +20,7 @@ const payload=(revision:number,status:CourierDeliveryInput['status']='planned',
   recipientName:'Sample Customer',recipientPhone:'+260971234567',
   riderName:'Test Rider',riderPhone:'+260971234568',
   bookingReference:'YANGO-TEST-123',courierFeeCents:5000,
-  courierFeePayer:payer,operatorNote:status==='returned'
+  courierFeePayer:payer,courierFeeState:'unconfirmed',operatorNote:status==='returned'
     ? 'Confirmed returned parcel in store and counted all goods.':null,
 });
 async function seedRequest(db:D1Database,ref:string,fee:number){
@@ -117,7 +117,7 @@ describe('Courier intake and proof of parcel return',()=>{
       source_channel:'facebook_page',courier:'yango_bike',
       pickup_location:'Purkins warehouse, Lusaka',dropoff_location:'Woodlands, Lusaka',
       recipient_name:'Customer Example',recipient_phone:'+260971234567',
-      courier_fee_payer:'not_agreed',courier_fee:'45.00',
+      courier_fee_payer:'not_agreed',courier_fee_state:'unconfirmed',courier_fee:'45.00',
       ...more,
     };
     for(const [key,value] of Object.entries(fields))f.set(key,value);
@@ -129,6 +129,8 @@ describe('Courier intake and proof of parcel return',()=>{
     expect(parse({courier_fee:'45.123'}).ok).toBe(false);
     expect(parse({recipient_phone:'not-a-phone'}).ok).toBe(false);
     expect(parse({delivery_status:'dispatched'}).ok).toBe(false);
+    expect(parse({courier_fee_state:'customer_reports_paid'}).ok).toBe(false);
+    expect(parse({courier_fee_payer:'customer_to_rider',courier_fee_state:'customer_reports_paid'}).ok).toBe(true);
   });
   it('prevents false returns without evidence, while supporting failed delivery',()=>{
     expect(parse({delivery_status:'returned'}).ok).toBe(false);
