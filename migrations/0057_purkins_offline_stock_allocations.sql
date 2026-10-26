@@ -40,3 +40,25 @@ WHEN EXISTS (
 BEGIN
   SELECT RAISE(ABORT,'Release allocated stock before revising quote');
 END;
+
+-- Preserve the rows required to restore held stock if a product is retired.
+-- The JSON contains the full typed item snapshot; only active holds block deletion.
+CREATE TRIGGER IF NOT EXISTS purkins_block_delete_product_with_hold
+BEFORE DELETE ON products
+WHEN EXISTS (
+  SELECT 1 FROM purkins_order_request_allocations a, json_each(a.lines_json) item
+  WHERE a.status='held' AND json_extract(item.value,'$.product_id')=OLD.id
+)
+BEGIN
+  SELECT RAISE(ABORT,'Release allocated stock before deleting product');
+END;
+
+CREATE TRIGGER IF NOT EXISTS purkins_block_delete_variant_with_hold
+BEFORE DELETE ON product_variants
+WHEN EXISTS (
+  SELECT 1 FROM purkins_order_request_allocations a, json_each(a.lines_json) item
+  WHERE a.status='held' AND json_extract(item.value,'$.variant_id')=OLD.id
+)
+BEGIN
+  SELECT RAISE(ABORT,'Release allocated stock before deleting variant');
+END;
