@@ -32,6 +32,13 @@ describe('Purkins demo checkout server-side isolation', () => {
     expect(settle).toContain('Demo checkout is disabled. No payment was taken.');
   });
 
+  it('makes the Admin deployment lock explicit rather than showing a misleading enable switch', () => {
+    const admin = read('src/pages/admin/settings.astro');
+    expect(admin).toContain('isDemoCheckoutEnabled()');
+    expect(admin).toContain('Deployment disabled');
+    expect(admin).toContain('because it can reserve real stock');
+  });
+
   it('still distinguishes simulated orders from real money', () => {
     const demo = read('src/features/payments/demo.ts');
     const cart = read('src/pages/cart.astro');
