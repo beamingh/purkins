@@ -92,6 +92,9 @@ describe('Purkins guided product editing', () => {
     expect(endpoint).toContain("request.headers.get('accept')?.includes('application/json')");
     expect(endpoint).toContain("{ ok: false, error: msg }");
     expect(endpoint).toContain("{ ok: true }");
+    expect(endpoint).toContain('?gallery_saved=1');
+    expect(editor).toContain('Photo changes saved ✓');
+    expect(editor).toContain('role="alert"');
     expect(endpoint).toContain("return wantsJson ? back() : new Response(null, { status: 204 })");
   });
 
