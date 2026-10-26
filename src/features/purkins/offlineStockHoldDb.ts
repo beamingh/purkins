@@ -41,7 +41,7 @@ function aggregate(lines: RequestedLine[]): Target[] | null {
   const targets = new Map<string, Target>();
   let quantityTotal = 0;
   for (const line of lines) {
-    if (!Number.isSafeInteger(line.product_id) || (line.product_id ?? 0) <= 0 ||
+    if (line.product_id == null || !Number.isSafeInteger(line.product_id) || line.product_id <= 0 ||
         (line.variant_id != null && (!Number.isSafeInteger(line.variant_id) || line.variant_id <= 0)) ||
         !Number.isSafeInteger(line.quantity) || line.quantity < 1 || line.quantity > 50 ||
         !Number.isSafeInteger(line.unit_price_cents) || line.unit_price_cents < 0) return null;
@@ -50,7 +50,7 @@ function aggregate(lines: RequestedLine[]): Target[] | null {
     const current = targets.get(key);
     if (current) current.quantity += line.quantity;
     else targets.set(key,{
-      productId: line.product_id!,variantId: line.variant_id,quantity:line.quantity,
+      productId: line.product_id,variantId: line.variant_id,quantity:line.quantity,
     });
   }
   if (quantityTotal > 50) return null;
