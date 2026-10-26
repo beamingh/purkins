@@ -20,7 +20,7 @@ import { getLightningBackend } from '../features/payments/lightning';
 import { mintLightningOrder } from '../features/payments/lightning-provider';
 import {
   DEMO_CHECKOUT_TTL_SECONDS,
-  isMethodAvailable,
+  enabledMethods,
   getPaymentProvider,
 } from '../features/payments';
 import {
@@ -52,8 +52,8 @@ const requestedRail = (fld('method') || Astro.url.searchParams.get('method') || 
 const rail: InAppRail = (IN_APP_RAILS as readonly string[]).includes(requestedRail)
   ? (requestedRail as InAppRail)
   : 'lightning';
-if (!Astro.locals.settings || !isMethodAvailable(rail, Astro.locals.settings))
-  return Astro.redirect('/cart', 303);
+if (!Astro.locals.settings || !enabledMethods(Astro.locals.settings).includes(rail))
+  return Astro.redirect('/cart?error=This%20payment%20method%20is%20unavailable', 303);
 
 // Order lines: buy-now (product_id [+ variant/extras]) or the whole cart. All
 // selectors arrive as prefixed public IDs (prod_/var_/xtra_ — api/checkout.ts
