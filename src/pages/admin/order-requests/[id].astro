@@ -61,9 +61,9 @@ const saved = Astro.url.searchParams.get('saved') === '1';
       <input type="hidden" name="expected_status" value={request.status} />
       <label class="block text-sm">Update status
         <select name="status" class="mt-1 block w-full max-w-xs rounded-md border border-gray-300 px-3 py-2" disabled={request.status === 'cancelled'}>
-          <option value="contacted">Customer contacted</option>
-          <option value="awaiting_payment">Awaiting payment or delivery/handover</option>
-          <option value="cancelled">Cancelled / unavailable</option>
+          <option value="contacted" selected={request.status === 'contacted' || request.status === 'new'}>Customer contacted</option>
+          <option value="awaiting_payment" selected={request.status === 'awaiting_payment'}>Awaiting payment or delivery/handover</option>
+          <option value="cancelled" selected={request.status === 'cancelled'}>Cancelled / unavailable</option>
         </select>
       </label>
       <label class="block text-sm">Internal note (not visible to the customer)
