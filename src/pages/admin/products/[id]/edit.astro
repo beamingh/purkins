@@ -36,6 +36,7 @@ const intake = await getIntake(env.DB, product.id);
 const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
 const justSaved = Astro.url.searchParams.get('saved') === '1';
+const gallerySaved = Astro.url.searchParams.get('gallery_saved') === '1';
 const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
 const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
 const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
@@ -94,6 +95,7 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
   </div>
 
   <div data-purkins-editor>
+    {error && <p role="alert" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800">{error}</p>}
     <nav aria-label="Product editing steps" class="mb-6 overflow-x-auto rounded-lg border border-line bg-surface p-2">
       <div class="flex min-w-max gap-1" role="tablist" aria-label="Product editing steps">
         {[
@@ -134,6 +136,7 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Images</h2>
       <span class="text-xs text-muted">Uploads save immediately · photo descriptions save when you click Save</span>
     </div>
+    {gallerySaved && <p role="status" class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">Photo changes saved ✓</p>}
 
     <form data-photo-quick-upload
       method="POST"
