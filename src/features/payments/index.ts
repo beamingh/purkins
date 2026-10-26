@@ -7,6 +7,7 @@ import { createLightningProvider } from './lightning-provider';
 import { getLightningBackend } from './lightning';
 import { createOpenNodeProvider } from './opennode';
 import { createDemoProvider } from './demo';
+import { isDemoCheckoutEnabled } from './demoPolicy';
 import { getSecret, vaultReady } from '../secrets/store';
 
 export type { PaymentProvider } from './provider';
@@ -17,12 +18,11 @@ export {
 } from './provider';
 export { DEMO_CHECKOUT_TTL_SECONDS } from './demo';
 
-// 'demo' is a first-class method — a simulated checkout that's ALWAYS offered
-// (records a real, demo-tagged order). The real rails work only when configured.
+// Demo checkout reserves real stock and writes test orders. It is OFF by default
+// unless explicitly enabled for controlled testing at deployment.
 export type PaymentMethod = 'stripe' | 'lightning' | 'opennode' | 'demo';
 const ALL_METHODS: PaymentMethod[] = ['stripe', 'lightning', 'opennode'];
-// The buttons always presented at checkout. Each real rail works if configured,
-// else its button leads to setup instructions; demo always works.
+// The offered rails; an actual demo button is gated by deployment opt-in.
 const OFFERED: PaymentMethod[] = ['stripe', 'lightning', 'demo'];
 
 export function isPaymentMethod(value: string): value is PaymentMethod {
@@ -34,12 +34,13 @@ export function isPaymentMethod(value: string): value is PaymentMethod {
  * keys (and Lightning its node URL) — all configured in the admin dashboard and
  * read from the runtime settings overlay (`Astro.locals.settings` /
  * getStoreSettings). Sync (no decryption) so it's cheap per render — the actual key
- * is only decrypted in getPaymentProvider. Demo always works.
+ * is only decrypted in getPaymentProvider. Demo requires explicit opt-in.
  */
 export function isMethodAvailable(
   method: PaymentMethod,
   settings: StoreSettings,
   vault = vaultReady(),
+  demoEnabled = isDemoCheckoutEnabled(),
 ): boolean {
   const has = (name: string) => vault && settings.configuredSecrets.includes(name);
   switch (method) {
@@ -52,7 +53,7 @@ export function isMethodAvailable(
         ? !!settings.lnbitsUrl && has('lnbits_api_key')
         : !!settings.phoenixdUrl && has('phoenixd_password');
     case 'demo':
-      return true; // demo is always usable
+      return demoEnabled;
   }
 }
 
@@ -61,9 +62,9 @@ export function hasRealMethod(settings: StoreSettings, vault = vaultReady()): bo
   return ALL_METHODS.some((m) => isMethodAvailable(m, settings, vault));
 }
 
-/** No real rail configured: only the demo method can take a payment. */
+/** Whether no real provider is configured AND demo is explicitly enabled. */
 export function paymentsInDemoMode(settings: StoreSettings, vault = vaultReady()): boolean {
-  return !hasRealMethod(settings, vault);
+  return !hasRealMethod(settings, vault) && enabledMethods(settings, vault).includes('demo');
 }
 
 /** The store's default rail (Settings → Payments; default 'stripe'). */
@@ -81,6 +82,7 @@ export function defaultMethod(settings: StoreSettings): PaymentMethod {
 export function enabledMethods(
   settings: StoreSettings,
   vault = vaultReady(),
+  demoEnabled = isDemoCheckoutEnabled(),
 ): PaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const def = defaultMethod(settings);
@@ -88,9 +90,9 @@ export function enabledMethods(
     def === 'demo' ? ALL_METHODS : [def, ...ALL_METHODS.filter((m) => m !== def)];
   const real = orderedReal
     .filter((m): m is Exclude<PaymentMethod, 'demo'> => m !== 'demo')
-    .filter((m) => isMethodAvailable(m, settings, vault))
+    .filter((m) => isMethodAvailable(m, settings, vault, demoEnabled))
     .filter((m) => !off.has(m));
-  if (off.has('demo')) return real;
+  if (off.has('demo') || !demoEnabled) return real;
   return def === 'demo' ? ['demo', ...real] : [...real, 'demo'];
 }
 
@@ -104,12 +106,13 @@ export function enabledMethods(
 export function offeredMethods(
   settings: StoreSettings,
   vault = vaultReady(),
+  demoEnabled = isDemoCheckoutEnabled(),
 ): PaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return (['stripe', 'lightning', ...extra, 'demo'] as PaymentMethod[]).filter((m) => !off.has(m));
+  return (['stripe', 'lightning', ...extra, ...(demoEnabled ? ['demo' as const] : [])] as PaymentMethod[]).filter((m) => !off.has(m));
 }
 
 /**
@@ -122,7 +125,12 @@ export function offeredMethods(
 export async function getPaymentProvider(method?: PaymentMethod): Promise<PaymentProvider> {
   const settings = await getStoreSettings(env.DB);
   const m = method ?? settings.paymentProvider;
-  if (m === 'demo') return createDemoProvider(env.DB);
+  if (m === 'demo') {
+    if (!isDemoCheckoutEnabled() || settings.disabledPaymentMethods.includes('demo')) {
+      throw new Error('Public demo checkout is disabled.');
+    }
+    return createDemoProvider(env.DB);
+  }
   switch (m) {
     case 'lightning':
       // Self-hosted Lightning (phoenixd / LNbits) behind a self-rendered pay page.
