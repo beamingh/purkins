@@ -50,7 +50,10 @@ describe('Purkins demo checkout server-side isolation', () => {
     const cart = read('src/pages/cart.astro');
     expect(demo).toContain("backend: 'demo'");
     expect(demo).toContain("reservationId: params.metadata?.reservation_id ?? null");
-    expect(cart).toContain('Checkout is currently unavailable.');
+    // The cart now offers genuine unpaid order requests while online payment is unavailable.
+    // This replaced the older blanket "Checkout is currently unavailable" message.
+    expect(cart).toContain('Online payment is not available yet. You can still submit an order request above.');
+    expect(cart).toContain('href="/request-order"');
     expect(cart).not.toContain('always-on demo');
   });
 });
