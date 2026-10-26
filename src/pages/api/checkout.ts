@@ -219,12 +219,22 @@ export const POST: APIRoute = async ({ request, cookies, url, redirect }) => {
     return redirect(`/payment-setup?method=${encodeURIComponent(requestedRaw)}`, 303);
   }
   const available = enabledMethods(settings);
-  // No method enabled → no checkout. Bounce back to the cart (which says so).
-  if (available.length === 0) return redirect('/cart', 303);
-  // Cart checkout passes an explicit method (the picker buttons). Express buy-now
-  // passes none → use the store's default (available[0] — the default rail first).
-  const selected: PaymentMethod =
-    (available.includes(requested) ? requested : available[0]) ?? defaultMethod(settings);
+  // Do not silently convert an explicit demo/invalid request into a REAL
+  // payment. A crafted POST must never be allowed to reserve production stock
+  // through an unavailable rail, even when another provider is configured.
+  if (requestedRaw && !available.includes(requested)) {
+    return redirect('/cart?error=' + encodeURIComponent(
+      'That payment method is not currently available. Please choose an available method.',
+    ), 303);
+  }
+  // Nothing (including demo) is enabled: browse-only until real payments exist.
+  if (available.length === 0) {
+    return redirect('/cart?error=' + encodeURIComponent(
+      'Checkout is not available yet. No payment has been taken.',
+    ), 303);
+  }
+  // Buy-now without a selected rail uses the first truly available method.
+  const selected: PaymentMethod = requestedRaw ? requested : available[0];
 
   const cfg = getConfig();
 
