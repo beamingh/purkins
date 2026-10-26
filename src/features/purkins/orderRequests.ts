@@ -66,7 +66,8 @@ export function parseOrderRequestForm(form: FormData): ParsedOrderRequest {
   if (email && (email.length > 200 || !EMAIL.test(email))) {
     return { ok: false, error: 'Enter a valid email or leave it blank.' };
   }
-  if (!(payment in REQUEST_PAYMENT_OPTIONS) || !(fulfillment in REQUEST_FULFILLMENT_OPTIONS)) {
+  if (!Object.prototype.hasOwnProperty.call(REQUEST_PAYMENT_OPTIONS, payment) ||
+      !Object.prototype.hasOwnProperty.call(REQUEST_FULFILLMENT_OPTIONS, fulfillment)) {
     return { ok: false, error: 'Choose how you would like to pay and receive your items.' };
   }
   if (area && area.length > 120 || addressNotes && addressNotes.length > 500 ||
