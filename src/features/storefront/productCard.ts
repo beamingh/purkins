@@ -82,6 +82,12 @@ export function buildProductCard(
     // The store's currency, not the row's: a product row can carry a legacy
     // currency, and the catalog has always displayed one consistent currency.
     formattedPrice: formatMoney(product.price_cents, options.currency),
+    formattedCompareAtPrice:
+      !product.variant_label &&
+      product.compare_at_price_cents != null &&
+      product.compare_at_price_cents > product.price_cents
+        ? formatMoney(product.compare_at_price_cents, options.currency)
+        : null,
     // Availability only — never the count. `stockState` is the authoritative
     // classification; re-deriving `stock > 0` here would fork that rule.
     inStock: stockState(product.stock) !== 'out',
