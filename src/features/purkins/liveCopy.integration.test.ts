@@ -89,7 +89,7 @@ describe('Approved Purkins live copy updates (real isolated D1)', () => {
       compare_at_price_cents: 110000,
     };
     expect(await applyGuardedLiveCopy(db, actor, input, purge)).toMatchObject({
-      ok: true, cache_purged: true, replayed: true,
+      ok: true, cache_purged: true, replayed: false,
     });
     const after = await state();
     expect(after).toMatchObject({
@@ -101,7 +101,7 @@ describe('Approved Purkins live copy updates (real isolated D1)', () => {
       'SELECT completed,cache_purged FROM purkins_live_edit_receipts WHERE request_id=?',
     ).bind(input.request_id).first())!).toMatchObject({ completed: 1, cache_purged: 1 });
     expect(await applyGuardedLiveCopy(db, actor, input, purge)).toMatchObject({
-      ok: true, cache_purged: true, replayed: false,
+      ok: true, cache_purged: true, replayed: true,
     });
     expect(purge).toHaveBeenCalledTimes(1);
     expect(await applyGuardedLiveCopy(db, 'owner:access:other@example.com', input, purge))
