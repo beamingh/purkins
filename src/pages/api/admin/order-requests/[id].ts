@@ -9,6 +9,8 @@ import { holdOfflineRequestStock, releaseOfflineRequestStock } from '../../../..
 import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
 import { parseOfflineSettlement } from '../../../../features/purkins/offlineSettlement';
 import { settleHeldOfflineOrder } from '../../../../features/purkins/offlineSettlementDb';
+import { parseCourierDelivery } from '../../../../features/purkins/courierDelivery';
+import { saveCourierDelivery } from '../../../../features/purkins/courierDeliveryDb';
 
 export const prerender = false;
 
@@ -19,6 +21,16 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   const form = await request.formData();
   const back = '/admin/order-requests/' + id;
   const fail = (message: string) => redirect(back + '?error=' + encodeURIComponent(message),303);
+  if (form.get('_action') === 'save_courier_delivery') {
+    const parsed = parseCourierDelivery(form);
+    if (!parsed.ok) return fail(parsed.error);
+    const outcome = await saveCourierDelivery(
+      env.DB,id,parsed.value,locals.adminEmail ?? 'admin-session',
+    );
+    return outcome.ok
+      ? redirect(back + '?delivery_saved=1',303)
+      : fail(outcome.error);
+  }
   if (form.get('_action') === 'record_received_payment') {
     const parsed = parseOfflineSettlement(form);
     if (!parsed.ok) return fail(parsed.error);

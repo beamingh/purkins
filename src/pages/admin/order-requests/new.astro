@@ -1,0 +1,157 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { DELIVERY_SOURCES } from '../../../features/purkins/courierDelivery';
+import { REQUEST_PAYMENT_OPTIONS, REQUEST_FULFILLMENT_OPTIONS } from '../../../features/purkins/orderRequests';
+
+interface CatalogLine {
+  product_id:string;
+  product_name:string;
+  variant_id:string|null;
+  variant_label:string|null;
+  unit_price_cents:number;
+  stock:number;
+}
+const query=await env.DB.prepare(
+  'SELECT p.public_id AS product_id,p.name AS product_name,'+
+  'v.public_id AS variant_id,v.label AS variant_label,'+
+  'COALESCE(v.price_cents,p.price_cents) AS unit_price_cents,'+
+  'COALESCE(v.stock,p.stock) AS stock '+
+  'FROM products p LEFT JOIN product_variants v ON v.product_id=p.id '+
+  'WHERE p.active=1 AND p.currency=\'zmw\' AND p.public_id IS NOT NULL '+
+  'AND (v.id IS NULL OR (v.active=1 AND v.public_id IS NOT NULL)) '+
+  'ORDER BY p.name COLLATE NOCASE,v.position,v.id LIMIT 1501',
+).all<CatalogLine>();
+const catalog=(query.results??[]).slice(0,1500);
+const error=Astro.url.searchParams.get('error');
+const truncated=(query.results??[]).length>1500;
+---
+<AdminLayout title="Record social-media order request" active="orders">
+  <a href="/admin/order-requests" class="text-sm text-brand underline">&larr; Back to order requests</a>
+  <h1 class="mt-4 text-2xl font-bold">Create unpaid Facebook / Marketplace order</h1>
+  <p class="mt-2 max-w-3xl text-sm text-gray-600">
+    You've spoken to the customer and agreed on items but payment is still due.
+    Record the enquiry here, then prepare the final quote, allocate stock and log
+    Yango delivery. <strong>This does not deduct stock or record a paid sale.</strong>
+  </p>
+  {error && <p role="alert" class="mt-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">{error}</p>}
+  {truncated && <p class="mt-4 text-sm text-amber-900">Showing the first 1,500 catalog variants. Search/add stock before entering additional SKUs.</p>}
+  {catalog.length===0 ? (
+    <p class="mt-6 text-sm">No active ZMW products in the catalog yet. Add and publish stock first.</p>
+  ) : (
+    <form action="/api/admin/order-requests/new" method="POST" id="social-request-form" class="mt-6 space-y-5">
+      <input type="hidden" name="request_id" value={crypto.randomUUID()} />
+      <input type="hidden" name="acknowledge" value="yes" />
+      <section class="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 class="font-semibold">Customer and origin</h2>
+        <div class="mt-4 grid gap-4 sm:grid-cols-2">
+          <label class="block text-sm">Where did the customer contact us?
+            <select name="source_channel" required class="mt-1 block w-full rounded-md border border-gray-300 p-2">
+              {Object.entries(DELIVERY_SOURCES).map(([value,label])=>(
+                <option value={value} selected={value==='facebook_page'}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block text-sm">Customer name
+            <input name="customer_name" required minlength="2" maxlength="100" class="mt-1 block w-full rounded-md border border-gray-300 p-2" />
+          </label>
+          <label class="block text-sm">Phone / WhatsApp number
+            <input name="phone" type="tel" required class="mt-1 block w-full rounded-md border border-gray-300 p-2" />
+          </label>
+          <label class="block text-sm">Email (optional)
+            <input name="email" type="email" class="mt-1 block w-full rounded-md border border-gray-300 p-2" />
+          </label>
+          <label class="block text-sm">Payment arrangement
+            <select name="payment_preference" required class="mt-1 block w-full rounded-md border border-gray-300 p-2">
+              {Object.entries(REQUEST_PAYMENT_OPTIONS).map(([value,label])=>(
+                <option value={value} selected={value==='pay_on_delivery'}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block text-sm">Fulfillment
+            <select name="fulfillment_preference" required class="mt-1 block w-full rounded-md border border-gray-300 p-2">
+              {Object.entries(REQUEST_FULFILLMENT_OPTIONS).map(([value,label])=>(
+                <option value={value} selected={value==='delivery'}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block text-sm">Delivery area / township
+            <input name="area" maxlength="120" required placeholder="e.g. Woodlands, Lusaka"
+              class="mt-1 block w-full rounded-md border border-gray-300 p-2" />
+          </label>
+          <label class="block text-sm">Drop-off landmark / directions
+            <textarea name="address_notes" maxlength="500" rows="2" class="mt-1 block w-full rounded-md border border-gray-300 p-2"></textarea>
+          </label>
+          <label class="block text-sm sm:col-span-2">Notes about the customer agreement (optional)
+            <textarea name="customer_note" maxlength="450" rows="2" class="mt-1 block w-full rounded-md border border-gray-300 p-2"></textarea>
+          </label>
+        </div>
+      </section>
+      <section class="rounded-lg border border-gray-200 bg-white p-5">
+        <h2 class="font-semibold">Requested goods</h2>
+        <div id="social-request-lines" class="mt-4 space-y-3"></div>
+        <div class="mt-4 flex items-center justify-between gap-4">
+          <button type="button" id="social-add-line" class="rounded-md border border-gray-300 px-3 py-2 text-sm">+ Add item</button>
+          <strong class="text-sm">Catalog subtotal: <output id="social-request-total">K0.00</output></strong>
+        </div>
+        <p class="mt-2 text-xs text-gray-600">The server reads current product prices and stock from D1. Discounts and delivery fees can be agreed in the quote afterward.</p>
+      </section>
+      <label class="flex items-start gap-3 text-sm">
+        <input name="customer_contacted" type="checkbox" value="yes" required class="mt-1" />
+        <span>I have personally spoken with this customer and am entering their genuine order enquiry. Payment has not yet been received.</span>
+      </label>
+      <button type="submit" class="rounded-md bg-brand px-5 py-3 font-semibold text-white">
+        Create unpaid request
+      </button>
+    </form>
+  )}
+  <template id="social-line-template">
+    <div class="social-line grid gap-3 rounded-md border border-gray-100 p-3 sm:grid-cols-[minmax(0,1fr)_6rem_auto]">
+      <label class="block text-sm">Product / size
+        <select name="item" class="social-product mt-1 block w-full rounded-md border border-gray-300 p-2" required>
+          <option value="">Choose item</option>
+          {catalog.map(p=>(
+            <option value={p.product_id+'|'+(p.variant_id??'')}
+              data-price={p.unit_price_cents} data-stock={p.stock}>
+              {p.product_name}{p.variant_label?' — '+p.variant_label:''} · {p.stock} available
+            </option>
+          ))}
+        </select>
+      </label>
+      <label class="block text-sm">Quantity
+        <input name="quantity" type="number" min="1" max="50" value="1"
+          class="social-quantity mt-1 w-full rounded-md border border-gray-300 p-2" required />
+      </label>
+      <button type="button" class="social-remove self-end rounded-md border border-gray-300 px-3 py-2 text-sm">Remove</button>
+    </div>
+  </template>
+</AdminLayout>
+
+<script is:inline>
+const target=document.getElementById('social-request-lines');
+const template=document.getElementById('social-line-template');
+const add=document.getElementById('social-add-line');
+const output=document.getElementById('social-request-total');
+if(target&&template&&add&&output){
+  const refresh=()=>{
+    let subtotal=0;
+    target.querySelectorAll('.social-line').forEach(row=>{
+      const choice=row.querySelector('.social-product');
+      const q=Number(row.querySelector('.social-quantity').value);
+      subtotal+=Number(choice.selectedOptions[0]?.dataset.price??0)*q;
+    });
+    output.value='K'+(subtotal/100).toLocaleString('en-ZM',{minimumFractionDigits:2,maximumFractionDigits:2});
+  };
+  const addLine=()=>{if(target.children.length>=25)return;target.appendChild(template.content.firstElementChild.cloneNode(true));refresh();};
+  add.addEventListener('click',addLine);
+  target.addEventListener('change',refresh);
+  target.addEventListener('input',refresh);
+  target.addEventListener('click',event=>{
+    if(!event.target.matches('.social-remove'))return;
+    event.target.closest('.social-line').remove();
+    if(!target.children.length)addLine();
+    refresh();
+  });
+  addLine();
+}
+</script>
