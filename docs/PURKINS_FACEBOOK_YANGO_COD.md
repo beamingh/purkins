@@ -26,7 +26,8 @@ actually happened separately.
    deducts sellable inventory one time (existing migration 0057).
 4. **Dispatch and delivery log**: plan delivery with pickup/drop-off addresses,
    recipient name/phone, Yango booking, rider contact, actual courier fare,
-   who will pay that fare, and a private note. Progress through
+   who will pay that fare, whether the buyer reports paying the rider or
+   Purkins has paid the courier, and a private note. Progress through
    planned → dispatched → delivered / delivery failed → returned.
    The log uses guarded revisions and keeps an event history.
 5. **Payment on receipt**: confirm the product payment directly in Purkins'
@@ -44,9 +45,9 @@ actually happened separately.
 ## Important accounting and operational boundaries
 
 - The logged Yango fare is **not automatically sales revenue**.
-  - Buyer pays rider directly: courier cost tracked, Purkins delivery fee in
+  - Buyer pays rider directly: courier cost and any customer-reported fee payment are tracked, Purkins delivery fee in
     quote **K0**. Total paid to Purkins excludes that fare.
-  - Purkins pays rider: the fare is a business cost. Any delivery amount
+  - Purkins pays rider: the fare is a business cost with a manually recorded payment status. Any delivery amount
     charged to the buyer must be agreed and included in the quote.
 - An order may be **delivered but not paid** (failed receipt), or **paid but
   not yet delivered**. Delivery status never silently changes paid state.
