@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS purkins_offline_settlements (
   recorded_by TEXT NOT NULL,
   recorded_at TEXT NOT NULL DEFAULT (datetime('now')),
   CHECK ((tender='cash' AND payment_reference IS NULL) OR
-    (tender<>'cash' AND length(payment_reference) BETWEEN 5 AND 120))
+    (tender<>'cash' AND payment_reference IS NOT NULL AND length(payment_reference) BETWEEN 5 AND 120))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_purkins_offline_payment_reference
   ON purkins_offline_settlements(tender,payment_reference)
