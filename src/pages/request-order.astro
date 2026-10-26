@@ -10,8 +10,11 @@ import { catalogPath } from '../features/settings/home';
 
 Astro.response.headers.set('cache-control', 'private, no-store');
 Astro.response.headers.set('referrer-policy', 'no-referrer');
-const { lines, subtotalCents } = await resolveCart(env.DB, readCart(Astro.cookies));
-const cartError = validateRequestCart(lines, subtotalCents);
+const cart = readCart(Astro.cookies);
+const { lines, subtotalCents } = await resolveCart(env.DB, cart);
+const cartError = Object.keys(cart).length !== lines.length
+  ? 'Some items in your cart are no longer available. Review your cart before requesting.'
+  : validateRequestCart(lines, subtotalCents);
 let error: string | null = null;
 if (Astro.request.method === 'POST') {
   const origin = Astro.request.headers.get('origin');
