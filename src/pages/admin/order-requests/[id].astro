@@ -4,6 +4,7 @@ import AdminLayout from '../../../layouts/AdminLayout.astro';
 import { formatPrice, formatDate, getConfig } from '../../../config';
 import { getOrderRequest, listRequestLines } from '../../../features/purkins/orderRequestDb';
 import { getOfflineQuote, listOfflineQuoteEvents } from '../../../features/purkins/offlineQuoteDb';
+import { getOfflineStockHold } from '../../../features/purkins/offlineStockHoldDb';
 import {
   REQUEST_FULFILLMENT_OPTIONS, REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES,
 } from '../../../features/purkins/orderRequests';
@@ -12,6 +13,10 @@ const request = await getOrderRequest(env.DB, Astro.params.id ?? '');
 if (!request) return new Response('Order request not found.', { status: 404 });
 const lines = await listRequestLines(env.DB,request.id);
 const quote = await getOfflineQuote(env.DB,request.id);
+const allocation = await getOfflineStockHold(env.DB,request.id);
+const isHeld = allocation?.status === 'held';
+const holdSaved = Astro.url.searchParams.get('hold_saved') === '1';
+const holdReleased = Astro.url.searchParams.get('hold_released') === '1';
 const quoteHistory = quote ? await listOfflineQuoteEvents(env.DB,request.id) : [];
 const quoteSaved = Astro.url.searchParams.get('quote_saved') === '1';
 const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
@@ -23,9 +28,12 @@ const saved = Astro.url.searchParams.get('saved') === '1';
   <h1 class="mt-2 text-2xl font-bold">Request {request.public_id}</h1>
   <p class="mt-1 text-sm text-gray-500">{formatDate(request.created_at,undefined,timeZone)} · {REQUEST_STATUSES[request.status]}</p>
   <p class="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-    <strong>Unpaid and unconfirmed.</strong> No inventory has been reserved or deducted.
-    Confirm availability, any delivery fees and the payment arrangement before promising fulfillment.
-    Never mark a customer as paid based solely on a screenshot.
+    <strong>Unpaid customer request.</strong>
+    {isHeld
+      ? ' Stock is currently allocated for this customer, but payment has NOT been received or verified.'
+      : ' No inventory is currently allocated to this request.'}
+    Confirm the final delivery arrangement and payment directly with the customer.
+    Never mark an order paid solely from a screenshot.
   </p>
   {error && <p role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
   {saved && <p role="status" class="mt-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">Request updated.</p>}
@@ -63,9 +71,10 @@ const saved = Astro.url.searchParams.get('saved') === '1';
     <h2 class="text-lg font-semibold">Prepare an offline quote</h2>
     <p class="mt-2 text-sm text-gray-600">
       Confirm the actual delivery fee and any discount before asking for payment.
-      This prepares an internal quote only: <strong>no stock is held, no payment is
-      recorded and no message is automatically sent.</strong> Share the agreed final
-      amount with the customer personally.
+      {isHeld
+        ? 'This quote is locked while the associated stock hold is active. Release the hold to revise it.'
+        : 'This prepares an internal quote only: no stock is held and no payment is recorded.'}
+      No message is automatically sent. Share the agreed final amount with the customer personally.
     </p>
     {quoteSaved && <p class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-800" role="status">Quote saved to the audit history.</p>}
     {quote && (
@@ -88,7 +97,7 @@ const saved = Astro.url.searchParams.get('saved') === '1';
         Item prices remain unchanged in this quote.
       </p>
       <label class="block text-sm">Fulfillment
-        <select name="fulfillment_method" disabled={request.status === 'cancelled'} class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+        <select name="fulfillment_method" disabled={request.status === 'cancelled' || isHeld} class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
           <option value="delivery" selected={quote?.fulfillment_method !== 'pickup'}>Delivery</option>
           <option value="pickup" selected={quote?.fulfillment_method === 'pickup'}>Customer pickup</option>
         </select>
@@ -96,26 +105,26 @@ const saved = Astro.url.searchParams.get('saved') === '1';
       <label class="block text-sm">Delivery fee (K)
         <input type="text" inputmode="decimal" name="delivery_fee" required
           value={((quote?.delivery_fee_cents ?? 0)/100).toFixed(2)}
-          disabled={request.status === 'cancelled'}
+          disabled={request.status === 'cancelled' || isHeld}
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
       </label>
       <label class="block text-sm">Discount (K)
         <input type="text" inputmode="decimal" name="discount" required
           value={((quote?.discount_cents ?? 0)/100).toFixed(2)}
-          disabled={request.status === 'cancelled'}
+          disabled={request.status === 'cancelled' || isHeld}
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
       </label>
       <label class="block text-sm sm:col-span-2">Delivery/pickup arrangements
         <textarea name="delivery_details" maxlength="500" rows="2"
-          disabled={request.status === 'cancelled'}
+          disabled={request.status === 'cancelled' || isHeld}
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">{quote?.delivery_details ?? ''}</textarea>
       </label>
       <label class="block text-sm sm:col-span-2">Internal quote note (not sent automatically)
         <textarea name="quote_note" maxlength="1000" rows="2"
-          disabled={request.status === 'cancelled'}
+          disabled={request.status === 'cancelled' || isHeld}
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">{quote?.owner_note ?? ''}</textarea>
       </label>
-      <button type="submit" disabled={request.status === 'cancelled'}
+      <button type="submit" disabled={request.status === 'cancelled' || isHeld}
         class="rounded-md bg-brand px-5 py-2 text-sm font-semibold text-white disabled:opacity-50 sm:col-span-2">
         {quote ? 'Update prepared quote' : 'Prepare quote'}
       </button>
@@ -135,6 +144,66 @@ const saved = Astro.url.searchParams.get('saved') === '1';
     )}
   </section>
   <section class="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+    <h2 class="text-lg font-semibold">Stock allocated to this customer</h2>
+    {holdSaved && <p role="status" class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-900">Stock allocation recorded. The request remains unpaid.</p>}
+    {holdReleased && <p role="status" class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-900">Stock has been returned to inventory. No paid order was created.</p>}
+    {isHeld ? (
+      <>
+        <p class="mt-3 text-sm text-amber-900">
+          <strong>Held, not paid.</strong> Stock was set aside by {allocation?.held_by}
+          {allocation?.held_at ? ' on ' + formatDate(allocation.held_at,undefined,timeZone) : ''}.
+          Do not record a sale until cash or transferred funds have actually been verified.
+        </p>
+        <p class="mt-2 text-xs text-gray-600">Quote revision: {allocation?.quote_revision}. Price changes and cancellation are blocked while this hold exists.</p>
+        <form method="POST" action={'/api/admin/order-requests/' + request.public_id} class="mt-4 space-y-3">
+          <input type="hidden" name="_action" value="release_hold" />
+          <label class="block text-sm font-medium">Reason for returning stock to inventory
+            <textarea name="release_reason" required minlength="4" maxlength="500" rows="2"
+              placeholder="e.g. Customer cancelled the delivery"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"></textarea>
+          </label>
+          <button type="submit" class="rounded-md border border-amber-600 px-4 py-2 text-sm font-semibold text-amber-900">Release held stock</button>
+        </form>
+      </>
+    ) : allocation?.status === 'released' ? (
+      <p class="mt-3 text-sm text-gray-700">
+        This request's stock was released by {allocation.released_by}.
+        Reason: {allocation.release_reason}. To avoid ambiguity, one request cannot be allocated twice;
+        ask the customer to submit a fresh request if they want to proceed again.
+      </p>
+    ) : quote && request.status !== 'cancelled' ? (
+      <>
+        <p class="mt-3 text-sm text-gray-700">
+          Once the buyer has agreed to the current quote and you have checked the order,
+          you can reserve the exact requested items. Inventory is deducted from sellable stock
+          immediately; online checkout sees the reduced quantities.
+        </p>
+        <form method="POST" action={'/api/admin/order-requests/' + request.public_id} class="mt-4 space-y-4">
+          <input type="hidden" name="_action" value="hold_stock" />
+          <input type="hidden" name="hold_revision" value={quote.revision} />
+          <input type="hidden" name="hold_nonce" value={crypto.randomUUID()} />
+          <label class="flex items-start gap-3 text-sm">
+            <input type="checkbox" name="buyer_confirmed" value="yes" required class="mt-1" />
+            <span>I've contacted the buyer, confirmed their agreement to the final quote
+              of <strong>{formatPrice(quote.total_cents,request.currency)}</strong>,
+              and verified the intended fulfillment arrangement.</span>
+          </label>
+          <button type="submit" disabled={request.status === 'new'}
+            class="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+            Allocate stock for this request
+          </button>
+          {request.status === 'new' && <p class="text-xs text-amber-800">Mark the customer as contacted before allocating inventory.</p>}
+        </form>
+      </>
+    ) : (
+      <p class="mt-3 text-sm text-gray-600">Prepare a quote and contact the buyer before allocating any stock.</p>
+    )}
+    <p class="mt-4 text-xs text-gray-500">
+      Holds currently have no automatic expiry. Release manually if the buyer abandons
+      the request. This is not a payment or receipt.
+    </p>
+  </section>
+  <section class="mt-6 rounded-lg border border-gray-200 bg-white p-5">
     <h2 class="text-lg font-semibold">Follow-up status</h2>
     <form method="POST" action={'/api/admin/order-requests/' + request.public_id} class="mt-4 space-y-4">
       <input type="hidden" name="expected_status" value={request.status} />
@@ -142,7 +211,7 @@ const saved = Astro.url.searchParams.get('saved') === '1';
         <select name="status" class="mt-1 block w-full max-w-xs rounded-md border border-gray-300 px-3 py-2" disabled={request.status === 'cancelled'}>
           <option value="contacted" selected={request.status === 'contacted' || request.status === 'new'}>Customer contacted</option>
           <option value="awaiting_payment" selected={request.status === 'awaiting_payment'}>Awaiting payment or delivery/handover</option>
-          <option value="cancelled" selected={request.status === 'cancelled'}>Cancelled / unavailable</option>
+          <option value="cancelled" selected={request.status === 'cancelled'} disabled={isHeld}>Cancelled / unavailable (release stock first)</option>
         </select>
       </label>
       <label class="block text-sm">Internal note (not visible to the customer)
@@ -158,11 +227,24 @@ const saved = Astro.url.searchParams.get('saved') === '1';
   </section>
   <section class="mt-6 rounded-lg border border-gray-200 p-5">
     <h2 class="text-lg font-semibold">When payment is actually received</h2>
-    <p class="mt-2 text-sm text-gray-600">
-      Verify funds in the receiving account or collect cash, then record a paid
-      sale using the existing manual-sale screen. This request remains separate until
-      an audited conversion workflow is implemented. Do not record a paid sale in advance.
-    </p>
-    <a href="/admin/orders/new" class="mt-3 inline-block text-brand underline">Record a verified paid manual sale</a>
+    {isHeld ? (
+      <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
+        <strong>Important:</strong> This request's inventory has already been deducted
+        from sellable stock. Do NOT separately record the same items using the paid
+        manual-sale form: doing so would deduct them a second time.
+        Verified payment conversion for stock-held requests is the next backend phase.
+        Keep independent proof of any money received and do not release the hold
+        to make a second sale without first reconciling the customer order.
+      </p>
+    ) : (
+      <>
+        <p class="mt-2 text-sm text-gray-600">
+          Only after independently verifying cash or transferred funds may a
+          separate paid manual sale be recorded. This request is not automatically
+          linked to that sale; ensure the same items are not sold or deducted twice.
+        </p>
+        <a href="/admin/orders/new" class="mt-3 inline-block text-brand underline">Record a verified paid manual sale</a>
+      </>
+    )}
   </section>
 </AdminLayout>
