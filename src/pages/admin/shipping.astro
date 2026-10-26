@@ -1,6 +1,7 @@
 ---
 import { env } from 'cloudflare:workers';
 import AdminLayout from '../../layouts/AdminLayout.astro';
+import { purgePublicAfterAdminMutation } from '../../features/cache/purgePublicAdmin';
 import { getConfig } from '../../config';
 import { zonesRequireWeight, type ShippingConfig } from '../../features/shipping/calculator';
 import { countProductsMissingWeight, sampleProductsMissingWeight } from '../../features/shipping/sellability';
@@ -171,7 +172,12 @@ if (Astro.request.method === 'POST') {
           ? await replaceInvalidShippingConfig(env.DB, String(form.get('fingerprint') ?? ''), parsedForm.document)
           : await saveRuntimeShippingConfig(env.DB, parsedForm.revision, parsedForm.document);
 
-      if (result.ok) return Astro.redirect('/admin/shipping?saved=1', 303);
+      if (result.ok) {
+        // Checkout/delivery prices are rendered by the public Worker. Clear
+        // its cache, not the separate Admin Worker's private cache.
+        await purgePublicAfterAdminMutation();
+        return Astro.redirect('/admin/shipping?saved=1', 303);
+      }
       if (result.reason === 'conflict') {
         conflict = true;
         notice = 'Shipping changed in another tab. Reload and review those changes before saving yours.';
