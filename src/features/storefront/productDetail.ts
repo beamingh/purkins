@@ -209,6 +209,11 @@ export async function loadProductDetail(
         ? renderMarkdown(product.description, { baseUrl: options.imageBaseUrl })
         : null,
       formattedPrice: formatMoney(displayPriceCents, options.currency),
+      formattedCompareAtPrice:
+        !hasVariants && product.compare_at_price_cents != null &&
+        product.compare_at_price_cents > product.price_cents
+          ? formatMoney(product.compare_at_price_cents, options.currency)
+          : null,
       priceCents: product.price_cents,
       currency: options.currency,
       priceVaries,
