@@ -39,6 +39,12 @@ describe('Purkins demo checkout server-side isolation', () => {
     expect(admin).toContain('because it can reserve real stock');
   });
 
+  it('keeps old snapshot tests isolated from live stock', () => {
+    const baseline = read('test/integration/storefront-baselines.sh');
+    expect(baseline).toContain('--var PURKINS_DEMO_CHECKOUT_ENABLED:true');
+    expect(baseline).toContain('throwaway local D1');
+  });
+
   it('still distinguishes simulated orders from real money', () => {
     const demo = read('src/features/payments/demo.ts');
     const cart = read('src/pages/cart.astro');
