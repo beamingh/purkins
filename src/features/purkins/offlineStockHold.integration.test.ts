@@ -86,12 +86,16 @@ describe('Purkins manual COD stock hold (isolated D1)',()=>{
     ).bind(A).run()).rejects.toThrow(/Release allocated stock/);
     expect((await getOrderRequest(db,A))?.status).toBe('contacted');
     expect((await getOfflineQuote(db,idA))?.revision).toBe(1);
+    await expect(db.prepare('DELETE FROM products WHERE id=1').run())
+      .rejects.toThrow(/Release allocated stock/);
   });
 
   it('reserves size-specific variant units independently from product stock',async()=>{
     expect((await holdOfflineRequestStock(db,C,1,crypto.randomUUID(),'owner')).ok).toBe(true);
     expect(await stock(db,'product_variants',10)).toBe(0);
     expect(await stock(db,'products',2)).toBe(0);
+    await expect(db.prepare('DELETE FROM product_variants WHERE id=10').run())
+      .rejects.toThrow(/Release allocated stock/);
     expect((await releaseOfflineRequestStock(db,C,'Customer no longer wants item','owner')).ok).toBe(true);
     expect(await stock(db,'product_variants',10)).toBe(2);
   });
