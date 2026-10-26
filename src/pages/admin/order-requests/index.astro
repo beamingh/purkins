@@ -21,6 +21,7 @@ const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
   <div class="mb-5 flex flex-wrap gap-3">
     <span class="rounded-md border border-gray-200 bg-white px-4 py-3 text-sm font-semibold">{open.length} active requests (up to 100 shown)</span>
     <a href="/admin/order-requests/new" class="rounded-md bg-brand px-4 py-3 text-sm font-semibold text-white">+ Enter Facebook / Marketplace enquiry</a>
+    <a href="/admin/order-requests/dispatch" class="rounded-md border border-gray-300 px-4 py-3 text-sm font-semibold hover:border-brand">View dispatch dashboard</a>
     <a href="/admin/orders/new" class="rounded-md border border-gray-300 px-4 py-3 text-sm font-semibold hover:border-brand">Record a verified paid sale</a>
   </div>
   <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">

@@ -212,6 +212,7 @@ const listError = Astro.url.searchParams.get('error');
         class="rounded-md border border-brand px-4 py-2 text-sm font-semibold text-brand hover:bg-brand/5">
         Order requests ({requestCount})
       </a>
+      <a href="/admin/order-requests/dispatch" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold">Courier dispatches</a>
       <a href="/admin/orders/new" class="rounded bg-brand px-4 py-2 text-sm font-semibold text-white">+ Record paid sale</a>
       {/* Lookup accepts the customer reference in any form it was communicated:
           the bare 10-char token, the full ord_ ID, or a legacy calculated

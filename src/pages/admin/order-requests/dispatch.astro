@@ -1,0 +1,128 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../../layouts/AdminLayout.astro';
+import { formatDate, formatPrice, getConfig } from '../../../config';
+import {
+  DISPATCH_BUCKETS, DISPATCH_ORDER, getDispatchOverview,
+  type DispatchBucket,
+} from '../../../features/purkins/dispatchOverview';
+import { DELIVERY_STATUSES, COURIER_FEE_PAYERS, COURIER_FEE_STATES } from '../../../features/purkins/courierDelivery';
+
+const overview=await getDispatchOverview(env.DB);
+const filter=Astro.url.searchParams.get('view')??'all';
+const selected=DISPATCH_ORDER.includes(filter as DispatchBucket)?filter:'all';
+const shown=selected==='all'
+  ?overview.items:overview.items.filter(item=>item.bucket===selected);
+const timeZone=Astro.locals.settings?.timeZone??getConfig().timeZone;
+const link=(bucket:string)=>bucket==='all'
+  ?'/admin/order-requests/dispatch':'/admin/order-requests/dispatch?view='+bucket;
+---
+<AdminLayout title="COD delivery dashboard" active="orders">
+  <header class="mb-6">
+    <a href="/admin/order-requests" class="text-sm text-brand underline">&larr; Customer order requests</a>
+    <h1 class="mt-3 text-2xl font-bold">Dispatch and Yango Bike deliveries</h1>
+    <p class="mt-2 max-w-3xl text-sm text-gray-600">
+      Track Facebook, Marketplace and website deliveries from allocated stock to rider handover.
+      <strong>Dispatch and delivery are not proof of payment.</strong>
+      Use each request's verified payment form before recording revenue.
+    </p>
+  </header>
+  <nav aria-label="Delivery status filters" class="mb-5 flex flex-wrap gap-2">
+    <a href={link('all')} aria-current={selected==='all'?'page':undefined}
+      class={'rounded-md border px-3 py-2 text-sm font-medium '+(selected==='all'?'border-brand bg-brand text-white':'border-gray-300 bg-white')}>
+      All ({overview.items.length})
+    </a>
+    {DISPATCH_ORDER.map(bucket=>(
+      <a href={link(bucket)} aria-current={selected===bucket?'page':undefined}
+        class={'rounded-md border px-3 py-2 text-sm font-medium '+(selected===bucket?'border-brand bg-brand text-white':'border-gray-300 bg-white')}>
+        {DISPATCH_BUCKETS[bucket]} ({overview.counts[bucket]})
+      </a>
+    ))}
+  </nav>
+  {overview.truncated&&(
+    <p class="mb-5 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+      Showing the latest 250 eligible request/dispatch records. Counts on this page
+      reflect only those 250 records, not all-time totals.
+    </p>
+  )}
+  <p class="mb-4 text-sm text-gray-600">
+    {shown.length} matching {shown.length===1?'record':'records'} from
+    {overview.truncated?' the latest 250 delivery requests':' currently recorded deliveries and allocated delivery requests'}.
+  </p>
+  <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+    <table class="w-full min-w-[970px] text-left text-sm">
+      <thead class="bg-gray-50 text-gray-600">
+        <tr>
+          <th class="px-4 py-3">Request / latest update</th>
+          <th class="px-4 py-3">Customer / destination</th>
+          <th class="px-4 py-3">Parcel status</th>
+          <th class="px-4 py-3">Payment / quoted goods</th>
+          <th class="px-4 py-3">Courier fee</th>
+          <th class="px-4 py-3">Next action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {shown.map(({row,bucket,reason})=>(
+          <tr class="border-t border-gray-100 align-top">
+            <td class="px-4 py-3">
+              <a href={'/admin/order-requests/'+row.request_public_id} class="font-semibold text-brand underline">
+                {row.request_public_id}
+              </a>
+              <p class="mt-1 text-xs text-gray-500">
+                {formatDate(row.delivery_updated_at??row.held_at,undefined,timeZone)}
+              </p>
+              <p class="mt-1 text-xs text-gray-500">
+                {row.booking_reference?'Booking: '+row.booking_reference:'No booking reference'}
+              </p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium">{row.recipient_name??row.buyer_name}</p>
+              <p>{row.phone}</p>
+              <p class="max-w-[240px] whitespace-pre-wrap text-xs text-gray-600">{row.dropoff_location??row.area??'Destination not entered'}</p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-medium">{DISPATCH_BUCKETS[bucket]}</p>
+              <p class="mt-1 text-xs text-gray-600">
+                {row.delivery_status?DELIVERY_STATUSES[row.delivery_status]:'Not yet planned'}
+              </p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="font-semibold">{formatPrice(row.quote_total_cents,row.currency)}</p>
+              {row.paid_order_public_id?(
+                <a class="text-green-800 underline" href={'/admin/orders/'+row.paid_order_public_id}>Paid · View order</a>
+              ):(
+                <p class="font-medium text-amber-800">Payment not recorded</p>
+              )}
+            </td>
+            <td class="px-4 py-3">
+              <p>{row.courier_fee_cents==null?'Fare not entered':formatPrice(row.courier_fee_cents,row.currency)}</p>
+              <p class="mt-1 text-xs text-gray-600">
+                {row.courier_fee_payer?COURIER_FEE_PAYERS[row.courier_fee_payer as keyof typeof COURIER_FEE_PAYERS]:'Not agreed'}
+              </p>
+              <p class="mt-1 text-xs text-gray-600">
+                {row.courier_fee_state?COURIER_FEE_STATES[row.courier_fee_state as keyof typeof COURIER_FEE_STATES]:'Not confirmed'}
+              </p>
+            </td>
+            <td class="px-4 py-3">
+              <p class="max-w-[280px] text-xs text-gray-700">{reason}</p>
+              <a href={'/admin/order-requests/'+row.request_public_id} class="mt-2 inline-block text-sm font-semibold text-brand underline">
+                Open request
+              </a>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    {shown.length===0&&(
+      <div class="p-6 text-sm text-gray-600">
+        No deliveries match this view. Allocate an agreed customer order, then create a
+        dispatch plan in its request detail page.
+        <a class="ml-1 text-brand underline" href="/admin/order-requests">Open order requests</a>.
+      </div>
+    )}
+  </div>
+  <p class="mt-5 text-xs text-gray-500">
+    This is an internal read-only dashboard. Update pickup, rider, returns and money received
+    from the individual request. No Yango GPS tracking or automatic bank/MoMo confirmation.
+  </p>
+</AdminLayout>
