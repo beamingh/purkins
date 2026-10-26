@@ -22,13 +22,13 @@ CREATE TABLE IF NOT EXISTS purkins_request_deliveries (
   courier_fee_state TEXT NOT NULL DEFAULT 'unconfirmed' CHECK(courier_fee_state IN
     ('unconfirmed','customer_reports_paid','purkins_paid')),
   operator_note TEXT,
-  CHECK ((courier_fee_state='unconfirmed') OR
-    (courier_fee_state='customer_reports_paid' AND courier_fee_payer='customer_to_rider') OR
-    (courier_fee_state='purkins_paid' AND courier_fee_payer='purkins')),
   change_nonce TEXT NOT NULL,
   updated_by TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  CHECK ((courier_fee_state='unconfirmed') OR
+    (courier_fee_state='customer_reports_paid' AND courier_fee_payer='customer_to_rider') OR
+    (courier_fee_state='purkins_paid' AND courier_fee_payer='purkins'))
 );
 
 CREATE TABLE IF NOT EXISTS purkins_request_delivery_events (
