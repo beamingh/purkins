@@ -10,13 +10,13 @@ import { createPendingPayment } from './lightning/pending';
 export const DEMO_CHECKOUT_TTL_SECONDS = 24 * 60 * 60;
 
 /**
- * Demo payment provider — the automatic fallback when NO real rail is configured
+ * Demo payment provider — enabled only by explicit operator deployment opt-in
  * (see getPaymentProvider). Collects nothing real: createCheckout stashes the
  * order snapshot in pending_payments (backend='demo') and sends the buyer to the
  * self-rendered /pay page, which simulates approval/decline and records the
  * order in-page (no webhook). Orders are tagged payment_method='demo', so they're
- * excluded from revenue and badged in the admin. Lets a freshly-deployed store be
- * exercised end-to-end before any Stripe key is added.
+ * excluded from revenue and badged in the admin. These tests STILL reserve real
+ * inventory: never enable this rail for unrestricted live shoppers.
  */
 export function createDemoProvider(db: D1Database): PaymentProvider {
   return {
