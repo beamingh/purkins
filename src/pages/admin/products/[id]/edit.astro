@@ -36,6 +36,7 @@ const intake = await getIntake(env.DB, product.id);
 const locationOptions = intake ? await listLocationTree(env.DB) : [];
 const error = Astro.url.searchParams.get('error');
 const justSaved = Astro.url.searchParams.get('saved') === '1';
+const gallerySaved = Astro.url.searchParams.get('gallery_saved') === '1';
 const catalogRevision=(product as typeof product & {mcp_catalog_revision?:number}).mcp_catalog_revision??0;
 const purgeRetryId=Astro.url.searchParams.get('purge_request_id');
 const purgeRetryRevision=Astro.url.searchParams.get('purge_revision');
@@ -94,6 +95,7 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
   </div>
 
   <div data-purkins-editor>
+    {error && <p role="alert" class="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-800">{error}</p>}
     <nav aria-label="Product editing steps" class="mb-6 overflow-x-auto rounded-lg border border-line bg-surface p-2">
       <div class="flex min-w-max gap-1" role="tablist" aria-label="Product editing steps">
         {[
@@ -132,8 +134,9 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
     <span id="gallery" class="sr-only" aria-hidden="true"></span>
     <div class="mb-4 flex items-baseline justify-between gap-3">
       <h2 class="text-xs uppercase tracking-widest text-gray-400">Images</h2>
-      <span class="text-xs text-gray-400">Changes here save automatically</span>
+      <span class="text-xs text-muted">Uploads save immediately · photo descriptions save when you click Save</span>
     </div>
+    {gallerySaved && <p role="status" class="mb-4 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">Photo changes saved ✓</p>}
 
     <form data-photo-quick-upload
       method="POST"
@@ -206,7 +209,7 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
                 data-js-action="alt"
                 method="POST"
                 action={`/api/admin/products/${product.public_id}/images`}
-                class="flex flex-1 items-center gap-2"
+                class="flex min-w-0 flex-1 flex-wrap items-center gap-2"
               >
                 <input type="hidden" name="_action" value="alt" />
                 <input type="hidden" name="image_id" value={img.public_id} />
@@ -216,14 +219,15 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
                   value={img.alt ?? ''}
                   draggable="false"
                   placeholder="Alt text — describe the image"
-                  class="w-full border-b border-line bg-transparent py-1 text-sm focus:border-brand focus:outline-none"
+                  class="min-w-40 flex-1 rounded-md border border-line bg-white px-3 py-2 text-sm text-gray-900 focus:border-brand focus:outline-none"
                 />
                 <button
                   type="submit"
-                  class="shrink-0 text-xs uppercase tracking-widest text-gray-400 hover:text-brand"
+                  class="shrink-0 rounded-md bg-brand px-4 py-2 text-sm font-semibold text-on-brand shadow-sm transition hover:bg-brand-hover focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-wait disabled:opacity-60"
                 >
                   Save
                 </button>
+                <span data-alt-status role="status" aria-live="polite" class="basis-full text-xs text-muted"></span>
               </form>
 
 
@@ -291,6 +295,7 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
         </ul>
       )
     }
+    <p data-gallery-status role="status" aria-live="polite" class="mt-3 text-sm text-muted"></p>
   </section>
 
   <section id="editor-pane-variants" data-editor-pane="variants" class="scroll-mt-20 border-t border-line pt-6">
@@ -641,19 +646,23 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
   </section>
   </div>
 
-  {/* Progressive enhancement: every gallery action runs via fetch (no reload, no
-      jump). The plain form POSTs are the no-JS fallback (they redirect to
-      #gallery). Primary badge + ↑/↓ visibility are CSS-driven, so they
-      auto-update as rows reorder. */}
+  {/* AJAX gallery controls verify JSON responses before displaying "Saved".
+      Standard form POSTs remain the no-JavaScript fallback. */}
   <script>
-    // @ts-nocheck -- plain-JS client script (annotations would ship to the browser)
+    // @ts-nocheck -- Client-side progressive enhancement.
     const list = document.querySelector('[data-gallery]');
     if (list instanceof HTMLElement) {
       const action = list.dataset.action || '';
-      const rows = () =>
-        Array.from(list.children).filter((el) => el instanceof HTMLElement);
-      // Keep the main-image marker and reorder actions truthful after edits,
-      // even when gallery actions update without a full-page reload.
+      const galleryStatus = document.querySelector('[data-gallery-status]');
+      const rows = () => Array.from(list.children).filter(el => el instanceof HTMLElement);
+      const tell = (node, message, state = 'info') => {
+        if (!(node instanceof HTMLElement)) return;
+        node.textContent = message;
+        node.classList.remove('text-muted', 'text-green-700', 'text-red-700', 'text-amber-700');
+        node.classList.add(state === 'success' ? 'text-green-700'
+          : state === 'error' ? 'text-red-700'
+          : state === 'dirty' ? 'text-amber-700' : 'text-muted');
+      };
       const refreshActions = () => {
         const current = rows();
         current.forEach((item, index) => {
@@ -671,76 +680,154 @@ const reviewBlockers: string[] = review && 'blockers' in review ? (review.blocke
           }
         });
       };
-      refreshActions();
-      const send = (params) =>
-        fetch(action, {
+      const restoreOrder = before => {
+        for (const item of before) list.appendChild(item);
+        refreshActions();
+      };
+      const send = async params => {
+        const response = await fetch(action, {
           method: 'POST',
-          headers: { 'content-type': 'application/x-www-form-urlencoded' },
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/x-www-form-urlencoded', accept: 'application/json' },
           body: new URLSearchParams(params),
         });
-      const persistOrder = () => {
+        // If an expired Admin session redirects to HTML, that is NOT a save.
+        const isJson = response.headers.get('content-type')?.includes('application/json');
+        const outcome = isJson ? await response.json().catch(() => null) : null;
+        if (!response.ok || outcome?.ok !== true) {
+          throw new Error(outcome?.error || 'Save could not be confirmed. Check your Admin session and try again.');
+        }
+        return outcome;
+      };
+      const persistOrder = async () => {
+        const params = new URLSearchParams();
+        params.set('_action', 'reorder');
+        for (const li of rows()) params.append('order', li.dataset.imageId || '');
+        await send(params);
         refreshActions();
-        const p = new URLSearchParams();
-        p.set('_action', 'reorder');
-        for (const li of rows()) p.append('order', li.dataset.imageId || '');
-        return send(p);
       };
 
       let dragging = null;
+      let beforeDrag = null;
+      let busy = false;
       for (const li of rows()) {
         li.setAttribute('draggable', 'true');
-        li.addEventListener('dragstart', () => {
+        li.addEventListener('dragstart', event => {
+          if (busy) { event.preventDefault(); return; }
           dragging = li;
+          beforeDrag = rows();
           li.classList.add('dragging');
         });
-        li.addEventListener('dragend', () => {
+        li.addEventListener('dragend', async () => {
           li.classList.remove('dragging');
+          if (dragging !== li || !beforeDrag) return;
+          const before = beforeDrag;
           dragging = null;
-          persistOrder();
+          beforeDrag = null;
+          if (rows().every((row, i) => row === before[i])) return;
+          busy = true;
+          tell(galleryStatus, 'Saving photo order…');
+          try {
+            await persistOrder();
+            tell(galleryStatus, 'Photo order saved ✓', 'success');
+          } catch (error) {
+            restoreOrder(before);
+            tell(galleryStatus, error instanceof Error ? error.message : 'Photo order not saved.', 'error');
+          } finally { busy = false; }
         });
+        const altForm = li.querySelector('form[data-js-action="alt"]');
+        const altInput = altForm?.querySelector('input[name="alt"]');
+        const altStatus = altForm?.querySelector('[data-alt-status]');
+        altInput?.addEventListener('input', () => tell(altStatus, 'Unsaved changes', 'dirty'));
       }
-      list.addEventListener('dragover', (e) => {
-        e.preventDefault();
+      list.addEventListener('dragover', event => {
         if (!dragging) return;
-        const after = rows().find((el) => {
+        event.preventDefault();
+        const after = rows().find(el => {
           if (el === dragging) return false;
           const r = el.getBoundingClientRect();
-          return r.top + r.height / 2 >= e.clientY;
+          return r.top + r.height / 2 >= event.clientY;
         });
         list.insertBefore(dragging, after || null);
       });
 
-      list.addEventListener('submit', async (e) => {
-        const form = e.target;
+      list.addEventListener('submit', async event => {
+        const form = event.target;
         if (!(form instanceof HTMLFormElement) || !form.dataset.jsAction) return;
-        e.preventDefault();
+        event.preventDefault();
         const type = form.dataset.jsAction;
         const li = form.closest('li');
         if (!li) return;
+
+        if (type === 'alt') {
+          if (form.dataset.saving === 'true') return;
+          const button = form.querySelector('button[type="submit"]');
+          const status = form.querySelector('[data-alt-status]');
+          const input = form.querySelector('input[name="alt"]');
+          const data = new FormData(form);
+          const submittedValue = String(data.get('alt') ?? '');
+          form.dataset.saving = 'true';
+          if (button instanceof HTMLButtonElement) {
+            button.disabled = true;
+            button.textContent = 'Saving…';
+          }
+          tell(status, 'Saving description…');
+          try {
+            await send(data);
+            // A user may edit the text while the save is in flight.
+            if (input instanceof HTMLInputElement && input.value !== submittedValue) {
+              tell(status, 'Unsaved changes', 'dirty');
+            } else {
+              tell(status, 'Saved ✓', 'success');
+            }
+          } catch (error) {
+            tell(status, error instanceof Error ? error.message : 'Description not saved. Try again.', 'error');
+          } finally {
+            form.dataset.saving = 'false';
+            if (button instanceof HTMLButtonElement) {
+              button.disabled = false;
+              button.textContent = 'Save';
+            }
+          }
+          return;
+        }
+
+        if (busy) {
+          tell(galleryStatus, 'Finish the current photo action before trying another.', 'dirty');
+          return;
+        }
+        const before = rows();
+        let changed = false;
         if (type === 'up' && li.previousElementSibling) {
           list.insertBefore(li, li.previousElementSibling);
-          await persistOrder();
+          changed = true;
         } else if (type === 'down' && li.nextElementSibling) {
           list.insertBefore(li.nextElementSibling, li);
-          await persistOrder();
-        } else if (type === 'primary') {
+          changed = true;
+        } else if (type === 'primary' && li !== list.firstElementChild) {
           list.insertBefore(li, list.firstElementChild);
-          await persistOrder();
+          changed = true;
         } else if (type === 'delete') {
-          if (!confirm('Delete this image?')) return;
-          await send({ _action: 'delete', image_id: li.dataset.imageId });
-          li.remove();
-          refreshActions();
-        } else if (type === 'alt') {
-          await send(new FormData(form));
-          const btn = form.querySelector('button[type="submit"]');
-          if (btn) {
-            const original = btn.textContent;
-            btn.textContent = 'Saved';
-            setTimeout(() => {
-              btn.textContent = original;
-            }, 1200);
+          if (!confirm('Remove this photo from the product?')) return;
+          changed = true;
+        }
+        if (!changed) return;
+        busy = true;
+        tell(galleryStatus, type === 'delete' ? 'Removing photo…' : 'Saving photo order…');
+        try {
+          if (type === 'delete') {
+            await send({ _action: 'delete', image_id: li.dataset.imageId });
+            li.remove();
+          } else {
+            await persistOrder();
           }
+          refreshActions();
+          tell(galleryStatus, type === 'delete' ? 'Photo removed ✓' : 'Photo order saved ✓', 'success');
+        } catch (error) {
+          restoreOrder(before);
+          tell(galleryStatus, error instanceof Error ? error.message : 'Photo change not saved.', 'error');
+        } finally {
+          busy = false;
         }
       });
     }

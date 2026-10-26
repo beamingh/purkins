@@ -68,6 +68,47 @@ describe('Purkins guided product editing', () => {
     expect(images).toContain('const media = await uploadMedia');
   });
 
+  it('gives every gallery description an obvious Save button with reliable feedback', () => {
+    const editor = source('src/pages/admin/products/[id]/edit.astro');
+    const endpoint = source('src/pages/api/admin/products/[id]/images.ts');
+
+    // Real inline feedback and high-contrast action, never a transient optimistic
+    // Saved message before the backend confirms the update.
+    expect(editor).toContain('data-alt-status');
+    expect(editor).toContain('aria-live="polite"');
+    expect(editor).toContain('bg-brand px-4 py-2 text-sm font-semibold text-on-brand');
+    expect(editor).toContain('Unsaved changes');
+    expect(editor).toContain('Saving description…');
+    expect(editor).toContain('Saved ✓');
+    expect(editor).toContain('Description not saved. Try again.');
+    expect(editor).toContain("button.disabled = true");
+    expect(editor).toContain("button.disabled = false");
+    expect(editor).not.toContain("btn.textContent = 'Saved'");
+
+    // A 303 redirect (including expired sessions) or 500 is not success.
+    expect(editor).toContain("accept: 'application/json'");
+    expect(editor).toContain("response.headers.get('content-type')");
+    expect(editor).toContain('!response.ok || outcome?.ok !== true');
+    expect(endpoint).toContain("request.headers.get('accept')?.includes('application/json')");
+    expect(endpoint).toContain("{ ok: false, error: msg }");
+    expect(endpoint).toContain("{ ok: true }");
+    expect(endpoint).toContain('?gallery_saved=1');
+    expect(editor).toContain('Photo changes saved ✓');
+    expect(editor).toContain('role="alert"');
+    expect(endpoint).toContain("return wantsJson ? back() : new Response(null, { status: 204 })");
+  });
+
+  it('keeps gallery reordering and removal recoverable on failures', () => {
+    const editor = source('src/pages/admin/products/[id]/edit.astro');
+    expect(editor).toContain('data-gallery-status');
+    expect(editor).toContain('restoreOrder(before)');
+    expect(editor).toContain('await persistOrder()');
+    expect(editor).toContain("await send({ _action: 'delete', image_id: li.dataset.imageId })");
+    expect(editor).toContain('Photo order saved ✓');
+    expect(editor).toContain('Photo removed ✓');
+    expect(editor).toContain('photo descriptions save when you click Save');
+  });
+
   it('preserves guarded publication and media permissions', () => {
     const edit = source('src/pages/admin/products/[id]/edit.astro');
     const registry = source('mcp/src/purkins-gallery.ts');
