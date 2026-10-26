@@ -3,8 +3,7 @@ import { env } from 'cloudflare:workers';
 import { getConfig } from '../../../../config';
 import { parseManualSaleForm } from '../../../../features/purkins/manualSale';
 import { recordManualSale } from '../../../../features/purkins/manualSaleDb';
-import { CACHE_TAG } from '../../../../features/cache/tags';
-import { purgeCacheTags } from '../../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -33,7 +32,7 @@ export const POST: APIRoute = async ({ request, redirect, locals }) => {
   // a cross-Worker invalidation strategy before enabling public edge caches.
   if (!sale.alreadyRecorded) {
     try {
-      await purgeCacheTags([CACHE_TAG.catalog]);
+      await purgePublicAfterAdminMutation();
     } catch (error) {
       console.error('Manual sale saved; catalog cache purge needs reconciliation', error);
     }
