@@ -40,11 +40,20 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   if (!publicId || !product) return new Response('Not found', { status: 404 });
   const id = product.id;
 
+  // Browser forms keep their existing redirect behavior. Fetch-based gallery
+  // controls explicitly request JSON so a redirected HTML/login/error page can
+  // never be mistaken for a successful save.
+  const wantsJson = request.headers.get('accept')?.includes('application/json') ?? false;
   const back = (msg?: string) =>
-    redirect(
-      `/admin/products/${publicId}/edit${msg ? `?error=${encodeURIComponent(msg)}` : ''}#gallery`,
-      303,
-    );
+    wantsJson
+      ? new Response(JSON.stringify(msg ? { ok: false, error: msg } : { ok: true }), {
+          status: msg ? 400 : 200,
+          headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'private, no-store' },
+        })
+      : redirect(
+          `/admin/products/${publicId}/edit${msg ? `?error=${encodeURIComponent(msg)}` : ''}#gallery`,
+          303,
+        );
 
   const form = await request.formData();
   const action = String(form.get('_action'));
@@ -103,7 +112,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     await reorderProductImages(env.DB, id, ids);
     await syncPrimaryImage(env.DB, id); // new first image becomes primary
     await purgeProduct();
-    return new Response(null, { status: 204 });
+    return wantsJson ? back() : new Response(null, { status: 204 });
   }
 
   const imagePublicId = parsePublicId(form.get('image_id'), 'productImage');
