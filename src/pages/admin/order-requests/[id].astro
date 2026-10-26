@@ -7,6 +7,8 @@ import { getOfflineQuote, listOfflineQuoteEvents } from '../../../features/purki
 import { getOfflineStockHold } from '../../../features/purkins/offlineStockHoldDb';
 import { getOfflineSettlement } from '../../../features/purkins/offlineSettlementDb';
 import { MANUAL_CHANNELS, MANUAL_TENDERS } from '../../../features/purkins/manualSale';
+import { getCourierDelivery, listCourierDeliveryEvents } from '../../../features/purkins/courierDeliveryDb';
+import { COURIERS, COURIER_FEE_PAYERS, DELIVERY_SOURCES, DELIVERY_STATUSES } from '../../../features/purkins/courierDelivery';
 import {
   REQUEST_FULFILLMENT_OPTIONS, REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES,
 } from '../../../features/purkins/orderRequests';
@@ -17,6 +19,9 @@ const lines = await listRequestLines(env.DB,request.id);
 const quote = await getOfflineQuote(env.DB,request.id);
 const allocation = await getOfflineStockHold(env.DB,request.id);
 const settlement = await getOfflineSettlement(env.DB,request.id);
+const courierDelivery = await getCourierDelivery(env.DB,request.id);
+const deliveryEvents = courierDelivery ? await listCourierDeliveryEvents(env.DB,request.id) : [];
+const deliverySaved = Astro.url.searchParams.get('delivery_saved') === '1';
 const isHeld = allocation?.status === 'held';
 const holdSaved = Astro.url.searchParams.get('hold_saved') === '1';
 const holdReleased = Astro.url.searchParams.get('hold_released') === '1';
@@ -239,6 +244,124 @@ const saved = Astro.url.searchParams.get('saved') === '1';
         Save follow-up
       </button>
     </form>
+  </section>
+  <section class="mt-6 rounded-lg border border-gray-200 bg-white p-5">
+    <h2 class="text-lg font-semibold">Dispatch and delivery log — Yango Bike</h2>
+    <p class="mt-2 text-sm text-gray-600">
+      Record the actual pickup, drop-off, courier booking and parcel outcome.
+      <strong>Rider delivery reports do not prove payment.</strong> Money received by
+      Purkins must be independently confirmed using the payment form below.
+      Customer-paid courier fees are not automatically included in Purkins revenue.
+    </p>
+    {deliverySaved && <p role="status" class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-900">Dispatch history updated. No payment or stock movement was recorded.</p>}
+    {courierDelivery && <div class="mt-4 rounded-md bg-gray-50 p-4 text-sm">
+      <p><strong>Current status:</strong> {DELIVERY_STATUSES[courierDelivery.status]} · Revision {courierDelivery.revision}</p>
+      <p><strong>Route:</strong> {courierDelivery.pickup_location} → {courierDelivery.dropoff_location}</p>
+      <p><strong>Booking:</strong> {courierDelivery.booking_reference || 'Not recorded'}</p>
+      <p><strong>Delivery cost:</strong> {courierDelivery.courier_fee_cents == null
+        ? 'Pending fare quote' : formatPrice(courierDelivery.courier_fee_cents,request.currency)}
+        · {COURIER_FEE_PAYERS[courierDelivery.courier_fee_payer]}</p>
+      <p class="text-xs text-gray-500">Updated by {courierDelivery.updated_by} · {formatDate(courierDelivery.updated_at,undefined,timeZone)}</p>
+    </div>}
+    {isHeld && quote?.fulfillment_method === 'delivery' && courierDelivery?.status !== 'returned' ? (
+      <form method="POST" action={'/api/admin/order-requests/' + request.public_id}
+        class="mt-4 grid gap-4 sm:grid-cols-2">
+        <input type="hidden" name="_action" value="save_courier_delivery" />
+        <input type="hidden" name="delivery_nonce" value={crypto.randomUUID()} />
+        <input type="hidden" name="delivery_revision" value={courierDelivery?.revision ?? 0} />
+        <label class="block text-sm">Parcel status
+          <select name="delivery_status" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" required>
+            {Object.entries(DELIVERY_STATUSES).filter(([status])=>{
+              if (!courierDelivery) return status === 'planned';
+              const allowed: Record<string,string[]> = {
+                planned:['planned','dispatched','returned'],
+                dispatched:['dispatched','delivered','delivery_failed','returned'],
+                delivery_failed:['delivery_failed','dispatched','returned'],
+                delivered:['delivered','returned'],
+              };
+              return (allowed[courierDelivery.status]??[]).includes(status);
+            }).map(([status,label])=><option value={status} selected={courierDelivery?.status===status}>{label}</option>)}
+          </select>
+        </label>
+        <label class="block text-sm">Where did the sale come from?
+          <select name="source_channel" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+            {Object.entries(DELIVERY_SOURCES).map(([value,label])=>(
+              <option value={value} selected={courierDelivery?.source_channel===value || (!courierDelivery&&value==='facebook_page')}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block text-sm">Courier
+          <select name="courier" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+            {Object.entries(COURIERS).map(([value,label])=><option value={value} selected={courierDelivery?.courier===value || (!courierDelivery&&value==='yango_bike')}>{label}</option>)}
+          </select>
+        </label>
+        <label class="block text-sm">Courier fee paid by
+          <select name="courier_fee_payer" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+            {Object.entries(COURIER_FEE_PAYERS).map(([value,label])=>(
+              <option value={value} selected={courierDelivery?.courier_fee_payer===value || (!courierDelivery&&value==='not_agreed')}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block text-sm">Actual Yango fare (K, optional)
+          <input name="courier_fee" inputmode="decimal" value={courierDelivery?.courier_fee_cents==null?'':(courierDelivery.courier_fee_cents/100).toFixed(2)}
+            placeholder="e.g. 45.00" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm">Booking / ride reference (optional while planning)
+          <input name="booking_reference" maxlength="120" value={courierDelivery?.booking_reference??''}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm sm:col-span-2">Pickup place or dispatch point
+          <textarea name="pickup_location" maxlength="500" rows="2" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">{courierDelivery?.pickup_location??''}</textarea>
+        </label>
+        <label class="block text-sm sm:col-span-2">Drop-off location, landmark and directions
+          <textarea name="dropoff_location" maxlength="500" rows="2" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">{courierDelivery?.dropoff_location??[request.area,request.address_notes].filter(Boolean).join(' · ')}</textarea>
+        </label>
+        <label class="block text-sm">Recipient name
+          <input name="recipient_name" maxlength="100" required value={courierDelivery?.recipient_name??request.buyer_name}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm">Recipient phone
+          <input name="recipient_phone" type="tel" required value={courierDelivery?.recipient_phone??request.phone}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm">Rider name
+          <input name="rider_name" maxlength="100" value={courierDelivery?.rider_name??''}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm">Rider phone
+          <input name="rider_phone" type="tel" value={courierDelivery?.rider_phone??''}
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+        </label>
+        <label class="block text-sm sm:col-span-2">Internal dispatch note / parcel return evidence
+          <textarea name="delivery_note" maxlength="1000" rows="3"
+            placeholder="Parcel received by whom? If returned, how did you confirm possession?"
+            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">{courierDelivery?.operator_note??''}</textarea>
+        </label>
+        <p class="text-xs text-gray-600 sm:col-span-2">
+          When the customer pays the rider directly for delivery, the Purkins quote must show K0
+          delivery charge, so the same fee is not billed twice. When Purkins pays Yango, the
+          courier fare is an expense; any customer delivery charge belongs in the agreed quote.
+        </p>
+        <button type="submit" class="rounded-md bg-brand px-5 py-2 font-semibold text-white sm:col-span-2">
+          {courierDelivery?'Update dispatch history':'Plan dispatch'}
+        </button>
+      </form>
+    ) : (
+      <p class="mt-4 text-sm text-gray-600">
+        {courierDelivery?.status==='returned'
+          ? 'This parcel was marked physically returned. The log is closed; return held stock through the separate inventory release action after confirming no payment was received.'
+          : 'Prepare and allocate a delivery quote before planning or recording a courier dispatch.'}
+      </p>
+    )}
+    {deliveryEvents.length>0 && <details class="mt-5 border-t border-gray-200 pt-3 text-sm">
+      <summary class="cursor-pointer font-medium">Dispatch event history ({deliveryEvents.length} latest)</summary>
+      <ol class="mt-3 space-y-2">
+        {deliveryEvents.map(event=><li class="rounded-md border border-gray-100 p-3">
+          Revision {event.revision} · {DELIVERY_STATUSES[event.status]} · {formatDate(event.created_at,undefined,timeZone)}
+          · recorded by {event.changed_by}
+        </li>)}
+      </ol>
+    </details>}
   </section>
   <section class="mt-6 rounded-lg border border-gray-200 p-5">
     <h2 class="text-lg font-semibold">When payment is actually received</h2>
