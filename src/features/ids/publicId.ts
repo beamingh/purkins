@@ -18,6 +18,7 @@ export const PUBLIC_ID_PREFIXES = {
   category: 'cat',
   page: 'page',
   order: 'ord',
+  orderRequest: 'req',
   media: 'med',
   productImage: 'pimg',
   navItem: 'nav',
