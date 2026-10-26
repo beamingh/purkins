@@ -42,6 +42,19 @@ export function parseProductForm(
   const currency = String(form.get('currency') ?? 'usd').trim().toLowerCase() || 'usd';
   // Scale by the chosen currency's minor units (so 1000 JPY stores as 1000, not 100000).
   const price_cents = toMinorUnits(price, currency);
+  const compareAtRaw = String(form.get('compare_at_price') ?? '').trim();
+  let compare_at_price_cents: number | null = null;
+  if (compareAtRaw !== '') {
+    const previousPrice = Number(compareAtRaw);
+    if (!Number.isFinite(previousPrice) || previousPrice <= 0) {
+      return { error: 'Original price must be a positive amount, or left blank.' };
+    }
+    compare_at_price_cents = toMinorUnits(previousPrice, currency);
+    if (!Number.isSafeInteger(compare_at_price_cents) ||
+        compare_at_price_cents <= price_cents) {
+      return { error: 'Original price must be higher than the current selling price.' };
+    }
+  }
   const description = String(form.get('description') ?? '').trim() || null;
   // Unchecked checkboxes submit nothing, so absence means inactive.
   const active = form.get('active') != null ? 1 : 0;
@@ -62,7 +75,7 @@ export function parseProductForm(
   }
 
   return {
-    data: { name, description, price_cents, currency, stock, active, weight_grams, requires_shipping },
+    data: { name, description, price_cents, compare_at_price_cents, currency, stock, active, weight_grams, requires_shipping },
   };
 }
 

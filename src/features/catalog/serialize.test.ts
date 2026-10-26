@@ -48,6 +48,24 @@ describe('toCatalogProduct', () => {
     });
   });
 
+  it('returns the old price only when it exceeds what customers pay', () => {
+    const valid = toCatalogProduct({ ...base, price_cents: 95000,
+      compare_at_price_cents: 110000, currency: 'zmw' }, [], ORIGIN);
+    expect(valid.price).toEqual({amount:950,cents:95000,currency:'ZMW'});
+    expect(valid.compare_at_price).toEqual({amount:1100,cents:110000,currency:'ZMW'});
+    for (const oldPrice of [null, undefined, 95000, 90000]) {
+      const normal = toCatalogProduct({ ...base, price_cents: 95000,
+        compare_at_price_cents: oldPrice }, [], ORIGIN);
+      expect(normal).not.toHaveProperty('compare_at_price');
+    }
+  });
+
+  it('does not imply the parent is discounted when size variants have different prices', () => {
+    const variantProduct = { ...base, variant_label: 'Size',
+      compare_at_price_cents: 11000 };
+    expect(toCatalogProduct(variantProduct, [], ORIGIN)).not.toHaveProperty('compare_at_price');
+  });
+
   it('scales price by the product currency (JPY has no minor unit)', () => {
     const jpy = { ...base, price_cents: 3000, currency: 'jpy' };
     expect(toCatalogProduct(jpy, [], ORIGIN).price).toEqual({

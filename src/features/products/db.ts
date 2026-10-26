@@ -8,6 +8,8 @@ export interface Product {
   slug: string;
   description: string | null;
   price_cents: number;
+  /** Optional regular price shown crossed out for selected genuine reductions. */
+  compare_at_price_cents?: number | null;
   currency: string;
   image_key: string | null;
   stock: number;
@@ -33,6 +35,8 @@ export interface ProductFields {
   name: string;
   description: string | null;
   price_cents: number;
+  /** NULL/omitted means no old price is advertised. */
+  compare_at_price_cents?: number | null;
   currency: string;
   stock: number;
   active: number;
@@ -394,11 +398,11 @@ export async function createProduct(db: D1Database, p: ProductInput): Promise<nu
   return withPublicId('product', async (publicId) => {
     const row = await db
       .prepare(
-        `INSERT INTO products (name, slug, description, price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, public_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `INSERT INTO products (name, slug, description, price_cents, compare_at_price_cents, currency, image_key, stock, active, weight_grams, requires_shipping, public_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          RETURNING id`,
       )
-      .bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, publicId)
+      .bind(p.name, p.slug, p.description, p.price_cents, p.compare_at_price_cents ?? null, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, publicId)
       .first<{ id: number }>();
     return row!.id;
   });
@@ -408,11 +412,11 @@ export async function updateProduct(db: D1Database, id: number, p: ProductInput)
   await db
     .prepare(
       `UPDATE products
-         SET name = ?, slug = ?, description = ?, price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
+         SET name = ?, slug = ?, description = ?, price_cents = ?, compare_at_price_cents = ?, currency = ?, image_key = ?, stock = ?, active = ?,
              weight_grams = ?, requires_shipping = ?
        WHERE id = ?`,
     )
-    .bind(p.name, p.slug, p.description, p.price_cents, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id)
+    .bind(p.name, p.slug, p.description, p.price_cents, p.compare_at_price_cents ?? null, p.currency, p.image_key, p.stock, p.active, p.weight_grams, p.requires_shipping, id)
     .run();
 }
 

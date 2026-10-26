@@ -61,15 +61,22 @@ const { model, purchase } = Astro.props;
 
     <h1 class="font-serif text-4xl tracking-tight">{model.name}</h1>
     {model.digitalDelivery && <p class="mt-2 text-xs uppercase tracking-widest text-brand">Digital download</p>}
-    <p
-      class="mt-4 text-2xl tabular-nums text-muted"
-      data-price-display
-      data-base={model.priceCents}
-      data-currency={model.currency}
-    >
-      {model.priceVaries && <span class="text-base text-faint">from </span>}
-      {model.formattedPrice}
-    </p>
+    <div class="mt-4 flex flex-wrap items-baseline gap-x-3 gap-y-1 tabular-nums">
+      {model.formattedCompareAtPrice && (
+        <s class="text-xl text-faint" aria-label={`Original price ${model.formattedCompareAtPrice}`}>
+          {model.formattedCompareAtPrice}
+        </s>
+      )}
+      <p
+        class={model.formattedCompareAtPrice ? 'text-3xl font-semibold text-brand' : 'text-2xl text-muted'}
+        data-price-display
+        data-base={model.priceCents}
+        data-currency={model.currency}
+      >
+        {model.priceVaries && <span class="text-base text-faint">from </span>}
+        {model.formattedPrice}
+      </p>
+    </div>
     {
       /* data-low-stock is the contract, not the wording. Reword or restyle it
          freely; keep the marker so scarcity stays distinguishable from normal

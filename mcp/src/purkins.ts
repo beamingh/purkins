@@ -104,7 +104,8 @@ export async function stockView(db: D1Database, product: Product) {
   return {
     id: product.public_id, slug: product.slug, name: product.name,
     description: product.description, stock: variants.length ? variants.filter((v) => v.active === 1).reduce((sum, v) => sum + v.stock, 0) : product.stock,
-    price_cents: product.price_cents, currency: product.currency,
+    price_cents: product.price_cents, compare_at_price_cents: product.compare_at_price_cents ?? null,
+    currency: product.currency,
     stock_revision: (product as Product & {mcp_stock_revision?: number}).mcp_stock_revision ?? 0,
     catalog_revision: (product as Product & {mcp_catalog_revision?: number}).mcp_catalog_revision ?? 0,
     active: product.active === 1, intake: privateIntake,

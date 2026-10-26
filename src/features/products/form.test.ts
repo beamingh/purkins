@@ -35,6 +35,27 @@ describe('parseProductForm', () => {
     }
   });
 
+  it('stores an optional higher original ZMW price for a real promotion', () => {
+    const r = parseProductForm(
+      form({ name: 'TY-899', price: '950', compare_at_price: '1100', stock: '4', currency: 'ZMW' }),
+    );
+    expect(r).toHaveProperty('data');
+    if ('data' in r) {
+      expect(r.data.price_cents).toBe(95000);
+      expect(r.data.compare_at_price_cents).toBe(110000);
+    }
+  });
+
+  it('does not advertise an original price unless it is higher than the current price', () => {
+    const original = { name: 'TY-899', price: '950', stock: '4', currency: 'ZMW' };
+    for (const compare_at_price of ['0', '950', '900', '-12', 'not-a-number', 'Infinity']) {
+      const r = parseProductForm(form({ ...original, compare_at_price }));
+      expect(r).toHaveProperty('error');
+    }
+    const blank = parseProductForm(form({ ...original, compare_at_price: '' }));
+    if ('data' in blank) expect(blank.data.compare_at_price_cents).toBeNull();
+  });
+
   it('treats an absent checkbox as active=0', () => {
     const r = parseProductForm(form({ name: 'Tee', price: '5', stock: '1' }));
     if ('data' in r) expect(r.data.active).toBe(0);
