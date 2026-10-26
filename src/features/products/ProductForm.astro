@@ -57,6 +57,9 @@ const priceDecimals = currencyDecimals(defaultCurrency);
 const price = product
   ? toMajorUnits(product.price_cents, product.currency).toFixed(currencyDecimals(product.currency))
   : (0).toFixed(priceDecimals);
+const compareAtPrice = product?.compare_at_price_cents != null
+  ? toMajorUnits(product.compare_at_price_cents, defaultCurrency).toFixed(priceDecimals)
+  : '';
 const intakeLanded = intake ? landedCostCents(intake) : null;
 const intakeSuggested = intake ? suggestedSellingPriceCents(intake) : null;
 const intakeEnabled = product === null || intake !== null;
@@ -157,7 +160,20 @@ const inputClass =
       <input id="stock" name="stock" type="number" step="1" min="0" value={product?.stock ?? 0} class={inputClass} />
     </div>
   </div>
-
+  <div>
+    <label class="block text-sm font-medium" for="compare-at-price">
+      Original price ({defaultCurrency.toUpperCase()}) <span class="font-normal text-muted">— optional</span>
+    </label>
+    <input
+      id="compare-at-price" name="compare_at_price" type="number" inputmode="decimal"
+      min="0" step={priceStep} value={compareAtPrice} class={inputClass}
+      placeholder="Leave blank for the regular price"
+    />
+    <p class="mt-1 text-xs text-muted">
+      Enter a genuine previous price higher than the selling price to display a crossed-out price.
+      Leave blank to show only the selling price. This is not the supplier's cost or a rand price tag.
+    </p>
+  </div>
 
   {
     intakeEnabled && (
