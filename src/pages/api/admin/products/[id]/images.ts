@@ -17,8 +17,7 @@ import { uploadMedia } from '../../../../../features/media/upload';
 import { attachMediaToProduct, getMediaByPublicId } from '../../../../../features/media/db';
 import { getStorage } from '../../../../../features/storage';
 import { parsePublicId } from '../../../../../features/ids/publicId';
-import { CACHE_TAG } from '../../../../../features/cache/tags';
-import { purgeCacheTags } from '../../../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -59,7 +58,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   const action = String(form.get('_action'));
   const storage = getStorage();
   const purgeProduct = () =>
-    purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
+    purgePublicAfterAdminMutation();
 
   if (action === 'add') {
     const files = form.getAll('images').filter((f): f is File => f instanceof File && f.size > 0);
