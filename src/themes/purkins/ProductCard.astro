@@ -44,8 +44,20 @@ const Heading = headingLevel;
           </span>
         )
       }
+      {card.inStock && card.formattedCompareAtPrice && (
+        <span class="absolute left-3 top-3 rounded-full bg-brand px-2.5 py-1 text-xs font-semibold tracking-wide text-on-brand">
+          Special offer
+        </span>
+      )}
     </div>
     <Heading class="mt-4 text-sm font-medium tracking-tight">{card.name}</Heading>
-    <p class="mt-1 text-sm tabular-nums text-muted">{card.formattedPrice}</p>
+    <div class="mt-1 flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm tabular-nums">
+      {card.formattedCompareAtPrice && (
+        <s class="text-faint" aria-label={`Original price ${card.formattedCompareAtPrice}`}>{card.formattedCompareAtPrice}</s>
+      )}
+      <span class={card.formattedCompareAtPrice ? 'font-semibold text-brand' : 'text-muted'}>
+        {card.formattedPrice}
+      </span>
+    </div>
   </a>
 </li>
