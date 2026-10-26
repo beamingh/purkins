@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS purkins_offline_settlements (
   request_id INTEGER PRIMARY KEY REFERENCES purkins_order_requests(id) ON DELETE RESTRICT,
   order_id INTEGER NOT NULL UNIQUE REFERENCES orders(id) ON DELETE RESTRICT,
+  confirmation_nonce TEXT NOT NULL UNIQUE,
   quote_revision INTEGER NOT NULL CHECK(quote_revision > 0),
   tender TEXT NOT NULL CHECK(tender IN
     ('cash','airtel_money','mtn_momo','zamtel_money','bank_transfer','other')),
