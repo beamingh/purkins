@@ -11,6 +11,7 @@ import { resolveRequiredOrderEmail } from '../../email/orderPolicy';
 import { deliverOrderNotifications } from '../../email/outbox';
 import type { StoreSettings } from '../../settings/db';
 import { purgeStockProductCache } from '../../cache/purge';
+import { isDemoCheckoutEnabled } from '../demoPolicy';
 
 // Settlement logic for the self-rendered /pay page, one function per method. Kept
 // here (beside the views) so the route stays a thin dispatcher.
@@ -40,6 +41,11 @@ export async function settleDemoCheckout(
   settings?: StoreSettings,
   waitUntil?: (promise: Promise<unknown>) => void,
 ): Promise<DemoSettleResult> {
+  // Defense in depth: legacy links or a direct module caller cannot settle
+  // simulated orders after owner disables public demo checkout.
+  if (!isDemoCheckoutEnabled() || settings?.disabledPaymentMethods.includes('demo')) {
+    return { declined: 'Demo checkout is disabled. No payment was taken.' };
+  }
   // Fail closed after the demo window even if a POST slips past the page guard.
   if (pending.expires_at != null && Date.parse(pending.expires_at) <= Date.now()) {
     return { declined: 'This demo checkout has expired.' };
