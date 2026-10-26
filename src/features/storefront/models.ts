@@ -48,6 +48,8 @@ export interface ProductCardModel {
   /** Server-formatted price in the store's currency. Display only — money is
    *  never posted back from a template as authority. */
   formattedPrice: string;
+  /** Optional formatted regular price, higher than the selling price. Display only. */
+  formattedCompareAtPrice?: string | null;
   /** Availability as a boolean, deliberately not a quantity: exact stock counts
    *  stay private, and bucket-level changes avoid cache invalidation. */
   inStock: boolean;
@@ -206,6 +208,8 @@ export interface ProductDetailModel {
   descriptionHtml: string | null;
   /** Lowest variant price when they differ, else the product price. */
   formattedPrice: string;
+  /** Previous price to strike out when this product has a valid sale and no variants. */
+  formattedCompareAtPrice?: string | null;
   /** Raw minor units for the live price script; display-only. */
   priceCents: number;
   currency: string;
