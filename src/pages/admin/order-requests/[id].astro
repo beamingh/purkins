@@ -8,7 +8,7 @@ import { getOfflineStockHold } from '../../../features/purkins/offlineStockHoldD
 import { getOfflineSettlement } from '../../../features/purkins/offlineSettlementDb';
 import { MANUAL_CHANNELS, MANUAL_TENDERS } from '../../../features/purkins/manualSale';
 import { getCourierDelivery, listCourierDeliveryEvents } from '../../../features/purkins/courierDeliveryDb';
-import { COURIERS, COURIER_FEE_PAYERS, DELIVERY_SOURCES, DELIVERY_STATUSES } from '../../../features/purkins/courierDelivery';
+import { COURIERS, COURIER_FEE_PAYERS, COURIER_FEE_STATES, DELIVERY_SOURCES, DELIVERY_STATUSES } from '../../../features/purkins/courierDelivery';
 import {
   REQUEST_FULFILLMENT_OPTIONS, REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES,
 } from '../../../features/purkins/orderRequests';
@@ -261,6 +261,7 @@ const saved = Astro.url.searchParams.get('saved') === '1';
       <p><strong>Delivery cost:</strong> {courierDelivery.courier_fee_cents == null
         ? 'Pending fare quote' : formatPrice(courierDelivery.courier_fee_cents,request.currency)}
         · {COURIER_FEE_PAYERS[courierDelivery.courier_fee_payer]}</p>
+      <p><strong>Courier fare payment:</strong> {COURIER_FEE_STATES[courierDelivery.courier_fee_state]}</p>
       <p class="text-xs text-gray-500">Updated by {courierDelivery.updated_by} · {formatDate(courierDelivery.updated_at,undefined,timeZone)}</p>
     </div>}
     {isHeld && quote?.fulfillment_method === 'delivery' && courierDelivery?.status !== 'returned' ? (
@@ -299,6 +300,13 @@ const saved = Astro.url.searchParams.get('saved') === '1';
           <select name="courier_fee_payer" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
             {Object.entries(COURIER_FEE_PAYERS).map(([value,label])=>(
               <option value={value} selected={courierDelivery?.courier_fee_payer===value || (!courierDelivery&&value==='not_agreed')}>{label}</option>
+            ))}
+          </select>
+        </label>
+        <label class="block text-sm">Has the courier fare been paid?
+          <select name="courier_fee_state" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+            {Object.entries(COURIER_FEE_STATES).map(([value,label])=>(
+              <option value={value} selected={courierDelivery?.courier_fee_state===value || (!courierDelivery&&value==='unconfirmed')}>{label}</option>
             ))}
           </select>
         </label>
