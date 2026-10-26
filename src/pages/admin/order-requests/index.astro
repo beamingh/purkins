@@ -6,7 +6,7 @@ import { listOrderRequests } from '../../../features/purkins/orderRequestDb';
 import { REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES } from '../../../features/purkins/orderRequests';
 
 const requests = await listOrderRequests(env.DB,100);
-const open = requests.filter(r => r.status !== 'cancelled');
+const open = requests.filter(r => r.status !== 'cancelled' && !r.settled_order_public_id);
 const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
 ---
 <AdminLayout title="Order requests" active="orders">
@@ -15,7 +15,7 @@ const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
     <h1 class="mt-2 text-2xl font-bold">Customer order requests</h1>
     <p class="mt-1 text-sm text-gray-600">
       Customers requesting pay-on-delivery, payment instructions or a callback.
-      These are <strong>unpaid enquiries</strong>, not sales. Submitting does not deduct stock.
+      These start as <strong>unpaid enquiries</strong>. Paid requests are linked to their canonical orders and no longer count as open follow-ups.
     </p>
   </header>
   <div class="mb-5 flex flex-wrap gap-3">
@@ -45,7 +45,9 @@ const timeZone = Astro.locals.settings?.timeZone ?? getConfig().timeZone;
             <td class="px-4 py-3">{request.buyer_name}<p class="text-xs text-gray-500">{request.phone}</p></td>
             <td class="px-4 py-3">{REQUEST_PAYMENT_OPTIONS[request.payment_preference]}</td>
             <td class="px-4 py-3 tabular-nums">{formatPrice(request.subtotal_cents,request.currency)}</td>
-            <td class="px-4 py-3">{REQUEST_STATUSES[request.status]}</td>
+            <td class="px-4 py-3">{request.settled_order_public_id ? (
+              <a href={'/admin/orders/' + request.settled_order_public_id} class="font-semibold text-green-700 underline">Paid · Open order</a>
+            ) : REQUEST_STATUSES[request.status]}</td>
           </tr>
         ))}
       </tbody>
