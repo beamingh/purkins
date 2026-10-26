@@ -4,6 +4,7 @@ import { Miniflare } from 'miniflare';
 import type { D1Database } from '@cloudflare/workers-types';
 import { splitPurkinsMigrationSql } from './migration-test-sql';
 import { saveOfflineQuote } from './offlineQuoteDb';
+import { listOrderRequests } from './orderRequestDb';
 import { holdOfflineRequestStock, releaseOfflineRequestStock } from './offlineStockHoldDb';
 import { settleHeldOfflineOrder, getOfflineSettlement } from './offlineSettlementDb';
 import { parseOfflineSettlement, type OfflineSettlementInput } from './offlineSettlement';
@@ -97,6 +98,9 @@ describe('Purkins verified full offline payments — isolated D1',()=>{
     });
     expect((await settleHeldOfflineOrder(db,A,payment('DIFFERENT-ID'),'owner')).ok).toBe(false);
     expect((await db.prepare('SELECT COUNT(*) n FROM orders').first<{n:number}>())?.n).toBe(1);
+    const queue=await listOrderRequests(db);
+    expect(queue.find(r=>r.public_id===A)?.settled_order_public_id).toBe(outcome.orderPublicId);
+    expect(queue.find(r=>r.public_id===B)?.settled_order_public_id).toBeNull();
   });
 
   it('cannot release a sold hold, cancel the request, or erase a settlement receipt',async()=>{
