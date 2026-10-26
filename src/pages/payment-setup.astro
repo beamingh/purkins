@@ -73,15 +73,15 @@ const guide = GUIDES[method] ?? null;
           <h1 class="mt-4 font-serif text-3xl tracking-tight">Set up payments</h1>
           <p class="mt-3 text-muted">
             This payment method isn't configured yet. Add a real rail (card or Lightning)
-            in Admin → Settings → Payments, or keep using the Demo checkout to try the store.
+            in Admin → Settings → Payments. Checkout is unavailable until a real payment rail is configured.
           </p>
         </>
       )
     }
 
     <div class="mt-8 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-      In the meantime, <strong class="font-semibold">Demo checkout</strong> works right now — it
-      places a real, demo-tagged order so you can see the full flow without charging anyone.
+      Payments are not yet available through this method. No order or payment has been created.
+      Please contact the store if you need help.
     </div>
   </div>
 </Layout>
