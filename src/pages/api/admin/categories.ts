@@ -2,8 +2,7 @@ import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { createCategoryCommand, CategoryValidationError } from '../../../features/categories/commands';
 import { parseCategoryForm } from '../../../features/categories/form';
-import { CACHE_TAG } from '../../../features/cache/tags';
-import { purgeCacheTags } from '../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -27,6 +26,6 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     if (error instanceof CategoryValidationError) return redirect(fail(error.message), 303);
     throw error; // DB faults must not be presented as validation errors.
   }
-  await purgeCacheTags([CACHE_TAG.catalog]);
+  await purgePublicAfterAdminMutation();
   return redirect('/admin/categories', 303);
 };
