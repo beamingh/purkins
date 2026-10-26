@@ -7,6 +7,8 @@ import { parseOfflineQuote } from '../../../../features/purkins/offlineQuote';
 import { saveOfflineQuote } from '../../../../features/purkins/offlineQuoteDb';
 import { holdOfflineRequestStock, releaseOfflineRequestStock } from '../../../../features/purkins/offlineStockHoldDb';
 import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
+import { parseOfflineSettlement } from '../../../../features/purkins/offlineSettlement';
+import { settleHeldOfflineOrder } from '../../../../features/purkins/offlineSettlementDb';
 
 export const prerender = false;
 
@@ -17,6 +19,27 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   const form = await request.formData();
   const back = '/admin/order-requests/' + id;
   const fail = (message: string) => redirect(back + '?error=' + encodeURIComponent(message),303);
+  if (form.get('_action') === 'record_received_payment') {
+    const parsed = parseOfflineSettlement(form);
+    if (!parsed.ok) return fail(parsed.error);
+    try {
+      const saved = await settleHeldOfflineOrder(
+        env.DB,id,parsed.value,locals.adminEmail ?? 'admin-session',
+      );
+      return saved.ok
+        ? redirect('/admin/orders/' + saved.orderPublicId +
+          (saved.alreadyRecorded
+            ? '?notice=Payment%20was%20already%20recorded'
+            : '?notice=Verified%20offline%20payment%20recorded'),303)
+        : fail(saved.error);
+    } catch (error) {
+      if (String(error).includes('UNIQUE constraint failed') ||
+          String(error).includes('idx_purkins_offline_payment_reference')) {
+        return fail('This transaction reference has already been recorded. Check the existing payment before trying again.');
+      }
+      throw error;
+    }
+  }
   if (form.get('_action') === 'hold_stock') {
     if (form.get('buyer_confirmed') !== 'yes') {
       return fail('Confirm that you have contacted the buyer and they agreed to this quote.');
