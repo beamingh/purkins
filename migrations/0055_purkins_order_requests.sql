@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS purkins_order_requests (
   public_id TEXT NOT NULL UNIQUE,
   request_id TEXT NOT NULL UNIQUE,
   payload_sha256 TEXT NOT NULL CHECK(length(payload_sha256)=64),
+  nonce TEXT NOT NULL UNIQUE,
   buyer_name TEXT NOT NULL CHECK(length(buyer_name) BETWEEN 2 AND 100),
   phone TEXT NOT NULL CHECK(length(phone) BETWEEN 9 AND 20),
   email TEXT,
