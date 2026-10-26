@@ -34,8 +34,8 @@ CREATE INDEX IF NOT EXISTS idx_purkins_order_requests_phone
 CREATE TABLE IF NOT EXISTS purkins_order_request_items (
   id INTEGER PRIMARY KEY,
   request_id INTEGER NOT NULL REFERENCES purkins_order_requests(id) ON DELETE RESTRICT,
-  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
-  variant_id INTEGER REFERENCES product_variants(id) ON DELETE RESTRICT,
+  product_id INTEGER REFERENCES products(id) ON DELETE SET NULL,
+  variant_id INTEGER REFERENCES product_variants(id) ON DELETE SET NULL,
   product_name TEXT NOT NULL,
   unit_price_cents INTEGER NOT NULL CHECK(unit_price_cents >= 0),
   quantity INTEGER NOT NULL CHECK(quantity BETWEEN 1 AND 99)
