@@ -18,6 +18,9 @@ const customerCount = await countCustomers(env.DB);
 const daily = await dailyOrderTotals(env.DB, 14);
 const recent = await listOrders(env.DB, 5);
 const lowStock = await lowStockProducts(env.DB, 5, 8);
+const openRequestCount = (await env.DB.prepare(
+  "SELECT COUNT(*) AS n FROM purkins_order_requests WHERE status != 'cancelled'"
+).first<{ n: number }>())?.n ?? 0;
 const onCfg = getConfig().orderNumber;
 
 const cards = [
@@ -34,6 +37,14 @@ const cards = [
 
 <AdminLayout title="Dashboard" active="dashboard">
   <h1 class="mb-8 font-serif text-3xl tracking-tight">Dashboard</h1>
+  <a href="/admin/order-requests"
+    class="mb-8 flex items-center justify-between gap-4 rounded-lg border border-amber-300 bg-amber-50 px-5 py-4 text-amber-900">
+    <span>
+      <strong>Customer order requests</strong>
+      <span class="mt-1 block text-sm">Follow up on pay-on-delivery, payment instructions and customer enquiries. Unpaid requests are not revenue.</span>
+    </span>
+    <span class="shrink-0 rounded-full bg-amber-200 px-3 py-1 text-lg font-bold tabular-nums">{openRequestCount}</span>
+  </a>
 
   <div class="mb-12 grid grid-cols-2 gap-4 sm:grid-cols-4">
     {
