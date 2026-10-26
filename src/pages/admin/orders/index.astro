@@ -104,7 +104,7 @@ const conflictOrders = new Map(
   ),
 );
 const requestCount = (await env.DB.prepare(
-  "SELECT COUNT(*) AS n FROM purkins_order_requests WHERE status != 'cancelled'"
+  "SELECT COUNT(*) AS n FROM purkins_order_requests r WHERE r.status != 'cancelled' AND NOT EXISTS (SELECT 1 FROM purkins_offline_settlements s WHERE s.request_id=r.id)"
 ).first<{ n: number }>())?.n ?? 0;
 const listError = Astro.url.searchParams.get('error');
 ---
