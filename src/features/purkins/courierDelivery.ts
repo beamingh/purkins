@@ -21,6 +21,11 @@ export const COURIER_FEE_PAYERS = {
   purkins: 'Purkins pays courier (customer delivery charge is in Purkins quote if agreed)',
   not_agreed: 'Not agreed / awaiting fare quote',
 } as const;
+export const COURIER_FEE_STATES = {
+  unconfirmed: 'Not yet confirmed paid',
+  customer_reports_paid: 'Customer reports paying rider (not Purkins revenue)',
+  purkins_paid: 'Purkins paid the courier',
+} as const;
 
 export type DeliveryStatus = keyof typeof DELIVERY_STATUSES;
 export interface CourierDeliveryInput {
@@ -38,6 +43,7 @@ export interface CourierDeliveryInput {
   bookingReference: string | null;
   courierFeeCents: number | null;
   courierFeePayer: keyof typeof COURIER_FEE_PAYERS;
+  courierFeeState: keyof typeof COURIER_FEE_STATES;
   operatorNote: string | null;
 }
 export type ParsedCourierDelivery =
@@ -77,6 +83,7 @@ export function parseCourierDelivery(form:FormData):ParsedCourierDelivery {
   const riderPhone=nullable('rider_phone')?.replace(/[\s()-]/g,'')??null;
   const bookingReference=nullable('booking_reference');
   const courierFeePayer=raw('courier_fee_payer');
+  const courierFeeState=raw('courier_fee_state');
   const feeRaw=raw('courier_fee');
   const courierFeeCents=feeRaw?parseSalePrice(feeRaw):null;
   const operatorNote=nullable('delivery_note');
@@ -85,7 +92,8 @@ export function parseCourierDelivery(form:FormData):ParsedCourierDelivery {
     return {ok:false,error:'Reload the dispatch form before submitting.'};
   }
   if (!Object.hasOwn(DELIVERY_STATUSES,status)||!Object.hasOwn(DELIVERY_SOURCES,sourceChannel)||
-      !Object.hasOwn(COURIERS,courier)||!Object.hasOwn(COURIER_FEE_PAYERS,courierFeePayer)) {
+      !Object.hasOwn(COURIERS,courier)||!Object.hasOwn(COURIER_FEE_PAYERS,courierFeePayer)||
+      !Object.hasOwn(COURIER_FEE_STATES,courierFeeState)) {
     return {ok:false,error:'Choose a valid dispatch status, source, courier and fee arrangement.'};
   }
   if (pickupLocation.length<5||pickupLocation.length>500||
@@ -96,6 +104,11 @@ export function parseCourierDelivery(form:FormData):ParsedCourierDelivery {
   if ((riderName?.length??0)>100||(riderPhone&&!PHONE.test(riderPhone))||
       (bookingReference?.length??0)>120||(operatorNote?.length??0)>1000) {
     return {ok:false,error:'One of the rider or dispatch details is invalid or too long.'};
+  }
+  if ((courierFeeState==='customer_reports_paid'&&courierFeePayer!=='customer_to_rider')||
+      (courierFeeState==='purkins_paid'&&courierFeePayer!=='purkins')||
+      (courierFeePayer==='not_agreed'&&courierFeeState!=='unconfirmed')) {
+    return {ok:false,error:'Courier fee payment status conflicts with who is paying the rider.'};
   }
   if (feeRaw&&courierFeeCents===null) {
     return {ok:false,error:'Enter a valid courier fee in ZMW (up to two decimal places).'};
@@ -114,6 +127,7 @@ export function parseCourierDelivery(form:FormData):ParsedCourierDelivery {
     pickupLocation,dropoffLocation,recipientName,recipientPhone,
     riderName,riderPhone,bookingReference,courierFeeCents,
     courierFeePayer:courierFeePayer as CourierDeliveryInput['courierFeePayer'],
+    courierFeeState:courierFeeState as CourierDeliveryInput['courierFeeState'],
     operatorNote,
   }};
 }
