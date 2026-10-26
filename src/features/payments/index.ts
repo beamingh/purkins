@@ -106,12 +106,13 @@ export function enabledMethods(
 export function offeredMethods(
   settings: StoreSettings,
   vault = vaultReady(),
+  demoEnabled = isDemoCheckoutEnabled(),
 ): PaymentMethod[] {
   const off = new Set(settings.disabledPaymentMethods);
   const extra = ALL_METHODS.filter(
     (m) => !OFFERED.includes(m) && isMethodAvailable(m, settings, vault),
   );
-  return (['stripe', 'lightning', ...extra, ...(isDemoCheckoutEnabled() ? ['demo' as const] : [])] as PaymentMethod[]).filter((m) => !off.has(m));
+  return (['stripe', 'lightning', ...extra, ...(demoEnabled ? ['demo' as const] : [])] as PaymentMethod[]).filter((m) => !off.has(m));
 }
 
 /**
