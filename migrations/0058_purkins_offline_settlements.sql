@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS purkins_offline_settlements (
     (tender<>'cash' AND payment_reference IS NOT NULL AND length(payment_reference) BETWEEN 5 AND 120))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_purkins_offline_payment_reference
-  ON purkins_offline_settlements(tender,payment_reference)
+  ON purkins_offline_settlements(tender,payment_reference COLLATE NOCASE)
   WHERE payment_reference IS NOT NULL;
 
 -- Disallow allocating stock back to the catalog after it has been sold.
