@@ -35,8 +35,7 @@ import { uploadDigitalFile, validateDigitalFile } from '../../../../features/pro
 import { attachmentActive } from '../../../../features/digitalDelivery/rollout.ts';
 import { indexProduct, unindexProduct } from '../../../../features/search';
 import { parsePublicId } from '../../../../features/ids/publicId';
-import { CACHE_TAG } from '../../../../features/cache/tags';
-import { purgeCacheTags } from '../../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
 import { parseIntakeFields } from '../../../../features/purkins/intake';
 import { getIntake, saveIntakeDraft, removeIntake } from '../../../../features/purkins/db';
 import { locationFromForm, assignIntakeLocation } from '../../../../features/purkins/locations';
@@ -123,7 +122,7 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     } catch (err) {
       console.error('Search unindex (delete) failed:', err);
     }
-    await purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
+    await purgePublicAfterAdminMutation();
     return redirect('/admin/products', 303);
   }
 
@@ -246,6 +245,6 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
     console.error('Search index (update) failed:', err);
   }
 
-  await purgeCacheTags([CACHE_TAG.catalog, CACHE_TAG.product(publicId)]);
+  await purgePublicAfterAdminMutation();
   return redirect(`${editUrl}&saved=1`, 303);
 };

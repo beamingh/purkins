@@ -19,8 +19,7 @@ import { getPageByPublicId } from '../../../features/pages/db';
 import { getProductByPublicId } from '../../../features/products/db';
 import { getCategoryByPublicId } from '../../../features/categories/db';
 import { parsePublicId } from '../../../features/ids/publicId';
-import { CACHE_TAG } from '../../../features/cache/tags';
-import { purgeCacheTags } from '../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -112,7 +111,7 @@ export const POST: APIRoute = async ({ request, redirect }) => {
     return redirect(`/admin/navigation?${params}`, 303);
   };
   const saved = async () => {
-    await purgeCacheTags([CACHE_TAG.shell]);
+    await purgePublicAfterAdminMutation();
     return back();
   };
 

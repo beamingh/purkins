@@ -6,7 +6,7 @@
 
 ## Source status — verified against GitHub
 
-As of the audit on 26 October 2026, **there are no open Purkins pull requests** after PR #36 was merged. There are many old source branches; an `ahead_by` count on a branch that was **squash-merged** does not mean its changes are missing from `main`. Compare PR integration history, current content and behavior before reviving a branch.
+At the 26 October integration audit, no open PRs remained after PR #37. The next backend cache-coherence fix is PR #38 (open pending tests). There are many old source branches; an `ahead_by` count on a branch that was **squash-merged** does not mean its changes are missing from `main`. Compare PR integration history, current content and behavior before reviving a branch.
 
 | Workstream | Integration result |
 | --- | --- |
@@ -17,7 +17,7 @@ As of the audit on 26 October 2026, **there are no open Purkins pull requests** 
 | Private preview, variant reconciliation and guarded publication | PRs #29–31 closed unmerged and **integrated together through merged PR #32** |
 | Guided five-step editor including copy/paste and drag/drop images | PR #33 merged |
 | Gallery save-feedback fixes | PR #34 merged |
-| Optional genuine compare-at prices | PR #35 merged into `main`; **live rollout remains pending** |
+| Optional genuine compare-at prices | PR #35 merged into `main`; **live migration 0053 and Worker deployment complete** |
 | Complete storefront/backend retail blueprint | PR #36 merged; see [PURKINS_RETAIL_BLUEPRINT.md](PURKINS_RETAIL_BLUEPRINT.md) |
 | Payload CMS foundation | PR #1 deliberately closed **without merge**; archive only, never merge or deploy |
 
@@ -27,12 +27,12 @@ As of the audit on 26 October 2026, **there are no open Purkins pull requests** 
 
 ## Actual remaining release work
 
-1. **Compare-at prices not yet deployed.** Production D1 `d1_migrations` includes `0052_purkins_mcp_publication.sql` but not migration `0053_purkins_compare_at_price.sql`; the live `products` table has no `compare_at_price_cents` column yet. Source was merged as PR #35. Apply `0053` through the permanent guarded migration command, deploy both Workers from current `main`, then enter historical K1,100 and current K950 for TY-899 if verified. A normal Purkins product-form save may unpublish an approved listing until it is re-approved: check owner approval and public cache before declaring complete.
+1. **Compare-at pricing released (verified 26 October).** Production D1 has migration `0053_purkins_compare_at_price.sql`; the new Admin+public Workers are deployed, and the TY-899 has a genuine optional compare-at value of K1,100 with the actual K950 checkout price, approved state and four units preserved. Both public detail and catalog APIs were checked. **Remaining backend issue:** general Admin product edits still revoke publication; see issue #39.
 2. **Media optimization and gallery.** Verify live network bytes: R2 originals are cached, but responsive width candidates require explicit image-delivery configuration and eligible image base URL. Define transforms, thumbnails, object-contain hero and zoom/multi-image behavior.
 3. **Real trading readiness.** Existing checkout reports demo-only; confirm supported Zambian real-payment and reconciliation path, actual pickup/delivery coverage and rate calculation, and test the complete paid-to-fulfilled order process.
 4. **Storefront content and IA.** The live D1 audit found no content pages and no header/footer menu entries. Publish factual support, delivery, returns, privacy and terms pages; then build menus, branded homepage, stronger product details, search and category filtering.
-5. **Solo operator workflow.** Inventory draft intake and category/media tools are present; finish admin action queues, product template coverage and the direct-image-transfer MCP path with audited permissions.
-6. **End-to-end verification.** Run mobile buyer and owner workflows with realistic photos and stock, check cache invalidation, checkout errors, notification and refund handling.
+5. **Cross-Worker cache coherence.** Admin routes previously purged the separate Admin Worker's cache instead of the public Worker's content. PR #38 implements authenticated cross-Worker invalidation for content, product, image, shipping, settings and manual-sales mutations. Test and deploy before relying on instant buyer-facing updates.\n6. **Solo operator workflow.** Inventory draft intake and category/media tools are present; finish admin action queues, product template coverage and the direct-image-transfer MCP path with audited permissions.
+7. **End-to-end verification.** Run mobile buyer and owner workflows with realistic photos and stock, check cache invalidation, checkout errors, notification and refund handling.
 
 **Master reference:** [PURKINS_RETAIL_BLUEPRINT.md](PURKINS_RETAIL_BLUEPRINT.md) defines structure, design principles, phased roadmap, acceptance criteria and the first 12 implementation tickets.
 

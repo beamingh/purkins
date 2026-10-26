@@ -4,8 +4,7 @@ import { updateCategoryCommand, deleteCategoryCommand, CategoryValidationError }
 import { getCategoryByPublicId } from '../../../../features/categories/db';
 import { parseCategoryForm } from '../../../../features/categories/form';
 import { parsePublicId } from '../../../../features/ids/publicId';
-import { CACHE_TAG } from '../../../../features/cache/tags';
-import { purgeCacheTags } from '../../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -38,6 +37,6 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   }
   // Intentionally outside a catch: if cache invalidation fails, do not
   // tell the operator the DB write failed and invite a duplicate retry.
-  await purgeCacheTags([CACHE_TAG.catalog]);
+  await purgePublicAfterAdminMutation();
   return redirect('/admin/categories', 303);
 };

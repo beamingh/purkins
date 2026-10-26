@@ -6,8 +6,7 @@ import { parsePageForm } from '../../../../features/pages/form';
 import { uniquePageSlug } from '../../../../features/pages/slug';
 import { savePageBody, saveWarning } from '../../../../features/pages/save';
 import { parsePublicId } from '../../../../features/ids/publicId';
-import { CACHE_TAG } from '../../../../features/cache/tags';
-import { purgeCacheTags } from '../../../../features/cache/purge';
+import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
 
 export const prerender = false;
 
@@ -24,7 +23,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
   if (String(form.get('_action')) === 'delete') {
     // Drops the page and its media associations. The files stay in the library.
     await deletePage(env.DB, id);
-    await purgeCacheTags([CACHE_TAG.shell]);
+    await purgePublicAfterAdminMutation();
     return redirect('/admin/pages', 303);
   }
 
@@ -44,7 +43,7 @@ export const POST: APIRoute = async ({ request, params, redirect }) => {
     { baseUrl: getConfig().images.baseUrl },
   );
 
-  await purgeCacheTags([CACHE_TAG.shell]);
+  await purgePublicAfterAdminMutation();
   const warning = saveWarning(result);
   return back(warning ? `?warning=${encodeURIComponent(warning)}` : '?saved=1');
 };

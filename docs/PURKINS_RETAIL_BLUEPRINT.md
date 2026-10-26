@@ -12,7 +12,7 @@ Source audit: current GitHub main, Cloudflare production settings/D1, and Purkin
 
 **Live business configuration:** one published product (TY-899), one category (Feeding & Nursing), zero published content pages, zero header/footer menu entries, zero orders at audit time; demo checkout is the only payment rail the MCP exposes. Home currently falls back to the product catalog. The live Workers do not expose IMAGE_BASE_URL; D1 has no image_delivery override. This suggests original source-file delivery, despite a separately implemented transform ladder. Verify with real response headers/network waterfalls before claiming CDN resizing enabled. Both Workers have PRELAUNCH_NOINDEX=true.
 
-**Recent work:** merged PR #35 for OPTIONAL compare-at pricing; production still requires migration 0053 and deployed code before it appears. The source photo for TY-899 is ~1122 × 1402; currently one gallery image. Product description and public listing are populated. Store still lacks live real-money checkout configuration and validated shipping fulfillment.
+**Recent work:** PR #35 optional compare-at pricing deployed after migration 0053 on 26 October; TY-899 uses historical K1,100 and selling K950, verified in public catalog/detail APIs. The source photo for TY-899 is ~1122 × 1402; currently one gallery image. Product description and public listing are populated. Store still lacks live real-money checkout configuration and validated shipping fulfillment.
 
 ## 1. Product strategy and non-goals
 
