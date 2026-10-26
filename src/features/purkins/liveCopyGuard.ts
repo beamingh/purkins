@@ -146,7 +146,8 @@ export async function applyGuardedLiveCopy(
     }
   }
 
-  return retryLiveCopyPurge(db, actor, id, product, purgePublicCache);
+  const completed = await retryLiveCopyPurge(db, actor, id, product, purgePublicCache);
+  return completed.ok ? { ...completed, replayed: Boolean(prior) } : completed;
 }
 
 /** Only retries cache refresh; NEVER repeats a committed live edit. */
