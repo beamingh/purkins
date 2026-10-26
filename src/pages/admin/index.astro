@@ -19,7 +19,7 @@ const daily = await dailyOrderTotals(env.DB, 14);
 const recent = await listOrders(env.DB, 5);
 const lowStock = await lowStockProducts(env.DB, 5, 8);
 const openRequestCount = (await env.DB.prepare(
-  "SELECT COUNT(*) AS n FROM purkins_order_requests WHERE status != 'cancelled'"
+  "SELECT COUNT(*) AS n FROM purkins_order_requests r WHERE r.status != 'cancelled' AND NOT EXISTS (SELECT 1 FROM purkins_offline_settlements s WHERE s.request_id=r.id)"
 ).first<{ n: number }>())?.n ?? 0;
 const onCfg = getConfig().orderNumber;
 

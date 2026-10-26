@@ -5,6 +5,8 @@ import { formatPrice, formatDate, getConfig } from '../../../config';
 import { getOrderRequest, listRequestLines } from '../../../features/purkins/orderRequestDb';
 import { getOfflineQuote, listOfflineQuoteEvents } from '../../../features/purkins/offlineQuoteDb';
 import { getOfflineStockHold } from '../../../features/purkins/offlineStockHoldDb';
+import { getOfflineSettlement } from '../../../features/purkins/offlineSettlementDb';
+import { MANUAL_CHANNELS, MANUAL_TENDERS } from '../../../features/purkins/manualSale';
 import {
   REQUEST_FULFILLMENT_OPTIONS, REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES,
 } from '../../../features/purkins/orderRequests';
@@ -14,6 +16,7 @@ if (!request) return new Response('Order request not found.', { status: 404 });
 const lines = await listRequestLines(env.DB,request.id);
 const quote = await getOfflineQuote(env.DB,request.id);
 const allocation = await getOfflineStockHold(env.DB,request.id);
+const settlement = await getOfflineSettlement(env.DB,request.id);
 const isHeld = allocation?.status === 'held';
 const holdSaved = Astro.url.searchParams.get('hold_saved') === '1';
 const holdReleased = Astro.url.searchParams.get('hold_released') === '1';
@@ -28,12 +31,16 @@ const saved = Astro.url.searchParams.get('saved') === '1';
   <h1 class="mt-2 text-2xl font-bold">Request {request.public_id}</h1>
   <p class="mt-1 text-sm text-gray-500">{formatDate(request.created_at,undefined,timeZone)} · {REQUEST_STATUSES[request.status]}</p>
   <p class="mt-4 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-    <strong>Unpaid customer request.</strong>
-    {isHeld
-      ? ' Stock is currently allocated for this customer, but payment has NOT been received or verified.'
-      : ' No inventory is currently allocated to this request.'}
-    Confirm the final delivery arrangement and payment directly with the customer.
-    Never mark an order paid solely from a screenshot.
+    {settlement
+      ? <><strong>Paid order recorded.</strong> Funds were manually confirmed by {settlement.recorded_by}.
+          <a class="ml-2 underline" href={'/admin/orders/' + settlement.order_public_id}>Open paid order</a>.
+          This stock was consumed by the sale; never release it into sellable inventory.</>
+      : <><strong>Unpaid customer request.</strong>
+          {isHeld
+            ? ' Stock is currently allocated for this customer, but payment has NOT been received or verified.'
+            : ' No inventory is currently allocated to this request.'}
+          Confirm payment independently in the actual receiving wallet, account, or as counted cash.
+          A screenshot alone is not sufficient.</>}
   </p>
   {error && <p role="alert" class="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
   {saved && <p role="status" class="mt-3 rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800">Request updated.</p>}
@@ -147,7 +154,13 @@ const saved = Astro.url.searchParams.get('saved') === '1';
     <h2 class="text-lg font-semibold">Stock allocated to this customer</h2>
     {holdSaved && <p role="status" class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-900">Stock allocation recorded. The request remains unpaid.</p>}
     {holdReleased && <p role="status" class="mt-3 rounded-md bg-green-50 p-3 text-sm text-green-900">Stock has been returned to inventory. No paid order was created.</p>}
-    {isHeld ? (
+    {settlement ? (
+      <p class="mt-3 text-sm text-gray-700">
+        This allocation was consumed by the recorded paid order
+        <a class="ml-1 text-brand underline" href={'/admin/orders/' + settlement.order_public_id}>{settlement.order_public_id}</a>.
+        It must not be manually released or deducted again.
+      </p>
+    ) : isHeld ? (
       <>
         <p class="mt-3 text-sm text-amber-900">
           <strong>Held, not paid.</strong> Stock was set aside by {allocation?.held_by}
@@ -199,19 +212,21 @@ const saved = Astro.url.searchParams.get('saved') === '1';
       <p class="mt-3 text-sm text-gray-600">Prepare a quote and contact the buyer before allocating any stock.</p>
     )}
     <p class="mt-4 text-xs text-gray-500">
-      Holds currently have no automatic expiry. Release manually if the buyer abandons
-      the request. This is not a payment or receipt.
+      {settlement
+        ? 'A paid order was created once from this hold. Use the paid order refund and fulfillment tools for subsequent changes.'
+        : 'Unpaid holds have no automatic expiry. Release manually if the buyer abandons the request.'}
     </p>
   </section>
   <section class="mt-6 rounded-lg border border-gray-200 bg-white p-5">
     <h2 class="text-lg font-semibold">Follow-up status</h2>
+    {settlement && <p class="mt-2 text-sm text-gray-600">This request has been converted into a paid order. Follow-up status is locked; use the paid order to manage fulfillment.</p>}
     <form method="POST" action={'/api/admin/order-requests/' + request.public_id} class="mt-4 space-y-4">
       <input type="hidden" name="expected_status" value={request.status} />
       <label class="block text-sm">Update status
-        <select name="status" class="mt-1 block w-full max-w-xs rounded-md border border-gray-300 px-3 py-2" disabled={request.status === 'cancelled'}>
+        <select name="status" class="mt-1 block w-full max-w-xs rounded-md border border-gray-300 px-3 py-2" disabled={request.status === 'cancelled' || Boolean(settlement)}>
           <option value="contacted" selected={request.status === 'contacted' || request.status === 'new'}>Customer contacted</option>
           <option value="awaiting_payment" selected={request.status === 'awaiting_payment'}>Awaiting payment or delivery/handover</option>
-          <option value="cancelled" selected={request.status === 'cancelled'} disabled={isHeld}>Cancelled / unavailable (release stock first)</option>
+          <option value="cancelled" selected={request.status === 'cancelled'} disabled={isHeld || Boolean(settlement)}>Cancelled / unavailable (release stock first)</option>
         </select>
       </label>
       <label class="block text-sm">Internal note (not visible to the customer)
@@ -219,7 +234,7 @@ const saved = Astro.url.searchParams.get('saved') === '1';
           class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
         >{request.operator_note ?? ''}</textarea>
       </label>
-      <button type="submit" disabled={request.status === 'cancelled'}
+      <button type="submit" disabled={request.status === 'cancelled' || Boolean(settlement)}
         class="rounded-md bg-brand px-5 py-2 font-semibold text-white disabled:opacity-50">
         Save follow-up
       </button>
@@ -227,24 +242,83 @@ const saved = Astro.url.searchParams.get('saved') === '1';
   </section>
   <section class="mt-6 rounded-lg border border-gray-200 p-5">
     <h2 class="text-lg font-semibold">When payment is actually received</h2>
-    {isHeld ? (
-      <p class="mt-2 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>Important:</strong> This request's inventory has already been deducted
-        from sellable stock. Do NOT separately record the same items using the paid
-        manual-sale form: doing so would deduct them a second time.
-        Verified payment conversion for stock-held requests is the next backend phase.
-        Keep independent proof of any money received and do not release the hold
-        to make a second sale without first reconciling the customer order.
-      </p>
-    ) : (
+    {settlement ? (
+      <div class="mt-3 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+        <p class="font-semibold">Full payment recorded · {formatPrice(settlement.amount_received_cents,request.currency)}</p>
+        <p>Method: {MANUAL_TENDERS[settlement.tender]} · Recorded by {settlement.recorded_by}</p>
+        {settlement.payment_reference && <p>Receiving-account transaction reference: {settlement.payment_reference}</p>}
+        <p>Fulfillment: {settlement.fulfillment_status}</p>
+        <p>Verification note: {settlement.confirmation_note}</p>
+        <a class="mt-2 inline-block text-brand underline" href={'/admin/orders/' + settlement.order_public_id}>Manage paid order</a>
+      </div>
+    ) : isHeld && quote ? (
       <>
-        <p class="mt-2 text-sm text-gray-600">
-          Only after independently verifying cash or transferred funds may a
-          separate paid manual sale be recorded. This request is not automatically
-          linked to that sale; ensure the same items are not sold or deducted twice.
+        <p class="mt-2 text-sm text-amber-900">
+          <strong>Confirm only after receiving the entire {formatPrice(quote.total_cents,request.currency)}.</strong>
+          This action immediately records a paid order, not merely an unpaid promise.
+          Transferred funds must appear in your own receiving account or wallet; for
+          cash-on-delivery, physically count the money first. Never use a screenshot alone.
         </p>
-        <a href="/admin/orders/new" class="mt-3 inline-block text-brand underline">Record a verified paid manual sale</a>
+        <form method="POST" action={'/api/admin/order-requests/' + request.public_id}
+          class="mt-4 grid gap-4 sm:grid-cols-2">
+          <input type="hidden" name="_action" value="record_received_payment" />
+          <input type="hidden" name="payment_nonce" value={crypto.randomUUID()} />
+          <input type="hidden" name="payment_quote_revision" value={quote.revision} />
+          <label class="block text-sm">Received payment method
+            <select name="tender" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+              {Object.entries(MANUAL_TENDERS).map(([value,label])=>(
+                <option value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block text-sm">Sales channel
+            <select name="channel" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+              {Object.entries(MANUAL_CHANNELS).map(([value,label])=>(
+                <option value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label class="block text-sm sm:col-span-2">Verified receiving-account transaction reference (required for non-cash payments)
+            <input name="payment_reference" maxlength="120" placeholder="Not a screenshot ID supplied by the customer"
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" />
+          </label>
+          <label class="block text-sm">Goods handover status
+            <select name="fulfillment" required class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2">
+              <option value="unfulfilled">Not handed over yet</option>
+              <option value="fulfilled">Already handed over to buyer</option>
+            </select>
+          </label>
+          <label class="block text-sm sm:col-span-2">Internal receipt verification note (8–1,000 characters)
+            <textarea name="payment_confirmation_note" required minlength="8" maxlength="1000" rows="3"
+              placeholder="Where and when you verified receipt. Do not include PINs or passwords."
+              class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"></textarea>
+          </label>
+          <label class="flex items-start gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="recipient_verified" value="yes" />
+            <span>For MoMo, Airtel, Zamtel, bank transfer or other non-cash payment:
+              I verified this transaction in the actual receiving account, not from a buyer screenshot.</span>
+          </label>
+          <label class="flex items-start gap-2 text-sm sm:col-span-2">
+            <input type="checkbox" name="cash_counted" value="yes" />
+            <span>For cash only: I physically received and counted the full quoted amount.</span>
+          </label>
+          <label class="flex items-start gap-2 text-sm font-medium sm:col-span-2">
+            <input type="checkbox" name="verified_received" value="yes" required />
+            <span>I confirm Purkins has actually received the full
+              <strong>{formatPrice(quote.total_cents,request.currency)}</strong>.
+              Create the paid order and consume this existing stock hold without deducting items again.</span>
+          </label>
+          <button type="submit" class="rounded-md bg-brand px-5 py-2 font-semibold text-white sm:col-span-2">
+            Record verified payment and create paid order
+          </button>
+        </form>
       </>
+    ) : (
+      <p class="mt-2 text-sm text-gray-600">
+        Prepare and confirm an unpaid quote, contact the buyer and allocate stock before
+        converting the request into a paid order. Never use the independent manual-sale
+        form for allocated stock.
+      </p>
     )}
   </section>
 </AdminLayout>

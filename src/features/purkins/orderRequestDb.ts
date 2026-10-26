@@ -18,6 +18,7 @@ export interface OrderRequestRow {
   currency: string;
   status: RequestStatus;
   operator_note: string | null;
+  settled_order_public_id?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -154,9 +155,12 @@ export async function listRequestLines(db: D1Database, id: number) {
 }
 export async function listOrderRequests(db: D1Database, limit=100) {
   const rows = await db.prepare(
-    'SELECT * FROM purkins_order_requests ORDER BY ' +
-    "CASE status WHEN 'new' THEN 0 WHEN 'contacted' THEN 1 " +
-    "WHEN 'awaiting_payment' THEN 2 ELSE 3 END,created_at DESC LIMIT ?",
+    'SELECT r.*,o.public_id AS settled_order_public_id FROM purkins_order_requests r ' +
+    'LEFT JOIN purkins_offline_settlements s ON s.request_id=r.id ' +
+    'LEFT JOIN orders o ON o.id=s.order_id ORDER BY ' +
+    "CASE WHEN s.order_id IS NOT NULL THEN 4 " +
+    "WHEN r.status='new' THEN 0 WHEN r.status='contacted' THEN 1 " +
+    "WHEN r.status='awaiting_payment' THEN 2 ELSE 3 END,r.created_at DESC LIMIT ?",
   ).bind(limit).all<OrderRequestRow>();
   return rows.results ?? [];
 }

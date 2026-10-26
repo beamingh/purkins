@@ -7,6 +7,8 @@ import { parseOfflineQuote } from '../../../../features/purkins/offlineQuote';
 import { saveOfflineQuote } from '../../../../features/purkins/offlineQuoteDb';
 import { holdOfflineRequestStock, releaseOfflineRequestStock } from '../../../../features/purkins/offlineStockHoldDb';
 import { purgePublicAfterAdminMutation } from '../../../../features/cache/purgePublicAdmin';
+import { parseOfflineSettlement } from '../../../../features/purkins/offlineSettlement';
+import { settleHeldOfflineOrder } from '../../../../features/purkins/offlineSettlementDb';
 
 export const prerender = false;
 
@@ -17,6 +19,27 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   const form = await request.formData();
   const back = '/admin/order-requests/' + id;
   const fail = (message: string) => redirect(back + '?error=' + encodeURIComponent(message),303);
+  if (form.get('_action') === 'record_received_payment') {
+    const parsed = parseOfflineSettlement(form);
+    if (!parsed.ok) return fail(parsed.error);
+    try {
+      const saved = await settleHeldOfflineOrder(
+        env.DB,id,parsed.value,locals.adminEmail ?? 'admin-session',
+      );
+      return saved.ok
+        ? redirect('/admin/orders/' + saved.orderPublicId +
+          (saved.alreadyRecorded
+            ? '?notice=Payment%20was%20already%20recorded'
+            : '?notice=Verified%20offline%20payment%20recorded'),303)
+        : fail(saved.error);
+    } catch (error) {
+      if (String(error).includes('UNIQUE constraint failed') ||
+          String(error).includes('idx_purkins_offline_payment_reference')) {
+        return fail('This transaction reference has already been recorded. Check the existing payment before trying again.');
+      }
+      throw error;
+    }
+  }
   if (form.get('_action') === 'hold_stock') {
     if (form.get('buyer_confirmed') !== 'yes') {
       return fail('Confirm that you have contacted the buyer and they agreed to this quote.');
@@ -35,9 +58,17 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   }
   if (form.get('_action') === 'release_hold') {
     const reason = String(form.get('release_reason') ?? '').trim();
-    const outcome = await releaseOfflineRequestStock(
-      env.DB,id,reason,locals.adminEmail ?? 'admin-session',
-    );
+    let outcome: Awaited<ReturnType<typeof releaseOfflineRequestStock>>;
+    try {
+      outcome = await releaseOfflineRequestStock(
+        env.DB,id,reason,locals.adminEmail ?? 'admin-session',
+      );
+    } catch (error) {
+      if (String(error).includes('Paid stock cannot be released')) {
+        return fail('The items were already sold through the linked paid order. Use the paid order for refunds or returns.');
+      }
+      throw error;
+    }
     if (!outcome.ok) return fail(outcome.error);
     try { await purgePublicAfterAdminMutation(); }
     catch (e) { console.error('Offline stock released but cache purge requires attention:',e); }
@@ -79,6 +110,9 @@ export const POST: APIRoute = async ({ request, params, redirect, locals }) => {
   } catch (e) {
     if (String(e).includes('Release allocated stock before cancelling request')) {
       return fail('Release the allocated stock before cancelling this request.');
+    }
+    if (String(e).includes('Paid request cannot be changed')) {
+      return fail('This request has already been converted to a paid order. Update the paid order instead.');
     }
     throw e;
   }
