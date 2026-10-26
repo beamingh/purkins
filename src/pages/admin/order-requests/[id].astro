@@ -8,7 +8,7 @@ import { getOfflineStockHold } from '../../../features/purkins/offlineStockHoldD
 import { getOfflineSettlement } from '../../../features/purkins/offlineSettlementDb';
 import { MANUAL_CHANNELS, MANUAL_TENDERS } from '../../../features/purkins/manualSale';
 import { getCourierDelivery, listCourierDeliveryEvents } from '../../../features/purkins/courierDeliveryDb';
-import { COURIERS, COURIER_FEE_PAYERS, COURIER_FEE_STATES, DELIVERY_SOURCES, DELIVERY_STATUSES } from '../../../features/purkins/courierDelivery';
+import { COURIERS, COURIER_FEE_PAYERS, COURIER_FEE_STATES, DELIVERY_SOURCES, DELIVERY_STATUSES , allowedDeliveryTransition, type DeliveryStatus } from '../../../features/purkins/courierDelivery';
 import {
   REQUEST_FULFILLMENT_OPTIONS, REQUEST_PAYMENT_OPTIONS, REQUEST_STATUSES,
 } from '../../../features/purkins/orderRequests';
@@ -22,6 +22,8 @@ const settlement = await getOfflineSettlement(env.DB,request.id);
 const courierDelivery = await getCourierDelivery(env.DB,request.id);
 const deliveryEvents = courierDelivery ? await listCourierDeliveryEvents(env.DB,request.id) : [];
 const deliverySaved = Astro.url.searchParams.get('delivery_saved') === '1';
+const permittedDeliveryStatuses = Object.entries(DELIVERY_STATUSES).filter(([status]) =>
+  allowedDeliveryTransition(courierDelivery?.status ?? null, status as DeliveryStatus));
 const intakeSource = Object.entries(DELIVERY_SOURCES).find(([,label]) =>
   request.customer_note?.startsWith('Sales source: ' + label))?.[0] ?? 'website';
 const isHeld = allocation?.status === 'held';
@@ -274,16 +276,9 @@ const saved = Astro.url.searchParams.get('saved') === '1';
         <input type="hidden" name="delivery_revision" value={courierDelivery?.revision ?? 0} />
         <label class="block text-sm">Parcel status
           <select name="delivery_status" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2" required>
-            {Object.entries(DELIVERY_STATUSES).filter(([status])=>{
-              if (!courierDelivery) return status === 'planned';
-              const allowed: Record<string,string[]> = {
-                planned:['planned','dispatched','returned'],
-                dispatched:['dispatched','delivered','delivery_failed','returned'],
-                delivery_failed:['delivery_failed','dispatched','returned'],
-                delivered:['delivered','returned'],
-              };
-              return (allowed[courierDelivery.status]??[]).includes(status);
-            }).map(([status,label])=><option value={status} selected={courierDelivery?.status===status}>{label}</option>)}
+            {permittedDeliveryStatuses.map(([status,label])=>(
+              <option value={status} selected={courierDelivery?.status===status}>{label}</option>
+            ))}
           </select>
         </label>
         <label class="block text-sm">Where did the sale come from?
