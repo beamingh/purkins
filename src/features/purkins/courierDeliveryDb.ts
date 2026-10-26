@@ -22,6 +22,7 @@ export interface CourierDeliveryRow {
   booking_reference:string|null;
   courier_fee_cents:number|null;
   courier_fee_payer:CourierDeliveryInput['courierFeePayer'];
+  courier_fee_state:CourierDeliveryInput['courierFeeState'];
   operator_note:string|null;
   change_nonce:string;
   updated_by:string;
@@ -39,11 +40,11 @@ export async function listCourierDeliveryEvents(db:D1Database,requestId:number) 
   const rows=await db.prepare(
     'SELECT revision,status,source_channel,courier,pickup_location,dropoff_location,'+
     'recipient_name,recipient_phone,rider_name,rider_phone,booking_reference,'+
-    'courier_fee_cents,courier_fee_payer,operator_note,changed_by,created_at '+
+    'courier_fee_cents,courier_fee_payer,courier_fee_state,operator_note,changed_by,created_at '+
     'FROM purkins_request_delivery_events WHERE request_id=? ORDER BY revision DESC LIMIT 30',
   ).bind(requestId).all<{
     revision:number; status:DeliveryStatus; changed_by:string; created_at:string;
-    courier_fee_cents:number|null; courier_fee_payer:string; booking_reference:string|null;
+    courier_fee_cents:number|null; courier_fee_payer:string; courier_fee_state:string; booking_reference:string|null;
   }>();
   return rows.results??[];
 }
@@ -87,7 +88,7 @@ export async function saveCourierDelivery(
   const params=[
     input.status,input.sourceChannel,input.courier,input.pickupLocation,input.dropoffLocation,
     input.recipientName,input.recipientPhone,input.riderName,input.riderPhone,
-    input.bookingReference,input.courierFeeCents,input.courierFeePayer,input.operatorNote,
+    input.bookingReference,input.courierFeeCents,input.courierFeePayer,input.courierFeeState,input.operatorNote,
     input.nonce,by,
   ];
   const guard="EXISTS (SELECT 1 FROM purkins_order_request_allocations a "+
@@ -100,8 +101,8 @@ export async function saveCourierDelivery(
       'INSERT INTO purkins_request_deliveries '+
       '(request_id,revision,status,source_channel,courier,pickup_location,dropoff_location,'+
       'recipient_name,recipient_phone,rider_name,rider_phone,booking_reference,'+
-      'courier_fee_cents,courier_fee_payer,operator_note,change_nonce,updated_by) '+
-      'SELECT r.id,1,'+Array(15).fill('?').join(',')+
+      'courier_fee_cents,courier_fee_payer,courier_fee_state,operator_note,change_nonce,updated_by) '+
+      'SELECT r.id,1,'+Array(16).fill('?').join(',')+
       ' FROM purkins_order_requests r WHERE r.public_id=? AND '+guard+
       ' ON CONFLICT(request_id) DO NOTHING RETURNING revision',
     ).bind(...params,request.public_id,request.id,input.courierFeePayer)
@@ -109,7 +110,7 @@ export async function saveCourierDelivery(
       'UPDATE purkins_request_deliveries SET revision=revision+1,'+
       'status=?,source_channel=?,courier=?,pickup_location=?,dropoff_location=?,'+
       'recipient_name=?,recipient_phone=?,rider_name=?,rider_phone=?,booking_reference=?,'+
-      'courier_fee_cents=?,courier_fee_payer=?,operator_note=?,change_nonce=?,updated_by=?,'+
+      'courier_fee_cents=?,courier_fee_payer=?,courier_fee_state=?,operator_note=?,change_nonce=?,updated_by=?,'+
       "updated_at=datetime('now') WHERE request_id=? AND revision=? AND "+guard+
       ' RETURNING revision',
     ).bind(...params,request.id,input.expectedRevision,request.id,input.courierFeePayer);
@@ -118,10 +119,10 @@ export async function saveCourierDelivery(
     'INSERT INTO purkins_request_delivery_events '+
     '(request_id,revision,status,source_channel,courier,pickup_location,dropoff_location,'+
     'recipient_name,recipient_phone,rider_name,rider_phone,booking_reference,'+
-    'courier_fee_cents,courier_fee_payer,operator_note,changed_by) '+
+    'courier_fee_cents,courier_fee_payer,courier_fee_state,operator_note,changed_by) '+
     'SELECT request_id,revision,status,source_channel,courier,pickup_location,dropoff_location,'+
     'recipient_name,recipient_phone,rider_name,rider_phone,booking_reference,'+
-    'courier_fee_cents,courier_fee_payer,operator_note,updated_by '+
+    'courier_fee_cents,courier_fee_payer,courier_fee_state,operator_note,updated_by '+
     'FROM purkins_request_deliveries WHERE request_id=? AND revision=? AND change_nonce=? '+
     'ON CONFLICT(request_id,revision) DO NOTHING',
   ).bind(request.id,revision,input.nonce);
