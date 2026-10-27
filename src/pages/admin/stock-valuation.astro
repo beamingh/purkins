@@ -14,7 +14,7 @@ const costPct=percent(value.costedUnits,value.totalUnits);
 const canCalculateProfit=value.completePotentialGrossProfitCents!==null;
 const knownCostLabel=value.costedUnits>0?money(value.knownCostValueCents):'Not recorded';
 const pricedLabel=value.pricedUnits>0?money(value.pricedValueCents):'Not priced';
-const rand=(minor:number)=>'R'+(minor/100).toLocaleString('en-ZA',{minimumFractionDigits:2,maximumFractionDigits:2});
+const taggedMoney=(minor:number,symbol:string)=>symbol+(minor/100).toLocaleString('en-ZM',{minimumFractionDigits:2,maximumFractionDigits:2});
 ---
 <AdminLayout title="Inventory valuation" active="products">
   <header class="mb-6">
@@ -78,14 +78,207 @@ const rand=(minor:number)=>'R'+(minor/100).toLocaleString('en-ZA',{minimumFracti
   </section>
 
   <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5" aria-label="Original retailer tag reference value">
-    <h2 class="font-semibold">Original South African retailer tags (reference only)</h2>
-    <p class="mt-3 text-2xl font-semibold tabular-nums">{value.taggedUnits>0?rand(value.taggedValueZarMinor):'Not recorded'}</p>
+    <h2 class="font-semibold">Original retailer price tags by currency (reference only)</h2>
+    <div class="mt-3 grid gap-3 sm:grid-cols-3">
+      <div><p class="text-xs text-gray-600">Rand (ZAR)</p><p class="text-xl font-semibold tabular-nums">{value.taggedValueZarMinor>0?taggedMoney(value.taggedValueZarMinor,'R'):'Not recorded'}</p></div>
+      <div><p class="text-xs text-gray-600">Kwacha (ZMW)</p><p class="text-xl font-semibold tabular-nums">{value.taggedValueZmwMinor>0?taggedMoney(value.taggedValueZmwMinor,'K'):'Not recorded'}</p></div>
+      <div><p class="text-xs text-gray-600">US dollars (USD)</p><p class="text-xl font-semibold tabular-nums">{value.taggedValueUsdMinor>0?taggedMoney(value.taggedValueUsdMinor,'
+  </section>
+
+  <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+    <h2 class="font-semibold">Data completeness</h2>
+    <div class="mt-4 space-y-4">
+      <div>
+        <div class="mb-1 flex justify-between text-sm"><span>Retail price coverage</span><span class="tabular-nums">{value.pricedUnits}/{value.totalUnits} units ({pricedPct}%)</span></div>
+        <div class="h-3 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-brand" style={{width:pricedPct+'%'}}></div></div>
+      </div>
+      <div>
+        <div class="mb-1 flex justify-between text-sm"><span>Purchase cost coverage</span><span class="tabular-nums">{value.costedUnits}/{value.totalUnits} units ({costPct}%)</span></div>
+        <div class="h-3 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-brand" style={{width:costPct+'%'}}></div></div>
+      </div>
+    </div>
+    {value.currencyExceptions>0&&<p class="mt-3 text-sm text-red-700">{value.currencyExceptions} non-ZMW stock lines need currency review before interpreting the totals.</p>}
+    {value.negativeStockLines>0&&<p class="mt-3 text-sm text-red-700">{value.negativeStockLines} lines have negative stock balances that must be reconciled.</p>}
+    {value.matchedUnits>0&&<p class="mt-3 text-sm text-gray-600">
+      For the {value.matchedUnits} units with both cost and selling prices, comparable
+      potential gross profit is <strong>{money(value.comparableGrossProfitCents)}</strong>.
+      This subtotal must not be presented as profit on all inventory.
+    </p>}
+  </section>
+
+  <section class="rounded-lg border border-gray-200 bg-white">
+    <div class="flex flex-wrap items-center justify-between gap-3 p-5">
+      <div>
+        <h2 class="font-semibold">Inventory lines and missing values</h2>
+        <p class="mt-1 text-xs text-gray-600">Unpriced or uncosted items appear first. Every variant is counted once, never together with its parent.</p>
+      </div>
+      <a href="/admin/products" class="text-sm font-semibold text-brand underline">Edit product pricing</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[920px] text-left text-sm">
+        <thead class="bg-gray-50 text-gray-600">
+          <tr>
+            <th class="px-4 py-3">Product / size</th>
+            <th class="px-4 py-3 text-right">Units</th>
+            <th class="px-4 py-3 text-right">Unit selling price</th>
+            <th class="px-4 py-3 text-right">Landed cost per unit</th>
+            <th class="px-4 py-3 text-right">Original tag</th>
+            <th class="px-4 py-3 text-right">Potential sales</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {value.lines.map(line=>(
+            <tr class="border-t border-gray-100">
+              <td class="px-4 py-3">
+                {line.product_public_id?(
+                  <a class="font-medium text-brand underline" href={'/admin/products/'+line.product_public_id+'/edit'}>{line.name}</a>
+                ):(<strong>{line.name}</strong>)}
+                {line.variant_label&&<p class="text-xs text-gray-500">{line.variant_label}</p>}
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.units}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.price_cents>0?money(line.price_cents):'Missing'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.landed_unit_cost_cents!==null?money(line.landed_unit_cost_cents):'Missing'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.original_tag_minor!=null&&line.original_tag_minor>0&&['ZAR','ZMW','USD'].includes(line.original_tag_currency?.toUpperCase()??'')?taggedMoney(line.original_tag_minor,line.original_tag_currency?.toUpperCase()==='ZAR'?'R':line.original_tag_currency?.toUpperCase()==='ZMW'?'K':'</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.price_cents>0?money(line.units*line.price_cents):'Unpriced'}</td>
+              <td class="px-4 py-3 text-xs">
+                <span class={line.published?'text-green-700':'text-gray-600'}>{line.published?'Published':'Draft'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {value.lines.length===0&&<p class="p-5 text-sm text-gray-600">No remaining stock has been entered.</p>}
+    </div>
+    {value.detailTruncated&&<p class="border-t border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      Showing only the first 150 non-empty stock lines, prioritizing missing values.
+      Financial totals above are computed across <strong>all</strong> recorded stock.
+    </p>}
+  </section>
+
+  <p class="mt-5 text-xs text-gray-500">
+    Gross profit here means potential sales less landed inventory cost only.
+    It is before platform charges, refunds, marketing, other operating expenses and taxes.
+    It is not realized revenue, net profit or a guaranteed sales forecast.
+  </p>
+</AdminLayout>
+):'Not recorded'}</p></div>
+    </div>
     <p class="mt-2 text-sm text-gray-600">
       {value.taggedUnits} of {value.totalUnits} recorded units across {value.taggedProductCount} product types
-      have valid ZAR price tags; {value.untaggedUnits} units do not.
-      This is the sum of original labels on unsold stock, not verified money paid
-      by Purkins. It is kept separate from acquisition / landed cost and is not
-      converted to kwacha using an assumed exchange rate.
+      have valid price tags; {value.untaggedUnits} units do not. These reference values
+      are not verified purchase expenditure and are never summed across currencies.
+      USD tag entry will require a database and inventory form update.
+    </p>
+  </section>
+
+  <section class="mb-6 rounded-lg border border-gray-200 bg-white p-5">
+    <h2 class="font-semibold">Data completeness</h2>
+    <div class="mt-4 space-y-4">
+      <div>
+        <div class="mb-1 flex justify-between text-sm"><span>Retail price coverage</span><span class="tabular-nums">{value.pricedUnits}/{value.totalUnits} units ({pricedPct}%)</span></div>
+        <div class="h-3 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-brand" style={{width:pricedPct+'%'}}></div></div>
+      </div>
+      <div>
+        <div class="mb-1 flex justify-between text-sm"><span>Purchase cost coverage</span><span class="tabular-nums">{value.costedUnits}/{value.totalUnits} units ({costPct}%)</span></div>
+        <div class="h-3 overflow-hidden rounded-full bg-gray-100"><div class="h-full bg-brand" style={{width:costPct+'%'}}></div></div>
+      </div>
+    </div>
+    {value.currencyExceptions>0&&<p class="mt-3 text-sm text-red-700">{value.currencyExceptions} non-ZMW stock lines need currency review before interpreting the totals.</p>}
+    {value.negativeStockLines>0&&<p class="mt-3 text-sm text-red-700">{value.negativeStockLines} lines have negative stock balances that must be reconciled.</p>}
+    {value.matchedUnits>0&&<p class="mt-3 text-sm text-gray-600">
+      For the {value.matchedUnits} units with both cost and selling prices, comparable
+      potential gross profit is <strong>{money(value.comparableGrossProfitCents)}</strong>.
+      This subtotal must not be presented as profit on all inventory.
+    </p>}
+  </section>
+
+  <section class="rounded-lg border border-gray-200 bg-white">
+    <div class="flex flex-wrap items-center justify-between gap-3 p-5">
+      <div>
+        <h2 class="font-semibold">Inventory lines and missing values</h2>
+        <p class="mt-1 text-xs text-gray-600">Unpriced or uncosted items appear first. Every variant is counted once, never together with its parent.</p>
+      </div>
+      <a href="/admin/products" class="text-sm font-semibold text-brand underline">Edit product pricing</a>
+    </div>
+    <div class="overflow-x-auto">
+      <table class="w-full min-w-[920px] text-left text-sm">
+        <thead class="bg-gray-50 text-gray-600">
+          <tr>
+            <th class="px-4 py-3">Product / size</th>
+            <th class="px-4 py-3 text-right">Units</th>
+            <th class="px-4 py-3 text-right">Unit selling price</th>
+            <th class="px-4 py-3 text-right">Landed cost per unit</th>
+            <th class="px-4 py-3 text-right">Original R tag</th>
+            <th class="px-4 py-3 text-right">Potential sales</th>
+            <th class="px-4 py-3">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {value.lines.map(line=>(
+            <tr class="border-t border-gray-100">
+              <td class="px-4 py-3">
+                {line.product_public_id?(
+                  <a class="font-medium text-brand underline" href={'/admin/products/'+line.product_public_id+'/edit'}>{line.name}</a>
+                ):(<strong>{line.name}</strong>)}
+                {line.variant_label&&<p class="text-xs text-gray-500">{line.variant_label}</p>}
+              </td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.units}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.price_cents>0?money(line.price_cents):'Missing'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.landed_unit_cost_cents!==null?money(line.landed_unit_cost_cents):'Missing'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.original_tag_minor!=null&&line.original_tag_minor>0&&line.original_tag_currency?.toUpperCase()==='ZAR'?rand(line.original_tag_minor):'Not recorded'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.price_cents>0?money(line.units*line.price_cents):'Unpriced'}</td>
+              <td class="px-4 py-3 text-xs">
+                <span class={line.published?'text-green-700':'text-gray-600'}>{line.published?'Published':'Draft'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {value.lines.length===0&&<p class="p-5 text-sm text-gray-600">No remaining stock has been entered.</p>}
+    </div>
+    {value.detailTruncated&&<p class="border-t border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      Showing only the first 150 non-empty stock lines, prioritizing missing values.
+      Financial totals above are computed across <strong>all</strong> recorded stock.
+    </p>}
+  </section>
+
+  <p class="mt-5 text-xs text-gray-500">
+    Gross profit here means potential sales less landed inventory cost only.
+    It is before platform charges, refunds, marketing, other operating expenses and taxes.
+    It is not realized revenue, net profit or a guaranteed sales forecast.
+  </p>
+</AdminLayout>
+):'Not recorded'}</td>
+              <td class="px-4 py-3 text-right tabular-nums">{line.price_cents>0?money(line.units*line.price_cents):'Unpriced'}</td>
+              <td class="px-4 py-3 text-xs">
+                <span class={line.published?'text-green-700':'text-gray-600'}>{line.published?'Published':'Draft'}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {value.lines.length===0&&<p class="p-5 text-sm text-gray-600">No remaining stock has been entered.</p>}
+    </div>
+    {value.detailTruncated&&<p class="border-t border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+      Showing only the first 150 non-empty stock lines, prioritizing missing values.
+      Financial totals above are computed across <strong>all</strong> recorded stock.
+    </p>}
+  </section>
+
+  <p class="mt-5 text-xs text-gray-500">
+    Gross profit here means potential sales less landed inventory cost only.
+    It is before platform charges, refunds, marketing, other operating expenses and taxes.
+    It is not realized revenue, net profit or a guaranteed sales forecast.
+  </p>
+</AdminLayout>
+):'Not recorded'}</p></div>
+    </div>
+    <p class="mt-2 text-sm text-gray-600">
+      {value.taggedUnits} of {value.totalUnits} recorded units across {value.taggedProductCount} product types
+      have valid price tags; {value.untaggedUnits} units do not. These reference values
+      are not verified purchase expenditure and are never summed across currencies.
+      USD tag entry will require a database and inventory form update.
     </p>
   </section>
 
