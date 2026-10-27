@@ -40,15 +40,15 @@ export async function fulfillGuardedPurkinsOrder(db:D1Database,actorRaw:string,i
         'ON CONFLICT(request_id) DO NOTHING RETURNING request_id')
         .bind(key,actor,hash,id,nonce),
       db.prepare("UPDATE orders SET fulfillment_status='fulfilled',fulfilled_at=datetime('now'),"+
-        'tracking_carrier=?,tracking_number=? WHERE public_id=? '+
+        'tracking_carrier=?,tracking_number=?,last_mcp_fulfillment_nonce=? WHERE public_id=? '+
         "AND status='paid' AND fulfillment_status='unfulfilled' "+
         'AND EXISTS (SELECT 1 FROM purkins_mcp_fulfillment_receipts r '+
         'WHERE r.request_id=? AND r.nonce=?) RETURNING public_id')
-        .bind(carrier,tracking,id,key,nonce),
+        .bind(carrier,tracking,nonce,id,key,nonce),
       db.prepare('UPDATE purkins_mcp_fulfillment_receipts SET completed=CASE WHEN EXISTS('+
-        "SELECT 1 FROM orders WHERE public_id=? AND status='paid' AND fulfillment_status='fulfilled' "+
+        "SELECT 1 FROM orders WHERE public_id=? AND status='paid' AND fulfillment_status='fulfilled' AND last_mcp_fulfillment_nonce=? "+
         ') THEN 1 ELSE -1 END WHERE request_id=? AND nonce=? RETURNING completed')
-        .bind(id,key,nonce),
+        .bind(id,nonce,key,nonce),
     ]);
     if(results[1]?.results?.length&&
       (results[2]?.results?.[0] as {completed?:number}|undefined)?.completed===1)
