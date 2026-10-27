@@ -5,6 +5,9 @@ import { registerPurkinsMediaTools } from './purkins-media';
 import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
 import { registerGuardedPublicationTools } from './purkins-publication';
+import { registerPurkinsOperationsReads, registerGuardedPurkinsDraftEdits } from './purkins-operations';
+import { registerPurkinsSalesReads, registerGuardedPurkinsSalesWrites } from './purkins-sales';
+import { registerGuardedPurkinsPhotoUpload } from './purkins-photo';
 import { publicStorefrontCachePurger } from '../../src/features/mcp/publicCachePurge';
 import { registerCategoryTools } from './categories';
 import { isApprovedMcpOwner } from './operator-access';
@@ -348,6 +351,10 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_CLOTHING_WRITES_ENABLED?: string;
       PURKINS_MCP_GALLERY_WRITES_ENABLED?: string;
       PURKINS_MCP_PUBLICATION_WRITES_ENABLED?: string;
+      PURKINS_MCP_DRAFT_EDIT_WRITES_ENABLED?: string;
+      PURKINS_MCP_SALES_WRITES_ENABLED?: string;
+      PURKINS_MCP_DISPATCH_WRITES_ENABLED?: string;
+      PURKINS_MCP_MEDIA_UPLOADS_ENABLED?: string;
       PURKINS_MCP_CACHE_PURGE_SECRET?: string;
     };
     const allowWrites = canWriteAsOperator(this.props, writeEnv.PURKINS_MCP_WRITES_ENABLED);
@@ -394,6 +401,16 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     registerGuardedPublicationTools(scopedServer, db, allowPublicationWrites,
       this.props.actor, publicationCachePurge);
     registerCategoryTools(scopedServer, db);
+    registerPurkinsOperationsReads(scopedServer, db);
+    registerPurkinsSalesReads(scopedServer, db);
+    registerGuardedPurkinsDraftEdits(scopedServer,db,
+      allowWrites && writeEnv.PURKINS_MCP_DRAFT_EDIT_WRITES_ENABLED === 'true',
+      this.props.actor);
+    registerGuardedPurkinsSalesWrites(scopedServer,db,this.props.actor,
+      allowWrites && writeEnv.PURKINS_MCP_SALES_WRITES_ENABLED === 'true',
+      allowWrites && writeEnv.PURKINS_MCP_DISPATCH_WRITES_ENABLED === 'true');
+    registerGuardedPurkinsPhotoUpload(scopedServer,db,mediaEnv.BUCKET,
+      this.props.actor,allowWrites && writeEnv.PURKINS_MCP_MEDIA_UPLOADS_ENABLED === 'true');
 
     // --- reads ---
     scopedServer.registerTool(
