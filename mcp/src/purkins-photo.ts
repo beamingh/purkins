@@ -1,11 +1,11 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
+import type { D1Database } from '@cloudflare/workers-types';
 import { z } from 'zod';
 import { uploadGuardedPurkinsMedia } from '../../src/features/mcp/photoUploadGuard';
 
 const reply=(data:unknown)=>({content:[{type:'text' as const,text:JSON.stringify(data,null,2)}]});
 export function registerGuardedPurkinsPhotoUpload(
-  server:McpServer,db:D1Database,bucket:R2Bucket|undefined,
+  server:McpServer,db:D1Database,bucket:Parameters<typeof uploadGuardedPurkinsMedia>[1]|undefined,
   actor:string|undefined,allowed:boolean,
 ){
   if(!allowed||!actor||!bucket)return;
