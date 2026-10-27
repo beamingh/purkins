@@ -1,5 +1,6 @@
 -- Guarded fulfillment of an existing, fully paid canonical order.
 -- No stock deduction, payment-state change or courier payment assumption.
+ALTER TABLE orders ADD COLUMN last_mcp_fulfillment_nonce TEXT;
 CREATE TABLE IF NOT EXISTS purkins_mcp_fulfillment_receipts (
   request_id TEXT PRIMARY KEY NOT NULL,
   actor TEXT NOT NULL CHECK(length(actor) BETWEEN 1 AND 254),
