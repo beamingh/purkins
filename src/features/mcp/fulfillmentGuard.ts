@@ -2,7 +2,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { parseOrderOrLegacyPublicId } from '../ids/publicId';
 import { requireVerifiedOwnerActorShape } from './ownerActor';
 
-const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i;
+const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const CONFLICT=(error:string)=>({ok:false,error,conflict:true});
 type Receipt={actor:string;payload_sha256:string;order_public_id:string;completed:number};
 export interface HandoverInput {
