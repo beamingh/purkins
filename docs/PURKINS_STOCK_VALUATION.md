@@ -8,9 +8,12 @@ three different metrics:
 - **Inventory acquisition value / landed cost:** original paid purchase price
   plus any per-unit allocated overhead. Converted to ZMW using an **explicit,
   recorded** ZAR→ZMW rate where relevant. This does not use an assumed FX rate.
-- **Original retailer tag reference:** recorded ZAR sticker prices on each unit,
-  summed in rand only for items with valid ZAR tags. This is NOT a verified
-  purchase-cost subtotal and must not be used to calculate gross profit.
+- **Original retailer tag reference:** tag values on remaining stock are grouped
+  by original currency (ZAR, ZMW and eventually USD), never added across
+  currencies or converted with an assumed exchange rate. They are not actual
+  purchase expenditure, and they must not be used to calculate gross profit.
+  The existing database accepts ZAR and ZMW tags only. Saving USD amounts
+  requires a separate schema, API and inventory form update.
 - **Potential gross revenue / retail value:** remaining stock quantity times
   the current intended selling price. This is only a hypothetical sell-out
   scenario, not actual revenue and not a guarantee the stock will sell.
@@ -35,7 +38,7 @@ available to shoppers. No migration is required.
    with a forecast of K0 revenue.
 4. A supplier/retailer's ZAR price tag is not Purkins purchase cost. The
    report separately totals only tagged units, using variant-specific tags
-   where available and falling back to the product-level tag. Tagged and
+   from `purkins_variant_intake_details` where available and falling back to the product-level tag. Tagged and
    untagged unit counts always cover the whole entered inventory.
    Purchase costs must come from the real acquisition invoice/record.
 5. For ZAR costs, convert using `purchase_currency=ZAR` and the item's
