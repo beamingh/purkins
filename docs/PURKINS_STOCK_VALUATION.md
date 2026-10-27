@@ -8,6 +8,9 @@ three different metrics:
 - **Inventory acquisition value / landed cost:** original paid purchase price
   plus any per-unit allocated overhead. Converted to ZMW using an **explicit,
   recorded** ZAR→ZMW rate where relevant. This does not use an assumed FX rate.
+- **Original retailer tag reference:** recorded ZAR sticker prices on each unit,
+  summed in rand only for items with valid ZAR tags. This is NOT a verified
+  purchase-cost subtotal and must not be used to calculate gross profit.
 - **Potential gross revenue / retail value:** remaining stock quantity times
   the current intended selling price. This is only a hypothetical sell-out
   scenario, not actual revenue and not a guarantee the stock will sell.
@@ -30,7 +33,10 @@ available to shoppers. No migration is required.
 3. Include unpublished draft products as owned stock, but label them as
    drafts. Draft stock with 0 selling price is **unpriced**, not free goods
    with a forecast of K0 revenue.
-4. A supplier/retailer's ZAR price tag is not Purkins purchase cost.
+4. A supplier/retailer's ZAR price tag is not Purkins purchase cost. The
+   report separately totals only tagged units, using variant-specific tags
+   where available and falling back to the product-level tag. Tagged and
+   untagged unit counts always cover the whole entered inventory.
    Purchase costs must come from the real acquisition invoice/record.
 5. For ZAR costs, convert using `purchase_currency=ZAR` and the item's
    `zar_to_zmw` rate recorded at intake; without a saved rate the cost
@@ -56,6 +62,9 @@ on 27 Oct 2026 without changing any resources.
 - **4 priced units** at K950 (TY-899 warmers) = **K3,800 known retail value**.
 - **76 units are unpriced**.
 - **0 units have entered and convertible acquisition costs**.
+- **66 of 80 units**, across **20 product types**, have original ZAR retailer
+  tags: **R5,207.35** summed reference value. The other **14 units** lack
+  tags. This is not confirmed original purchase expenditure.
 - Gross revenue for all 80 units and all-stock potential gross profit cannot
   yet be computed. Also, many physical stock items are not yet entered.
 
