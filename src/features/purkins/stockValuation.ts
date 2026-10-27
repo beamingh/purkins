@@ -22,11 +22,12 @@ WITH stock_lines AS (
     v.stock AS units, v.price_cents AS price_cents,
     i.purchase_cost_minor, i.purchase_currency, i.zar_to_zmw,
     i.overhead_zwm_cents, i.status AS intake_status,
-    COALESCE(v.retail_tag_minor,i.retail_tag_minor) AS original_tag_minor,
-    CASE WHEN v.retail_tag_minor IS NOT NULL THEN COALESCE(v.retail_tag_currency,i.retail_tag_currency)
+    COALESCE(vi.retail_tag_minor,i.retail_tag_minor) AS original_tag_minor,
+    CASE WHEN vi.retail_tag_minor IS NOT NULL THEN COALESCE(vi.retail_tag_currency,i.retail_tag_currency)
       ELSE i.retail_tag_currency END AS original_tag_currency
   FROM products p JOIN product_variants v ON v.product_id=p.id
   LEFT JOIN purkins_intake i ON i.product_id=p.id
+  LEFT JOIN purkins_variant_intake_details vi ON vi.variant_id=v.id
 ),
 valued AS (
   SELECT *,
@@ -67,6 +68,8 @@ export interface StockValuation {
   untaggedUnits:number;
   taggedProductCount:number;
   taggedValueZarMinor:number;
+  taggedValueZmwMinor:number;
+  taggedValueUsdMinor:number;
   matchedUnits:number;
   pricedValueCents:number;
   knownCostValueCents:number;
@@ -87,6 +90,7 @@ interface RawSummary {
   unpriced_units:number; missing_cost_units:number; priced_units:number;
   costed_units:number; tagged_units:number; untagged_units:number;
   tagged_product_count:number; tagged_value_zar_minor:number;
+  tagged_value_zmw_minor:number; tagged_value_usd_minor:number;
   matched_units:number; priced_value_cents:number;
   known_cost_value_cents:number; comparable_revenue_cents:number;
   comparable_cost_cents:number; currency_exceptions:number; negative_stock_lines:number;
@@ -102,10 +106,12 @@ SELECT
   COALESCE(SUM(CASE WHEN units>0 AND landed_unit_cost_cents IS NULL THEN units ELSE 0 END),0) AS missing_cost_units,
   COALESCE(SUM(CASE WHEN units>0 AND price_cents>0 THEN units ELSE 0 END),0) AS priced_units,
   COALESCE(SUM(CASE WHEN units>0 AND landed_unit_cost_cents IS NOT NULL THEN units ELSE 0 END),0) AS costed_units,
-  COALESCE(SUM(CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,''))='ZAR' THEN units ELSE 0 END),0) AS tagged_units,
-  COALESCE(SUM(CASE WHEN units>0 AND (original_tag_minor IS NULL OR original_tag_minor<=0 OR UPPER(COALESCE(original_tag_currency,''))!='ZAR') THEN units ELSE 0 END),0) AS untagged_units,
-  COUNT(DISTINCT CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,''))='ZAR' THEN product_id ELSE NULL END) AS tagged_product_count,
+  COALESCE(SUM(CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,'')) IN ('ZAR','ZMW','USD') THEN units ELSE 0 END),0) AS tagged_units,
+  COALESCE(SUM(CASE WHEN units>0 AND (original_tag_minor IS NULL OR original_tag_minor<=0 OR UPPER(COALESCE(original_tag_currency,'')) NOT IN ('ZAR','ZMW','USD')) THEN units ELSE 0 END),0) AS untagged_units,
+  COUNT(DISTINCT CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,'')) IN ('ZAR','ZMW','USD') THEN product_id ELSE NULL END) AS tagged_product_count,
   COALESCE(SUM(CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,''))='ZAR' THEN units*original_tag_minor ELSE 0 END),0) AS tagged_value_zar_minor,
+  COALESCE(SUM(CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,''))='ZMW' THEN units*original_tag_minor ELSE 0 END),0) AS tagged_value_zmw_minor,
+  COALESCE(SUM(CASE WHEN units>0 AND original_tag_minor>0 AND UPPER(COALESCE(original_tag_currency,''))='USD' THEN units*original_tag_minor ELSE 0 END),0) AS tagged_value_usd_minor,
   COALESCE(SUM(CASE WHEN units>0 AND price_cents>0 AND landed_unit_cost_cents IS NOT NULL THEN units ELSE 0 END),0) AS matched_units,
   COALESCE(SUM(CASE WHEN units>0 AND price_cents>0 THEN units*price_cents ELSE 0 END),0) AS priced_value_cents,
   COALESCE(SUM(CASE WHEN units>0 AND landed_unit_cost_cents IS NOT NULL THEN units*landed_unit_cost_cents ELSE 0 END),0) AS known_cost_value_cents,
@@ -141,6 +147,7 @@ export async function getStockValuation(db:D1Database):Promise<StockValuation> {
     pricedUnits:sum.priced_units,costedUnits:sum.costed_units,
     taggedUnits:sum.tagged_units,untaggedUnits:sum.untagged_units,
     taggedProductCount:sum.tagged_product_count,taggedValueZarMinor:sum.tagged_value_zar_minor,
+    taggedValueZmwMinor:sum.tagged_value_zmw_minor,taggedValueUsdMinor:sum.tagged_value_usd_minor,
     matchedUnits:sum.matched_units,
     pricedValueCents:sum.priced_value_cents,
     knownCostValueCents:sum.known_cost_value_cents,
