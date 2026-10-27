@@ -36,6 +36,7 @@ export const MCP_TOOL_PERMISSIONS = [
   {name:'record_guarded_purkins_paid_sale',group:'Guarded sales operations',label:'Record Verified Paid Sale',safety:'guarded'},
   {name:'settle_guarded_purkins_cod_payment',group:'Guarded sales operations',label:'Settle Verified Held COD Request',safety:'guarded'},
   {name:'record_guarded_purkins_dispatch',group:'Guarded sales operations',label:'Record Yango Dispatch Event',safety:'guarded'},
+  {name:'fulfill_guarded_purkins_order',group:'Guarded sales operations',label:'Confirm Paid Order Handover',safety:'guarded'},
   {name:'create_guarded_purkins_draft',group:'Guarded stock drafts',label:"Create one private draft with idempotency",safety:'guarded'},
   {name:'adjust_guarded_purkins_stock',group:'Guarded stock drafts',label:"Reconcile draft stock with revision check",safety:'guarded'},
   {name:'bulk_create_guarded_clothing_drafts',group:'Guarded stock drafts',label:"Bulk clothing sizes and barcodes",safety:'guarded'},
