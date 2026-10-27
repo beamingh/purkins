@@ -40,7 +40,7 @@ New tools do NOT switch on legacy unsafe writers. There is no automated Yango bo
 ```powershell
 git fetch origin feat/purkins-mcp-sales-operator-completion
 git switch --track origin/feat/purkins-mcp-sales-operator-completion
-npx vitest run src/features/mcp/draftEdit.integration.test.ts src/features/mcp/operatorActions.test.ts test/scripts/purkins-mcp-operator-completion-contract.test.mjs
+npx vitest run src/features/mcp/draftEdit.integration.test.ts src/features/mcp/fulfillmentGuard.integration.test.ts src/features/mcp/operatorActions.test.ts test/scripts/purkins-mcp-operator-completion-contract.test.mjs
 npm run mcp:check
 npm run check
 npm run purkins:cloudflare -- build
