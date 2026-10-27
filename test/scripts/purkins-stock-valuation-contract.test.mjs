@@ -17,6 +17,10 @@ describe('Purkins inventory valuation financial safety',()=>{
     expect(s).toContain('overhead_zwm_cents');
     expect(s).toContain('original_tag_minor');
     expect(s).toContain('tagged_value_zar_minor');
+    expect(s).toContain('tagged_value_zmw_minor');
+    expect(s).toContain('tagged_value_usd_minor');
+    expect(s).toContain('purkins_variant_intake_details vi');
+    expect(s).not.toContain('v.retail_tag_minor');
     expect(s).toContain('purchase_cost_minor + COALESCE(overhead_zwm_cents,0)');
     expect(s).not.toContain('purchase_cost_minor=original_tag_minor');
     expect(s).not.toContain('INSERT INTO');
