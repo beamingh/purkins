@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { D1Database } from '@cloudflare/workers-types';
 import { z } from 'zod';
 import { getDispatchOverview } from '../../src/features/purkins/dispatchOverview';
+import { fulfillGuardedPurkinsOrder } from '../../src/features/mcp/fulfillmentGuard';
 import {
   recordGuardedPaidSale,recordGuardedDispatch,settleGuardedCodPayment,
 } from '../../src/features/mcp/salesGuard';
@@ -42,6 +43,18 @@ export function registerGuardedPurkinsSalesWrites(
     },async(args)=>{
       try{return result(await recordGuardedPaidSale(db,actor,args));}
       catch{return result({error:'Payment recording uncertain. Inspect orders and retry exactly the SAME request_id and payload, never a fresh ID for the same transaction.'});}
+    });
+    server.registerTool('fulfill_guarded_purkins_order',{
+      description:'OWNER ONLY. Confirm physical handover for an existing fully PAID canonical order. Atomic paid-and-unfulfilled CAS with idempotent receipt. Does not mark a rider delivery as paid or decrement inventory again. Requires explicit confirmed handover.',
+      inputSchema:{
+        request_id:uuid,order_public_id:z.string().min(10).max(80),
+        tracking_carrier:z.string().max(100).nullable(),
+        tracking_number:z.string().max(150).nullable(),
+        confirm_handed_over:z.literal(true),
+      },
+    },async(args)=>{
+      try{return result(await fulfillGuardedPurkinsOrder(db,actor,args));}
+      catch{return result({error:'Handover recording uncertain. Check order status before retrying the SAME request ID.'});}
     });
     server.registerTool('settle_guarded_purkins_cod_payment',{
       description:'OWNER ONLY. Convert an already held Facebook/Marketplace order request into one paid order AFTER FULL quoted funds have been verified on the receiving MTN/Airtel/Zamtel/bank account, or physically counted for cash. Requires quote revision and verified receipt note. Never treats rider delivery or buyer screenshot as payment.',
