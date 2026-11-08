@@ -6,6 +6,10 @@ on:
     paths:
       - 'mcp/src/**'
       - 'src/features/mcp/**'
+      - 'src/features/creative/**'
+      - 'src/features/media/**'
+      - 'src/pages/admin/creative-standards.astro'
+      - 'wrangler.admin.template.jsonc'
       - 'src/features/purkins/**'
       - 'src/features/products/ProductForm.astro'
       - 'migrations/**'
@@ -29,7 +33,7 @@ jobs:
         run: npm ci
       # npm ci at repository root installs the MCP workspace from the root lockfile.
       - name: Run catalogue integration tests
-        run: npx vitest run src/features/purkins/intake.test.ts src/features/mcp/draftEdit.integration.test.ts src/features/mcp/stockGuard.integration.test.ts src/features/mcp/clothingIntake.integration.test.ts src/features/purkins/liveCopy.integration.test.ts src/features/mcp/clientScope.test.ts
+        run: npx vitest run src/features/purkins/intake.test.ts src/features/mcp/draftEdit.integration.test.ts src/features/mcp/stockGuard.integration.test.ts src/features/mcp/clothingIntake.integration.test.ts src/features/purkins/liveCopy.integration.test.ts src/features/mcp/clientScope.test.ts src/features/creative/standards.test.ts src/features/creative/standards.integration.test.ts src/features/media/usage.test.ts
       - name: Check Astro and application types
         run: npm run check
       - name: Check MCP types and isolated Worker bundle
