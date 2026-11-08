@@ -6,7 +6,7 @@ Creative instructions live in **D1**, not in prompts, chat memory or hardcoded s
 
 A creative document has a domain (photography, naming, descriptions or social), scope (global, preset, category or product), a revision, active state, JSON rules, and approved `med_` media references.
 
-Effective instructions merge: **global → selected preset → category → product**. Only configured fields override inherited fields. A product with multiple categories applies them in stable alphabetical order; product overrides always win. Reference images from all active levels are combined without duplicates.
+Effective instructions merge: **global → selected preset → category → product**. Only configured **structured settings** override inherited values; instructions and required shots accumulate in precedence order so global brand safeguards remain visible. A product with multiple categories applies them in stable alphabetical order; product overrides always win. Reference images from all active levels are combined without duplicates.
 
 Photography defaults: 4:5 portrait, 1080 × 1350 px, white studio. Approved presets: studio-product, feature-composite, purkins-kitchen, lifestyle. These are **starting defaults**, freely editable in Admin.
 
