@@ -79,7 +79,7 @@ const [current,history,categories,productRows] = await Promise.all([
 ]);
 const rules = ruleConfig(current);
 const references = ruleReferences(current);
-const photoOrigin = env.STOREFRONT_URL || Astro.url.origin;
+const photoOrigin = (env as typeof env & { STOREFRONT_URL?: string }).STOREFRONT_URL || Astro.url.origin;
 const photos = await referencePhotos(env.DB,references,photoOrigin);
 let effective = null;
 try {
@@ -93,7 +93,7 @@ try {
 } catch { /* invalid or deleted selection: still allow editor with validation */ }
 const input = 'w-full rounded-md border border-line bg-white px-3 py-2 text-sm text-ink';
 const label = 'mb-1 block text-sm font-semibold';
-const setIf = (v: unknown) => v ?? '';
+const setIf = (v: string | number | undefined) => v ?? '';
 const site = getConfig().storeName;
 const pageUrl = '/admin/creative-standards';
 ---
