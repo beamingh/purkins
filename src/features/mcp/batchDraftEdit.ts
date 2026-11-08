@@ -111,8 +111,8 @@ export async function applyGuardedPurkinsBulk(
     }
   }
   return {ok:results.every(item=>item.ok),results,
-    applied:results.filter(item=>item.ok && !item.replayed).length,
-    replayed:results.filter(item=>item.ok && item.replayed).length,
+    applied:results.filter(item=>item.ok && 'replayed' in item && !item.replayed).length,
+    replayed:results.filter(item=>item.ok && 'replayed' in item && item.replayed).length,
     failed:results.filter(item=>!item.ok).length,
     note:'Updates are per-item transactions, not all-or-none. Inspect failures individually.'};
 }
