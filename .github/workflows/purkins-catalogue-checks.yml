@@ -27,8 +27,7 @@ jobs:
           cache: npm
       - name: Install locked application dependencies
         run: npm ci
-      - name: Install locked MCP dependencies
-        run: npm ci --prefix mcp
+      # npm ci at repository root installs the MCP workspace from the root lockfile.
       - name: Run catalogue integration tests
         run: npx vitest run src/features/purkins/intake.test.ts src/features/mcp/draftEdit.integration.test.ts src/features/mcp/stockGuard.integration.test.ts src/features/mcp/clothingIntake.integration.test.ts src/features/purkins/liveCopy.integration.test.ts src/features/mcp/clientScope.test.ts
       - name: Check Astro and application types
