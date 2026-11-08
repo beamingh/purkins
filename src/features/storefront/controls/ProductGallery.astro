@@ -20,6 +20,8 @@ interface Props {
   hero: StorefrontImage;
   soldOut: boolean;
   soldOutLabel?: string;
+  /** Opt-in 4:5 portrait frames for the Purkins theme. Other themes stay square. */
+  portrait?: boolean;
   class?: string;
 }
 
@@ -28,9 +30,12 @@ const {
   hero,
   soldOut,
   soldOutLabel = 'Sold out',
+  portrait = false,
   class: className = '',
 } = Astro.props;
 const hasGallery = images.length > 1;
+const heroShape = portrait ? 'aspect-[4/5] object-contain' : 'aspect-square object-cover';
+const thumbnailShape = portrait ? 'h-20 w-16 object-contain' : 'h-16 w-16 object-cover';
 ---
 
 {
@@ -48,12 +53,12 @@ const hasGallery = images.length > 1;
             sizes={image.hero.sizes}
             alt={image.hero.alt}
             width="800"
-            height="800"
+            height={portrait ? 1000 : 800}
             loading={image.hero.priority ? 'eager' : 'lazy'}
             fetchpriority={image.hero.priority ? 'high' : 'auto'}
             decoding="async"
             {...(image.hero.priority ? {} : { 'data-image-fade': '' })}
-            class={`aspect-square w-full shrink-0 snap-center bg-surface object-cover${soldOut ? ' opacity-60' : ''}`}
+            class={`w-full shrink-0 snap-center bg-surface ${heroShape}${soldOut ? ' opacity-60' : ''}`}
           />
         ))}
         {soldOut && (
@@ -74,11 +79,11 @@ const hasGallery = images.length > 1;
               sizes={image.thumbnail.sizes}
               alt=""
               width="64"
-              height="64"
+              height={portrait ? 80 : 64}
               loading="lazy"
               decoding="async"
               data-image-fade
-              class="h-16 w-16 bg-surface object-cover"
+              class={`${thumbnailShape} bg-surface`}
             />
           </a>
         ))}
@@ -89,7 +94,9 @@ const hasGallery = images.length > 1;
       <StoreImage
         image={hero}
         fade
-        class={`aspect-square w-full bg-surface object-cover${soldOut ? ' opacity-60' : ''}`}
+        width={600}
+        height={portrait ? 750 : 600}
+        class={`w-full bg-surface ${heroShape}${soldOut ? ' opacity-60' : ''}`}
       />
       {soldOut && (
         <span class="absolute left-4 top-4 rounded-full bg-surface/90 px-3 py-1 text-xs uppercase tracking-widest text-muted ring-1 ring-line">
