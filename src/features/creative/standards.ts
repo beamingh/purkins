@@ -59,7 +59,10 @@ export const isScope = (v: unknown): v is CreativeScope =>
 
 export function normalizeCreativeKey(domain: unknown, scope: unknown, target: unknown): CreativeKey {
   if (!isDomain(domain) || !isScope(scope)) throw new Error('Invalid creative standards section.');
-  const target_id = String(target ?? '').trim();
+  const rawTarget = String(target ?? '').trim();
+  const target_id = scope === 'product' ? (parsePublicId(rawTarget,'product') ?? rawTarget)
+    : scope === 'category' ? (parsePublicId(rawTarget,'category') ?? rawTarget)
+    : rawTarget;
   if (scope === 'global' && target_id !== '') throw new Error('Global standards have no target ID.');
   if (scope === 'preset' && !/^[a-z][a-z0-9-]{0,59}$/.test(target_id)) {
     throw new Error('Preset identifiers must use short lowercase slugs.');
@@ -116,9 +119,9 @@ export function validateCreativeConfig(value: unknown): CreativeConfig {
 
 export function normalizeReferenceIds(input: readonly string[]): string[] {
   if (input.length > 12) throw new Error('A standard supports up to 12 approved reference images.');
-  const ids = [...new Set(input.map(v=>v.trim()).filter(Boolean))];
-  if (ids.some(id=>!parsePublicId(id,'media'))) throw new Error('Reference images require med_ media library IDs.');
-  return ids;
+  const values=input.map(v=>String(v).trim()).filter(Boolean);
+  if (values.some(id=>!parsePublicId(id,'media'))) throw new Error('Reference images require med_ media library IDs.');
+  return [...new Set(values.map(id=>parsePublicId(id,'media')!))];
 }
 
 export async function validateTarget(db: D1Database, key: CreativeKey): Promise<void> {
