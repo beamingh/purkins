@@ -3,6 +3,7 @@ import type { D1Database } from '@cloudflare/workers-types';
 import { z } from 'zod';
 import { getStockValuation } from '../../src/features/purkins/stockValuation';
 import { editGuardedPurkinsDraft } from '../../src/features/mcp/draftEdit';
+import { applyGuardedLiveCopy } from '../../src/features/purkins/liveCopyGuard';
 import { getProductByPublicId } from '../../src/features/products/db';
 import { categoriesForProduct } from '../../src/features/categories/db';
 import { parsePublicId } from '../../src/features/ids/publicId';
@@ -65,5 +66,34 @@ export function registerGuardedPurkinsDraftEdits(
   },async(args)=>{
     try{return reply(await editGuardedPurkinsDraft(db,actor,args));}
     catch{return reply({error:'Draft edit uncertain; refresh the product and retry with the SAME request_id before creating another operation.'});}
+  });
+}
+
+/** Separate explicit owner switch for a live TITLE only, not price or slug. */
+export function registerGuardedPurkinsLiveTitle(
+  server:McpServer,db:D1Database,allowed=false,actor?:string,
+  purgePublicCache:(()=>Promise<void>)|null=null,
+):void{
+  if(!allowed||!actor)return;
+  server.registerTool('rename_guarded_purkins_live_product',{
+    description:'OWNER ONLY: rename one APPROVED PUBLISHED Purkins listing, preserving its existing URL/slug, selling price, stock, photos and current description. Requires current catalog revision, UUIDv4 request_id, explicit confirmation and working cross-Worker cache purge. Audit/replay protected.',
+    inputSchema:{
+      request_id:z.string().uuid(),product_id:z.string().regex(/^prod_[0-9a-z]+$/),
+      expected_catalog_revision:z.number().int().nonnegative(),
+      name:z.string().trim().min(1).max(200),confirm_rename:z.literal(true),
+    },
+  },async({request_id,product_id,expected_catalog_revision,name})=>{
+    try{
+      if(!purgePublicCache)return reply({ok:false,error:'Public storefront cache refresh not configured.'});
+      const product=await getProductByPublicId(db,product_id);
+      if(!product)return reply({ok:false,error:'Product not found.'});
+      return reply(await applyGuardedLiveCopy(db,actor,{
+        request_id,product_id,expected_catalog_revision,name,
+        description:product.description,
+        compare_at_price_cents:product.compare_at_price_cents??null,
+      },purgePublicCache));
+    }catch{
+      return reply({ok:false,error:'Live rename outcome uncertain. Inspect product, then retry with the SAME request_id only.'});
+    }
   });
 }

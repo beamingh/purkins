@@ -1,6 +1,8 @@
 import { toMinorUnits } from '../../money';
 
 export interface LiveCopyFields {
+  /** Optional guarded title change. The public slug remains untouched. */
+  name?: string;
   description: string | null;
   compare_at_price_cents: number | null;
 }

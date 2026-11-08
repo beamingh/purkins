@@ -60,6 +60,10 @@ export async function applyGuardedLiveCopy(
     return fail('Invalid edit request or catalog revision. Reload and retry.');
   }
   if (!purgePublicCache) return fail('Public storefront cache refresh is not configured. No changes saved.');
+  const nextName = input.name === undefined ? null : input.name.trim();
+  if (nextName !== null && (!nextName || nextName.length > 200)) {
+    return fail('Product title must be between 1 and 200 characters.');
+  }
   if (input.description !== null && input.description.length > 8000) {
     return fail('Description exceeds the 8,000-character limit.');
   }
@@ -72,6 +76,7 @@ export async function applyGuardedLiveCopy(
     product, revision: input.expected_catalog_revision,
     description: input.description,
     compare_at_price_cents: input.compare_at_price_cents,
+    ...(nextName === null ? {} : { name: nextName }),
   });
   const prior = await receipt(db, id);
   if (prior && (prior.actor !== actor || prior.product_public_id !== product ||
@@ -111,7 +116,7 @@ export async function applyGuardedLiveCopy(
           '(request_id,actor,product_public_id,payload_sha256,nonce,expected_revision) ' +
           'VALUES (?,?,?,?,?,?) ON CONFLICT(request_id) DO NOTHING RETURNING request_id')
           .bind(id, actor, product, hash, nonce, input.expected_catalog_revision),
-        db.prepare('UPDATE products SET description=?, compare_at_price_cents=?, ' +
+        db.prepare('UPDATE products SET name=COALESCE(?,name), description=?, compare_at_price_cents=?, ' +
           'last_purkins_live_edit_nonce=? ' +
           'WHERE public_id=? AND active=1 AND mcp_catalog_revision=? AND currency=\'zmw\' ' +
           'AND (? IS NULL OR ? > price_cents) ' +
@@ -119,7 +124,7 @@ export async function applyGuardedLiveCopy(
           'AND i.status=\'approved\' AND i.condition_status=\'complete\') ' +
           'AND EXISTS(SELECT 1 FROM purkins_live_edit_receipts r ' +
           'WHERE r.request_id=? AND r.nonce=?) RETURNING id')
-          .bind(input.description, input.compare_at_price_cents, nonce, product,
+          .bind(nextName, input.description, input.compare_at_price_cents, nonce, product,
             input.expected_catalog_revision,
             input.compare_at_price_cents, input.compare_at_price_cents, id, nonce),
         // If the CAS failed, -1 violates the completed CHECK and rolls the

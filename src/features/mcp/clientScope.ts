@@ -32,6 +32,7 @@ export const MCP_TOOL_PERMISSIONS = [
   {name:'get_purkins_private_preview',group:'Private catalog reads',label:'Get Authenticated Draft Preview',safety:'read'},
   {name:'get_purkins_dispatch_overview',group:'Orders and reporting',label:'Read Yango Dispatch Queue',safety:'read'},
   {name:'edit_guarded_purkins_draft',group:'Guarded stock drafts',label:'Edit Draft Details, Price, Costs and Categories',safety:'guarded'},
+  {name:'rename_guarded_purkins_live_product',group:'Guarded publishing',label:'Rename Approved Published Product (preserve URL)',safety:'guarded'},
   {name:'upload_guarded_purkins_photo',group:'Guarded locations and photos',label:'Upload Private Photo Bytes',safety:'guarded'},
   {name:'record_guarded_purkins_paid_sale',group:'Guarded sales operations',label:'Record Verified Paid Sale',safety:'guarded'},
   {name:'settle_guarded_purkins_cod_payment',group:'Guarded sales operations',label:'Settle Verified Held COD Request',safety:'guarded'},

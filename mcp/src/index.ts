@@ -5,7 +5,7 @@ import { registerPurkinsMediaTools } from './purkins-media';
 import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
 import { registerGuardedPublicationTools } from './purkins-publication';
-import { registerPurkinsOperationsReads, registerGuardedPurkinsDraftEdits } from './purkins-operations';
+import { registerPurkinsOperationsReads, registerGuardedPurkinsDraftEdits, registerGuardedPurkinsLiveTitle } from './purkins-operations';
 import { registerPurkinsSalesReads, registerGuardedPurkinsSalesWrites } from './purkins-sales';
 import { registerGuardedPurkinsPhotoUpload } from './purkins-photo';
 import { publicStorefrontCachePurger } from '../../src/features/mcp/publicCachePurge';
@@ -355,6 +355,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_SALES_WRITES_ENABLED?: string;
       PURKINS_MCP_DISPATCH_WRITES_ENABLED?: string;
       PURKINS_MCP_MEDIA_UPLOADS_ENABLED?: string;
+      PURKINS_MCP_LIVE_EDIT_WRITES_ENABLED?: string;
       PURKINS_MCP_CACHE_PURGE_SECRET?: string;
     };
     const allowWrites = canWriteAsOperator(this.props, writeEnv.PURKINS_MCP_WRITES_ENABLED);
@@ -406,6 +407,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     registerGuardedPurkinsDraftEdits(scopedServer,db,
       allowWrites && writeEnv.PURKINS_MCP_DRAFT_EDIT_WRITES_ENABLED === 'true',
       this.props.actor);
+    registerGuardedPurkinsLiveTitle(scopedServer,db,
+      allowWrites && writeEnv.PURKINS_MCP_LIVE_EDIT_WRITES_ENABLED === 'true',
+      this.props.actor,publicationCachePurge);
     registerGuardedPurkinsSalesWrites(scopedServer,db,this.props.actor,
       allowWrites && writeEnv.PURKINS_MCP_SALES_WRITES_ENABLED === 'true',
       allowWrites && writeEnv.PURKINS_MCP_DISPATCH_WRITES_ENABLED === 'true');
