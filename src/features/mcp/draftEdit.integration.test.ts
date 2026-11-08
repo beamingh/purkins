@@ -14,19 +14,20 @@ describe('Guarded draft edits, isolated Purkins D1',()=>{
       compatibilityDate:'2026-07-20',d1Databases:['DB']});
     db=await mf.getD1Database('DB');
     await db.exec('CREATE TABLE products (id INTEGER PRIMARY KEY, public_id TEXT NOT NULL UNIQUE,name TEXT NOT NULL,description TEXT,price_cents INTEGER NOT NULL,active INTEGER NOT NULL,mcp_catalog_revision INTEGER NOT NULL DEFAULT 0,last_mcp_draft_edit_nonce TEXT)');
-    await db.exec('CREATE TABLE purkins_intake (product_id INTEGER PRIMARY KEY,status TEXT, purchase_currency TEXT,purchase_cost_minor INTEGER,zar_to_zmw REAL,overhead_zwm_cents INTEGER,pricing_mode TEXT,condition_status TEXT,brand TEXT,retail_tag_minor INTEGER,retail_tag_currency TEXT,internal_notes TEXT,updated_at TEXT)');
+    await db.exec('CREATE TABLE purkins_intake (product_id INTEGER PRIMARY KEY,status TEXT, purchase_currency TEXT,purchase_cost_minor INTEGER,zar_to_zmw REAL,overhead_zwm_cents INTEGER,pricing_mode TEXT,condition_status TEXT,brand TEXT,original_supplier_name TEXT,supplier_reference TEXT,retail_tag_minor INTEGER,retail_tag_currency TEXT,internal_notes TEXT,updated_at TEXT)');
     await db.exec('CREATE TABLE categories (id INTEGER PRIMARY KEY,public_id TEXT NOT NULL UNIQUE)');
     await db.exec('CREATE TABLE product_categories (product_id INTEGER,category_id INTEGER,PRIMARY KEY(product_id,category_id))');
     await db.exec('CREATE TABLE purkins_mcp_draft_edit_receipts (request_id TEXT PRIMARY KEY, actor TEXT,product_public_id TEXT,payload_sha256 TEXT,nonce TEXT UNIQUE,expected_revision INTEGER,applied_revision INTEGER,completed INTEGER NOT NULL DEFAULT 0 CHECK(completed IN (0,1)))');
     await db.exec("INSERT INTO products (id,public_id,name,description,price_cents,active) VALUES (1,'prod_0123456789','Blue Bib','Old description',0,0)");
-    await db.exec("INSERT INTO purkins_intake VALUES(1,'draft','ZMW',NULL,NULL,0,'manual','review',NULL,NULL,'ZAR',NULL,NULL)");
+    await db.exec("INSERT INTO purkins_intake VALUES(1,'draft','ZMW',NULL,NULL,0,'manual','review',NULL,NULL,NULL,NULL,'ZAR',NULL,NULL)");
     await db.exec("INSERT INTO categories VALUES(1,'cat_0123456789')");
   },30000);
   afterAll(async()=>{await mf?.dispose()});
 
   it('atomically updates draft pricing, purchase cost and category, with durable replay',async()=>{
     const uuid='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-    const patch={name:'Blue Bib Set',price_cents:25000,purchase_cost_minor:12500,
+    const patch={name:'Blue Bib Set',original_supplier_name:'Supplier Blue Bib 3pk',supplier_reference:'Invoice 000123',
+       price_cents:25000,purchase_cost_minor:12500,
       purchase_currency:'ZMW' as const,condition_status:'complete' as const,
       category_ids:['cat_0123456789']};
     const first=await edit(uuid,0,patch);
@@ -35,8 +36,9 @@ describe('Guarded draft edits, isolated Purkins D1',()=>{
     expect(replay).toMatchObject({ok:true,product_id:product,replayed:true});
     expect((await db.prepare('SELECT name,price_cents,mcp_catalog_revision FROM products WHERE id=1').first()))
       .toMatchObject({name:'Blue Bib Set',price_cents:25000,mcp_catalog_revision:1});
-    expect((await db.prepare('SELECT purchase_cost_minor,condition_status FROM purkins_intake WHERE product_id=1').first()))
-      .toMatchObject({purchase_cost_minor:12500,condition_status:'complete'});
+    expect((await db.prepare('SELECT purchase_cost_minor,condition_status,original_supplier_name,supplier_reference FROM purkins_intake WHERE product_id=1').first()))
+      .toMatchObject({purchase_cost_minor:12500,condition_status:'complete',
+          original_supplier_name:'Supplier Blue Bib 3pk',supplier_reference:'Invoice 000123'});
     expect((await db.prepare('SELECT COUNT(*) n FROM product_categories WHERE product_id=1').first<{n:number}>())?.n).toBe(1);
   });
 

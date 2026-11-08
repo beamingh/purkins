@@ -57,6 +57,7 @@ describe('Private MCP stock writes against real isolated D1', () => {
       '0040_purkins_intake.sql','0041_purkins_cataloguing.sql',
       '0042_purkins_manual_pricing.sql','0043_purkins_location_tree.sql',
       '0045_purkins_mcp_write_guard.sql','0046_purkins_mcp_stock_guard.sql',
+      '0064_purkins_supplier_provenance.sql',
     ]) await migrate(name);
   }, 30_000);
   afterAll(async () => { await mf?.dispose(); });

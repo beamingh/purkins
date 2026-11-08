@@ -67,7 +67,8 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
       '0045_purkins_mcp_write_guard.sql','0046_purkins_mcp_stock_guard.sql',
       '0047_purkins_mcp_clothing_intake.sql','0049_purkins_mcp_connections.sql',
       '0050_purkins_mcp_tool_permissions.sql',
-      '0051_purkins_mcp_variant_reconcile.sql']) await migrate(name);
+      '0051_purkins_mcp_variant_reconcile.sql',
+      '0064_purkins_supplier_provenance.sql']) await migrate(name);
   },30_000);
   afterAll(async () => { await mf?.dispose(); });
 

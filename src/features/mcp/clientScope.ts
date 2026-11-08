@@ -31,6 +31,8 @@ export const MCP_TOOL_PERMISSIONS = [
   {name:'get_purkins_stock_valuation',group:'Orders and reporting',label:'Get Private Stock Valuation',safety:'read'},
   {name:'get_purkins_private_preview',group:'Private catalog reads',label:'Get Authenticated Draft Preview',safety:'read'},
   {name:'get_purkins_dispatch_overview',group:'Orders and reporting',label:'Read Yango Dispatch Queue',safety:'read'},
+  {name:'preview_guarded_purkins_bulk_edit',group:'Private catalog reads',label:'Review Bulk Catalogue Changes',safety:'read'},
+  {name:'apply_guarded_purkins_bulk_edit',group:'Guarded stock drafts',label:'Apply Reviewed Bulk Draft Changes',safety:'guarded'},
   {name:'edit_guarded_purkins_draft',group:'Guarded stock drafts',label:'Edit Draft Details, Price, Costs and Categories',safety:'guarded'},
   {name:'rename_guarded_purkins_live_product',group:'Guarded publishing',label:'Rename Approved Published Product (preserve URL)',safety:'guarded'},
   {name:'upload_guarded_purkins_photo',group:'Guarded locations and photos',label:'Upload Private Photo Bytes',safety:'guarded'},
