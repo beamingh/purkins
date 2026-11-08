@@ -30,7 +30,8 @@ describe('Purkins manual COD stock hold source contracts',()=>{
     expect(page).toContain('buyer_confirmed');
     expect(page).toContain('Allocate stock for this request');
     expect(page).toContain('Release held stock');
-    expect(page).toContain('would deduct them a second time');
+    expect(page).toContain('consume this existing stock hold without deducting items again.');
+    expect(page).toContain('It must not be manually released or deducted again.');
     expect(route).toContain("form.get('buyer_confirmed') !== 'yes'");
     expect(route).toContain('holdOfflineRequestStock(');
     expect(route).toContain('releaseOfflineRequestStock(');

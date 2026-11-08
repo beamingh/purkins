@@ -35,8 +35,9 @@ describe('Purkins trust-first COD and pay-later request source boundaries',()=>{
     const endpoint=read('src/pages/api/admin/order-requests/[id].ts');
     const dashboard=read('src/pages/admin/index.astro');
     expect(admin).toContain('unpaid enquiries');
-    expect(detail).toContain('No inventory has been reserved or deducted.');
-    expect(detail).toContain('Record a verified paid manual sale');
+    expect(detail).toContain('No inventory is currently allocated to this request.');
+    expect(detail).toContain('Stock is currently allocated for this customer, but payment has NOT been received or verified.');
+    expect(detail).toContain('Record verified payment and create paid order');
     expect(endpoint).toContain('updateOrderRequestStatus(');
     expect(endpoint).not.toContain('recordManualSale(');
     expect(dashboard).toContain('openRequestCount');

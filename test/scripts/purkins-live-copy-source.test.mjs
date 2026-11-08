@@ -12,14 +12,14 @@ describe('Purkins live approved listing edit wiring', () => {
     expect(sql).not.toMatch(/\bDROP TABLE\b|\bDELETE FROM products\b/i);
   });
 
-  it('only writes description and compare-at original price under live approval and CAS', () => {
+  it('only writes name, description and compare-at price under live approval and CAS', () => {
     const guard = read('src/features/purkins/liveCopyGuard.ts');
-    expect(guard).toContain('SET description=?, compare_at_price_cents=?,');
+    expect(guard).toContain('SET name=COALESCE(?,name), description=?, compare_at_price_cents=?,');
     expect(guard).toContain('mcp_catalog_revision=?');
     expect(guard).toContain("i.status=\\'approved\\'");
     expect(guard).toContain("i.condition_status=\\'complete\\'");
     expect(guard).toContain('price_cents');
-    expect(guard).not.toMatch(/SET active=|SET stock=|SET price_cents=/);
+    expect(guard).not.toMatch(/SET active=|SET stock=|SET price_cents=|SET slug=/);
     expect(guard).toContain('db.batch([');
     expect(guard).toContain('completed=CASE WHEN EXISTS(');
     expect(guard).toContain('ELSE -1 END');
