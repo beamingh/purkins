@@ -17,6 +17,8 @@ const uuid = () => crypto.randomUUID();
 const intakeForm = new FormData();
 intakeForm.set('pricing_mode','manual');
 intakeForm.set('brand','Little Castle');
+intakeForm.set('original_supplier_name','Supplier Vest 3-Pack');
+intakeForm.set('supplier_reference','Purchase slip 0007');
 intakeForm.set('purchase_currency','ZAR');
 intakeForm.set('purchase_cost','69.99');
 intakeForm.set('retail_tag_price','69.99');
@@ -67,7 +69,8 @@ describe('Guarded Purkins multi-variant clothing intake (isolated real D1)', () 
       '0045_purkins_mcp_write_guard.sql','0046_purkins_mcp_stock_guard.sql',
       '0047_purkins_mcp_clothing_intake.sql','0049_purkins_mcp_connections.sql',
       '0050_purkins_mcp_tool_permissions.sql',
-      '0051_purkins_mcp_variant_reconcile.sql']) await migrate(name);
+      '0051_purkins_mcp_variant_reconcile.sql',
+      '0064_purkins_supplier_provenance.sql']) await migrate(name);
   },30_000);
   afterAll(async () => { await mf?.dispose(); });
 

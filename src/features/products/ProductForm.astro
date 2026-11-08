@@ -185,7 +185,13 @@ const inputClass =
           <label class="text-sm">Brand
             <input class={inputClass} name="brand" maxlength="100" value={intake?.brand ?? ''} placeholder="Little Castle, Real Baby…" />
           </label>
-          <label class="text-sm">Supplier barcode / label code
+          <label class="text-sm sm:col-span-2">Original supplier product name (private)
+             <input class={inputClass} name="original_supplier_name" maxlength="200" value={intake?.original_supplier_name ?? ''} placeholder="Exact label printed on packaging, if known" />
+           </label>
+           <label class="text-sm sm:col-span-2">Supplier source / reference (private)
+             <input class={inputClass} name="supplier_reference" maxlength="250" value={intake?.supplier_reference ?? ''} placeholder="Supplier catalogue, invoice or purchase reference" />
+           </label>
+           <label class="text-sm">Supplier barcode / label code
             <input class={inputClass} name="supplier_barcode" maxlength="80" value={intake?.supplier_barcode ?? ''} placeholder="Preserves leading zeroes" />
           </label>
           <label class="text-sm">Size

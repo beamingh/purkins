@@ -12,6 +12,8 @@ const sha=async (data:unknown)=>{
 
 export interface DraftPatch {
   name?:string;
+  original_supplier_name?:string|null;
+  supplier_reference?:string|null;
   description?:string|null;
   price_cents?:number;
   purchase_currency?:'ZMW'|'ZAR';
@@ -38,6 +40,7 @@ type Current={
   purchase_currency:'ZMW'|'ZAR';purchase_cost_minor:number|null;zar_to_zmw:number|null;
   overhead_zwm_cents:number;pricing_mode:'manual'|'cost_based';
   condition_status:'complete'|'review'|'incomplete';brand:string|null;
+  original_supplier_name:string|null;supplier_reference:string|null;
   retail_tag_minor:number|null;retail_tag_currency:'ZMW'|'ZAR';internal_notes:string|null;
 };
 type Receipt={actor:string;payload_sha256:string;completed:number;applied_revision:number|null;product_public_id:string};
@@ -59,11 +62,16 @@ export async function editGuardedPurkinsDraft(
   const fields=Object.keys(p);
   const valid=new Set(['name','description','price_cents','purchase_currency','purchase_cost_minor',
     'zar_to_zmw','overhead_zwm_cents','pricing_mode','condition_status','brand',
-    'retail_tag_minor','retail_tag_currency','internal_notes','category_ids']);
+    'retail_tag_minor','retail_tag_currency','internal_notes',
+    'original_supplier_name','supplier_reference','category_ids']);
   if(!fields.length||fields.some(k=>!valid.has(k)))throw Error('Provide supported changes only.');
   if(p.name!==undefined&&(!p.name.trim()||p.name.length>200))throw Error('Name must be 1–200 characters.');
   if(p.description!==undefined&&p.description!==null&&p.description.length>5000)throw Error('Description too long.');
   if(p.brand!==undefined&&p.brand!==null&&p.brand.length>100)throw Error('Brand too long.');
+  if(p.original_supplier_name!==undefined&&p.original_supplier_name!==null&&
+    p.original_supplier_name.length>200)throw Error('Supplier name too long.');
+  if(p.supplier_reference!==undefined&&p.supplier_reference!==null&&
+    p.supplier_reference.length>250)throw Error('Supplier reference too long.');
   if(p.internal_notes!==undefined&&p.internal_notes!==null&&p.internal_notes.length>2000)throw Error('Notes too long.');
   if((p.price_cents!==undefined&&!money(p.price_cents))||
      (p.purchase_cost_minor!==undefined&&!money(p.purchase_cost_minor))||
@@ -93,7 +101,8 @@ export async function editGuardedPurkinsDraft(
   const row=await db.prepare('SELECT p.id,p.public_id,p.name,p.description,p.price_cents,'+
     'p.active,p.mcp_catalog_revision,i.status,i.purchase_currency,i.purchase_cost_minor,'+
     'i.zar_to_zmw,i.overhead_zwm_cents,i.pricing_mode,i.condition_status,'+
-    'i.brand,i.retail_tag_minor,i.retail_tag_currency,i.internal_notes '+
+    'i.brand,i.retail_tag_minor,i.retail_tag_currency,i.internal_notes,'+
+    'i.original_supplier_name,i.supplier_reference '+
     'FROM products p JOIN purkins_intake i ON i.product_id=p.id WHERE p.public_id=?')
     .bind(product).first<Current>();
   if(!row||row.active!==0||row.status!=='draft')return conflict('Only unpublished Purkins drafts can be edited.');
@@ -127,7 +136,8 @@ export async function editGuardedPurkinsDraft(
       p.price_cents??row.price_cents,nonce,product,input.expected_catalog_revision,key,nonce);
   const updateIntake=db.prepare('UPDATE purkins_intake SET purchase_currency=?,purchase_cost_minor=?,'+
     'zar_to_zmw=?,overhead_zwm_cents=?,pricing_mode=?,condition_status=?,'+
-    'brand=?,retail_tag_minor=?,retail_tag_currency=?,internal_notes=?,updated_at=datetime(\'now\') '+
+    'brand=?,retail_tag_minor=?,retail_tag_currency=?,internal_notes=?,'+
+    'original_supplier_name=?,supplier_reference=?,updated_at=datetime(\'now\') '+
     'WHERE product_id=(SELECT id FROM products WHERE public_id=? AND last_mcp_draft_edit_nonce=?) '+
     "AND status='draft' RETURNING product_id")
     .bind(currentPurchase,currentCost,currentRate,p.overhead_zwm_cents??row.overhead_zwm_cents,
@@ -135,6 +145,8 @@ export async function editGuardedPurkinsDraft(
       p.retail_tag_minor===undefined?row.retail_tag_minor:p.retail_tag_minor,
       p.retail_tag_currency??row.retail_tag_currency,
       p.internal_notes===undefined?row.internal_notes:p.internal_notes,
+      p.original_supplier_name===undefined?row.original_supplier_name:p.original_supplier_name,
+      p.supplier_reference===undefined?row.supplier_reference:p.supplier_reference,
       product,nonce);
   const statements=[ensure,updateProduct,updateIntake];
   if(p.category_ids!==undefined){

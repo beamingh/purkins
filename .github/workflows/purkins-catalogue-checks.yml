@@ -1,0 +1,36 @@
+name: Purkins catalogue edit safety checks
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'mcp/src/**'
+      - 'src/features/mcp/**'
+      - 'src/features/purkins/**'
+      - 'src/features/products/ProductForm.astro'
+      - 'migrations/**'
+      - '.github/workflows/purkins-catalogue-checks.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install locked application dependencies
+        run: npm ci
+      # npm ci at repository root installs the MCP workspace from the root lockfile.
+      - name: Run catalogue integration tests
+        run: npx vitest run src/features/purkins/intake.test.ts src/features/mcp/draftEdit.integration.test.ts src/features/mcp/stockGuard.integration.test.ts src/features/mcp/clothingIntake.integration.test.ts src/features/purkins/liveCopy.integration.test.ts src/features/mcp/clientScope.test.ts
+      - name: Check Astro and application types
+        run: npm run check
+      - name: Check MCP types and isolated Worker bundle
+        run: npm run mcp:check

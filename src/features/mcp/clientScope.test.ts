@@ -9,6 +9,9 @@ describe('Purkins owner client scope',()=>{
     }
     expect(MCP_OWNER_READ_TOOLS).toContain('review_purkins_draft');
     expect(MCP_OWNER_READ_TOOLS).toContain('list_purkins_stock');
+    expect(MCP_OWNER_READ_TOOLS).toContain('preview_guarded_purkins_bulk_edit');
+    expect(MCP_OWNER_READ_TOOLS).not.toContain('apply_guarded_purkins_bulk_edit');
+    expect(MCP_OWNER_READ_TOOLS).not.toContain('rename_guarded_purkins_live_product');
     expect(MCP_OWNER_READ_TOOLS).not.toContain('create_checkout');
     expect(MCP_OWNER_READ_TOOLS).not.toContain('approve_purkins_stock');
   });

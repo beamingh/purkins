@@ -14,6 +14,17 @@ const form = (values: Record<string, string | undefined>): FormData => {
   return f;
 };
 describe('Purkins private intake', () => {
+  it('preserves a private supplier product name and reference without guessing', () => {
+    const parsed = parseIntakeFields(form({
+      original_supplier_name:'  Original Little Castle Vest 3-Pack  ',
+      supplier_reference:'  Invoice INV-0007  ',
+    }));
+    if (!('data' in parsed)) throw Error(parsed.error);
+    expect(parsed.data.original_supplier_name).toBe('Original Little Castle Vest 3-Pack');
+    expect(parsed.data.supplier_reference).toBe('Invoice INV-0007');
+    expect(parseIntakeFields(form({original_supplier_name:'x'.repeat(201)}))).toHaveProperty('error');
+    expect(parseIntakeFields(form({supplier_reference:'x'.repeat(251)}))).toHaveProperty('error');
+  });
   it('generates stable item codes', () => {
     expect(generateItemSku(12)).toBe('PUR-000012');
     expect(() => generateItemSku(0)).toThrow();

@@ -31,6 +31,8 @@ const money = z.number().int().min(0).max(99_999_999_999);
 const detailsSchema = z.object({
   pricing_mode: z.enum(['manual', 'cost_based']).optional(),
   brand: z.string().max(100).nullable().optional(),
+  original_supplier_name: z.string().trim().max(200).nullable().optional(),
+  supplier_reference: z.string().trim().max(250).nullable().optional(),
   supplier_barcode: z.string().max(80).nullable().optional(),
   size_label: z.string().max(60).nullable().optional(),
   colour: z.string().max(60).nullable().optional(),
@@ -61,7 +63,7 @@ const variantSchema = z.object({
 
 function parseDetails(input: DetailsInput): IntakeFields {
   const f = new FormData();
-  for (const key of ['brand', 'supplier_barcode', 'size_label', 'colour',
+  for (const key of ['brand', 'supplier_barcode', 'original_supplier_name', 'supplier_reference', 'size_label', 'colour',
     'age_range', 'storage_location', 'condition_status', 'internal_notes',
     'purchase_currency', 'retail_tag_currency', 'pricing_mode'] as const) {
     const value = input[key];
@@ -168,13 +170,15 @@ export function registerPurkinsTools(server: McpServer, db: D1Database, allowWri
       'LEFT JOIN product_variants v ON v.product_id=p.id ' +
       'LEFT JOIN purkins_variant_identifiers vi ON vi.variant_id=v.id ' +
       'WHERE instr(lower(p.name),lower(?))>0 OR instr(lower(COALESCE(i.brand,\'\')),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(i.original_supplier_name,\'\')),lower(?))>0 ' +
+      'OR instr(lower(COALESCE(i.supplier_reference,\'\')),lower(?))>0 ' +
       'OR instr(lower(i.sku),lower(?))>0 ' +
       'OR instr(lower(COALESCE(v.sku,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(i.supplier_barcode,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(vi.supplier_barcode,\'\')),lower(?))>0 ' +
       'OR instr(lower(COALESCE(i.storage_location,\'\')),lower(?))>0 ' +
       'ORDER BY p.public_id LIMIT ?',
-    ).bind(q,q,q,q,q,q,q,limit).all<{public_id:string}>();
+    ).bind(q,q,q,q,q,q,q,q,q,limit).all<{public_id:string}>();
     const stock = await Promise.all((results ?? []).map(async (row) => {
       const product = await getProductByPublicId(db, row.public_id);
       return product ? stockView(db, product) : null;

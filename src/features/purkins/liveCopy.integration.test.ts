@@ -14,11 +14,11 @@ describe('Approved Purkins live copy updates (real isolated D1)', () => {
   let mf: Miniflare;
   let db: D1Database;
   const state = async () => db.prepare(
-    'SELECT p.active,p.price_cents,p.compare_at_price_cents,p.stock,p.description,' +
+    'SELECT p.name,p.slug,p.active,p.price_cents,p.compare_at_price_cents,p.stock,p.description,' +
     'p.mcp_catalog_revision AS revision,p.last_purkins_live_edit_nonce AS nonce,' +
     'i.status FROM products p JOIN purkins_intake i ON i.product_id=p.id WHERE p.public_id=?',
   ).bind(product).first<{
-    active: number; price_cents: number; compare_at_price_cents: number | null;
+    name: string; slug: string; active: number; price_cents: number; compare_at_price_cents: number | null;
     stock: number; description: string | null; revision: number;
     nonce: string | null; status: string;
   }>();
@@ -109,6 +109,27 @@ describe('Approved Purkins live copy updates (real isolated D1)', () => {
     expect(await applyGuardedLiveCopy(db, actor,
       { ...input, description: 'Different attempt' }, purge))
       .toMatchObject({ ok: false });
+  });
+
+  it('renames an approved listing but preserves slug, selling price, stock and approval', async () => {
+    const before = (await state())!;
+    const purge = vi.fn(async () => {});
+    const input = {
+      product_id: product, request_id: requestId(), expected_catalog_revision: before.revision,
+      name: 'Purkins TY-899 Double Bottle Warmer',
+      description: before.description, compare_at_price_cents: before.compare_at_price_cents,
+    };
+    expect(await applyGuardedLiveCopy(db, actor, input, purge)).toMatchObject({ok:true,cache_purged:true});
+    expect(await state()).toMatchObject({
+      name: 'Purkins TY-899 Double Bottle Warmer', slug:before.slug,
+      price_cents:before.price_cents, stock:before.stock, active:1, status:'approved',
+    });
+    expect(await applyGuardedLiveCopy(db, actor, input, purge)).toMatchObject({ok:true,replayed:true});
+    expect(purge).toHaveBeenCalledTimes(1);
+    expect(await applyGuardedLiveCopy(db, actor, {
+      ...input, request_id:requestId(), expected_catalog_revision:(await state())!.revision,
+      name:'  ',
+    }, purge)).toMatchObject({ok:false});
   });
 
   it('rejects stale revisions and never revokes approval', async () => {
