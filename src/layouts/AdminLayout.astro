@@ -17,6 +17,7 @@ type Section =
   | 'customers'
   | 'categories'
   | 'media'
+  | 'creative'
   | 'pages'
   | 'navigation'
   | 'shipping'
@@ -57,6 +58,7 @@ const nav: { key: Section; label: string; href: string }[] = [
   { key: 'navigation', label: 'Navigation', href: '/admin/navigation' },
   { key: 'shipping', label: 'Shipping', href: '/admin/shipping' },
   { key: 'media', label: 'Media', href: '/admin/media' },
+  { key: 'creative', label: 'Creative Standards', href: '/admin/creative-standards' },
   { key: 'mcp', label: 'MCP connections', href: '/admin/mcp' },
   { key: 'settings', label: 'Settings', href: '/admin/settings' },
 ];
