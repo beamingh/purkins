@@ -13,16 +13,19 @@ import type { StorefrontImage } from '../models';
 interface Props {
   image: StorefrontImage;
   class?: string;
+  /** Intrinsic size hint. Other themes keep the square default. */
+  width?: number;
+  height?: number;
   /** Fade the bitmap over its frame once loaded. Ignored for priority images. */
   fade?: boolean;
 }
 
-const { image, class: className = '', fade = false } = Astro.props;
+const { image, class: className = '', fade = false, width = 600, height = 600 } = Astro.props;
 ---
 
-{/* width/height are a square (1:1) aspect hint to reserve space (no CLS) — the
-    actual display size comes from `class`. All product images + the placeholder
-    are square; object-cover crops anything that isn't.
+{/* Intrinsic dimensions reserve the right aspect ratio before the image loads.
+    Other themes default to square, while Purkins can supply a 4:5 hint.
+    The visual fit and shape are controlled by each theme's CSS classes.
 
     A priority image never fades: `priority` marks the likely LCP element and asks
     the browser to fetch it first, but an opacity:0 element isn't a valid LCP
@@ -34,8 +37,8 @@ const { image, class: className = '', fade = false } = Astro.props;
   srcset={image.srcset}
   alt={image.alt}
   class={className}
-  width="600"
-  height="600"
+  width={width}
+  height={height}
   loading={image.priority ? 'eager' : 'lazy'}
   fetchpriority={image.priority ? 'high' : 'auto'}
   decoding="async"
