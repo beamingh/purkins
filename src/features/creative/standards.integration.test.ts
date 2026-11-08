@@ -70,6 +70,9 @@ describe('creative standards in real isolated D1',()=>{
     expect(effective.rules).toMatchObject({aspect_ratio:'4:5',target_width:1080,
       background:'Category background',accuracy_notes:expect.stringContaining('YOU ARE MY SUNSHINE')});
     expect(effective.preferred_preset).toBe('feature-composite');
+    expect(effective.rules.instructions).toContain('Use 4:5 portrait photographs');
+    expect(effective.rules.instructions).toContain('Combine authentic views');
+    expect(effective.rules.required_shots).toContain('Primary full product');
     expect(effective.sources.map(s=>s.scope)).toEqual(['global','preset','category','product']);
     expect(effective.reference_images).toMatchObject([{
       id:approved,image_url:'https://purkins.ulwimbo.com/images/media/example.png',
