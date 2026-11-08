@@ -17,6 +17,8 @@ const uuid = () => crypto.randomUUID();
 const intakeForm = new FormData();
 intakeForm.set('pricing_mode','manual');
 intakeForm.set('brand','Little Castle');
+intakeForm.set('original_supplier_name','Supplier Vest 3-Pack');
+intakeForm.set('supplier_reference','Purchase slip 0007');
 intakeForm.set('purchase_currency','ZAR');
 intakeForm.set('purchase_cost','69.99');
 intakeForm.set('retail_tag_price','69.99');

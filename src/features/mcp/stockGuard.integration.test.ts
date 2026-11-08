@@ -63,13 +63,16 @@ describe('Private MCP stock writes against real isolated D1', () => {
   afterAll(async () => { await mf?.dispose(); });
 
   it('creates a private draft and intake in one batch, then replays without duplication', async () => {
-    const key=uuid(), input=draft('Safe Draft Bottle Warmer',key);
+    const key=uuid(), input={...draft('Safe Draft Bottle Warmer',key),
+      intake:{...intake,original_supplier_name:'Supplier Pack Name',supplier_reference:'INV-010'}};
     const result=await createGuardedStockDraft(db,actor,input);
     expect(result).toMatchObject({ok:true,stock:5,revision:0,replayed:false});
     if(!result.ok) return;
     const product=await getProductByPublicId(db,result.id);
     expect(product).toMatchObject({active:0,stock:5,price_cents:95000,currency:'zmw'});
-    expect((await getIntake(db,product!.id))?.status).toBe('draft');
+    expect(await getIntake(db,product!.id)).toMatchObject({
+      status:'draft',original_supplier_name:'Supplier Pack Name',supplier_reference:'INV-010',
+    });
     const receipt=await db.prepare(
       'SELECT action,actor,outcome,after_stock,payload_sha256 FROM purkins_mcp_stock_mutations WHERE request_id=?',
     ).bind(key).first<{action:string;actor:string;outcome:string;after_stock:number;payload_sha256:string}>();
