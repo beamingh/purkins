@@ -93,14 +93,17 @@ export async function insertIntake(
     `INSERT INTO purkins_intake
       (product_id, sku, size_label, colour, age_range, storage_location,
        purchase_currency, purchase_cost_minor, zar_to_zmw, overhead_zwm_cents,
-       markup_percent, brand, supplier_barcode, retail_tag_minor, retail_tag_currency,
+       markup_percent, brand, supplier_barcode, original_supplier_name, supplier_reference,
+       retail_tag_minor, retail_tag_currency,
        pack_count, condition_status, internal_notes, pricing_mode, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft')`,
   ).bind(
     productId, sku, fields.size_label, fields.colour, fields.age_range, fields.storage_location,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
     fields.overhead_zwm_cents, fields.markup_percent,
-    fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
+    fields.brand ?? null, fields.supplier_barcode ?? null,
+    fields.original_supplier_name ?? null, fields.supplier_reference ?? null,
+    fields.retail_tag_minor ?? null,
     fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
     fields.condition_status ?? 'complete', fields.internal_notes ?? null,
     fields.pricing_mode ?? 'cost_based',
@@ -138,7 +141,8 @@ export async function saveIntakeDraft(
     `UPDATE purkins_intake
       SET size_label=?, colour=?, age_range=?, storage_location=?, location_id=?, purchase_currency=?,
           purchase_cost_minor=?, zar_to_zmw=?, overhead_zwm_cents=?, markup_percent=?,
-          brand=?, supplier_barcode=?, retail_tag_minor=?, retail_tag_currency=?,
+          brand=?, supplier_barcode=?, original_supplier_name=?, supplier_reference=?,
+          retail_tag_minor=?, retail_tag_currency=?,
           pack_count=?, condition_status=?, internal_notes=?, pricing_mode=?,
           status='draft', updated_at=datetime('now')
       WHERE product_id=?`,
@@ -146,7 +150,9 @@ export async function saveIntakeDraft(
     fields.size_label, fields.colour, fields.age_range, fields.storage_location, nextLocationId,
     fields.purchase_currency, fields.purchase_cost_minor, fields.zar_to_zmw,
     fields.overhead_zwm_cents, fields.markup_percent,
-    fields.brand ?? null, fields.supplier_barcode ?? null, fields.retail_tag_minor ?? null,
+    fields.brand ?? null, fields.supplier_barcode ?? null,
+    fields.original_supplier_name ?? null, fields.supplier_reference ?? null,
+    fields.retail_tag_minor ?? null,
     fields.retail_tag_currency ?? 'ZAR', fields.pack_count ?? null,
     fields.condition_status ?? 'complete', fields.internal_notes ?? null,
     fields.pricing_mode ?? 'cost_based', productId,

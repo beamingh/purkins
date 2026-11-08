@@ -21,6 +21,10 @@ export interface IntakeFields {
   overhead_zwm_cents: number;
   markup_percent: number | null;
   brand?: string | null;
+  /** Private exact supplier/packaging name, independent of the selling title. */
+  original_supplier_name?: string | null;
+  /** Private supplier catalogue, invoice, or sourcing reference. */
+  supplier_reference?: string | null;
   supplier_barcode?: string | null;
   retail_tag_minor?: number | null;
   retail_tag_currency?: PurchaseCurrency;
@@ -141,6 +145,8 @@ export function parseIntakeFields(form: FormData): { data: IntakeFields } | { er
     return { data: {
       pricing_mode,
       brand: optionalText(form, 'brand', 100),
+      original_supplier_name: optionalText(form, 'original_supplier_name', 200),
+      supplier_reference: optionalText(form, 'supplier_reference', 250),
       supplier_barcode: normalizeSupplierBarcode(read(form, 'supplier_barcode')),
       retail_tag_minor: currencyAmount(read(form, 'retail_tag_price'), 'Supplier price tag'),
       retail_tag_currency: tagCurrency,
