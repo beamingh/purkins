@@ -267,7 +267,16 @@ export async function effectiveCreativeRule(
     domain:args.domain,scope:'preset',target_id:preferred,
   }):null;
   const layered=[global,preset,...categories,product].filter((r):r is CreativeRow=>!!r&&r.active===1);
-  const rules=layered.reduce<CreativeConfig>((acc,r)=>({...acc,...ruleConfig(r)}),{});
+  // Structured choices obey last-writer precedence; composition instructions
+  // and required shots accumulate so a preset never erases global fidelity rules.
+  const rules=layered.reduce<CreativeConfig>((acc,r)=>{
+    const next=ruleConfig(r);
+    return {
+      ...acc,...next,
+      ...(next.instructions?{instructions:[acc.instructions,next.instructions].filter(Boolean).join('\n\n')}:{}),
+      ...(next.required_shots?{required_shots:[...new Set([...(acc.required_shots??[]),...next.required_shots])]}:{}),
+    };
+  },{});
   const references=[...new Set(layered.flatMap(r=>ruleReferences(r)))];
   return {domain:args.domain,preferred_preset:preferred||null,rules,
     sources:layered.map(r=>({scope:r.scope,target_id:r.target_id,revision:r.revision,updated_at:r.updated_at})),
