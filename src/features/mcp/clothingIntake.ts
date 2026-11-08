@@ -217,15 +217,18 @@ export async function createGuardedClothingDraft(
     'product_id','sku','size_label','colour','age_range','storage_location',
     'location_id','purchase_currency','purchase_cost_minor','zar_to_zmw',
     'overhead_zwm_cents','markup_percent','brand','supplier_barcode',
+    'original_supplier_name','supplier_reference',
     'retail_tag_minor','retail_tag_currency','pack_count','condition_status',
     'internal_notes','pricing_mode','status',
   ];
   const expressions = ["p.id","printf('PUR-%06d',p.id)",'?','?','?','NULL',
     '?','?','?','?','?','?','?','?','?','?','?','?','?','?',"'draft'"];
+  expressions.splice(expressions.length - 1, 0, '?', '?');
   const values = [
     f.size_label,f.colour,f.age_range,item.location_id,f.purchase_currency,
     f.purchase_cost_minor,f.zar_to_zmw,f.overhead_zwm_cents,f.markup_percent,
-    f.brand ?? null,f.supplier_barcode ?? null,f.retail_tag_minor ?? null,
+    f.brand ?? null,f.supplier_barcode ?? null,
+    f.original_supplier_name ?? null,f.supplier_reference ?? null,f.retail_tag_minor ?? null,
     f.retail_tag_currency ?? 'ZAR',f.pack_count ?? null,f.condition_status ?? 'review',
     f.internal_notes ?? null,f.pricing_mode ?? 'manual',
   ];

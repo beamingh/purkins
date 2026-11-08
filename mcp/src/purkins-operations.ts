@@ -11,6 +11,8 @@ const reply=(value:unknown)=>({content:[{type:'text' as const,text:JSON.stringif
 const cents=z.number().int().min(0).max(99_999_999_999);
 const patch=z.object({
   name:z.string().trim().min(1).max(200).optional(),
+  original_supplier_name:z.string().trim().max(200).nullable().optional(),
+  supplier_reference:z.string().trim().max(250).nullable().optional(),
   description:z.string().max(5000).nullable().optional(),
   price_cents:cents.optional(),
   purchase_currency:z.enum(['ZMW','ZAR']).optional(),
