@@ -1,10 +1,25 @@
 # Purkins — source integration and live release register
 
-**Updated:** 26 October 2026. **Active base:** `main`.
+**Updated:** 9 November 2026. **Active base:** `main`.
 
 **Architecture:** Astro/Minshop storefront, Cloudflare public and protected Admin+MCP Workers, a single permanent D1 database, R2 media. Payload CMS/Next.js branch is discontinued.
 
-## Source status — verified against GitHub
+## Latest audit: 9 November 2026
+
+**GitHub inventory:** 51 remote branches, 49 total PRs (**2 open, 42 merged, 5 deliberately closed without direct merge**). The only open pull requests are:
+
+- [PR #56](https://github.com/beamingh/purkins/pull/56): Purkins 4:5 product-card and gallery frames. Checks passed; not merged or deployed.
+- [PR #57](https://github.com/beamingh/purkins/pull/57): MCP-first Rules & Standards with default/custom categories, Admin alternative, history, guarded owner MCP writes. Checks passed; draft, not merged or deployed. Migration `0065_purkins_rules_and_standards.sql` must precede deployment.
+
+**Closed without direct merge:** PR #1 Payload CMS remains deliberately discontinued; PR #11 operator MCP was superseded by merged PR #12; PRs #29, #30 and #31 were consolidated into merged PR #32, whose features are visible in `main` (private draft preview, variant reconciliation, guarded publication and migrations 0051–0052). Do not merge obsolete closed branches again.
+
+**Unpaired historical branches:** `feat/minshop-foundation` and `feat/purkins-inventory` are documented ancestors superseded by PR #2. Their comparison with current `main` has only a short historical `PURKINS.md` edit, not a missing implementation. `fix/purkins-local-test-contracts` has five test file differences by commit ancestry, but the current contents of all five files are byte-for-byte identical to `main`, so no patch is missing.
+
+**Interpretation:** No currently open GitHub PR has been forgotten. Old branches are preserved as history, not a merge queue. This audit concerns **pushed GitHub history only**; unpushed or uncommitted changes in the Windows working tree cannot be verified remotely. Do not delete old branches or merge the Payload branch as part of a clean-up.
+
+**Release order:** Review and integrate PR #56 and PR #57 together on a temporary integration branch, verify both isolated Workers, then merge reviewed PRs to `main`. Apply migration 0065 and deploy separately under the existing explicit production confirmation gates. Existing owner MCP tokens require permissions for newly registered tools and the rules-write gate must be intentionally enabled.
+
+## Historical source status — verified on 26 October 2026
 
 At the 26 October integration audit, no open PRs remained after PR #37. The next backend cache-coherence fix is PR #38 (open pending tests). There are many old source branches; an `ahead_by` count on a branch that was **squash-merged** does not mean its changes are missing from `main`. Compare PR integration history, current content and behavior before reviving a branch.
 
