@@ -13,7 +13,7 @@ export function emptyUsage(): MediaUsage {
 }
 
 export function isUnused(usage: MediaUsage): boolean {
-  return usage.products.length === 0 && usage.pages.length === 0 && !usage.logo && usage.creative.length === 0;
+  return usage.products.length === 0 && usage.pages.length === 0 && !usage.logo && usage.rules.length === 0;
 }
 
 /**
@@ -59,7 +59,7 @@ export async function mediaUsageForIds(
   if (ids.length === 0) return usage;
 
   const placeholders = ids.map(() => '?').join(', ');
-  const [products, pages, logo, creative] = await db.batch<Record<string, unknown>>([
+  const [products, pages, logo, attachedRules] = await db.batch<Record<string, unknown>>([
     db.prepare(PRODUCT_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare(PAGE_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare("SELECT value FROM settings WHERE key = 'logo_image_key'"),
@@ -91,7 +91,7 @@ export async function mediaUsageForIds(
       ?.pages.push({ id: row.page_id, public_id: row.page_public_id, title: row.page_title });
   }
 
-  for (const row of (creative.results ?? []) as Array<{media_id:number;category_slug:string;rule_slug:string;scope:string;target_id:string}>) {
+  for (const row of (attachedRules.results ?? []) as Array<{media_id:number;category_slug:string;rule_slug:string;scope:string;target_id:string}>) {
     usage.get(row.media_id)?.rules.push({category_slug:row.category_slug,rule_slug:row.rule_slug,scope:row.scope,target_id:row.target_id});
   }
   const logoKey = ((logo.results ?? []) as Array<{ value: string }>)[0]?.value;
@@ -180,6 +180,6 @@ export function describeUsage(usage: MediaUsage): string {
     );
   }
   if (usage.logo) parts.push('the store logo');
-  if (usage.creative.length) parts.push(`${usage.creative.length} creative standard reference(s)`);
+  if (usage.rules.length) parts.push(`${usage.rules.length} saved rule reference(s)`);
   return parts.join(' and ');
 }
