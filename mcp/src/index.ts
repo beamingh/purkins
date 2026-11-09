@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { McpAgent } from 'agents/mcp';
 import { registerPurkinsTools, registerGuardedPurkinsStockTools, registerGuardedClothingIntakeTools, registerGuardedVariantReconcileTools } from './purkins';
 import { registerPurkinsMediaTools } from './purkins-media';
-import { registerCreativeStandardsTools } from './creative';
+import { registerPurkinsRuleTools } from './rules';
 import { registerGuardedPurkinsGalleryTools } from './purkins-gallery';
 import { registerLocationTools } from './locations';
 import { registerGuardedPublicationTools } from './purkins-publication';
@@ -356,7 +356,7 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
       PURKINS_MCP_SALES_WRITES_ENABLED?: string;
       PURKINS_MCP_DISPATCH_WRITES_ENABLED?: string;
       PURKINS_MCP_MEDIA_UPLOADS_ENABLED?: string;
-      PURKINS_MCP_CREATIVE_WRITES_ENABLED?: string;
+      PURKINS_MCP_RULE_WRITES_ENABLED?: string;
       PURKINS_MCP_LIVE_EDIT_WRITES_ENABLED?: string;
       PURKINS_MCP_CACHE_PURGE_SECRET?: string;
     };
@@ -404,9 +404,9 @@ export class StoreMcp extends McpAgent<Env, Record<string, never>, SessionProps>
     registerGuardedPublicationTools(scopedServer, db, allowPublicationWrites,
       this.props.actor, publicationCachePurge);
     registerCategoryTools(scopedServer, db);
-    registerCreativeStandardsTools(
+    registerPurkinsRuleTools(
       scopedServer, db, this.env.STOREFRONT_URL,
-      allowWrites && writeEnv.PURKINS_MCP_CREATIVE_WRITES_ENABLED === 'true' &&
+      allowWrites && writeEnv.PURKINS_MCP_RULE_WRITES_ENABLED === 'true' &&
         Boolean(this.props.actor),
       this.props.actor,
     );
