@@ -2,8 +2,9 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { D1Database } from '@cloudflare/workers-types';
 import {
-  RULE_KINDS,RULE_SCOPES,listRuleCategories,createRuleCategory,
-  listRules,normalizeRuleKey,getRule,getRuleVersions,ruleConfig,ruleReferences,
+  RULE_KINDS,RULE_SCOPES,listRuleCategories,getRuleCategory,getRuleCategoryVersions,
+  getRuleCategoryVersion,createRuleCategory,updateRuleCategory,
+  listRules,normalizeRuleKey,getRule,getRuleVersions,getRuleVersion,ruleConfig,ruleReferences,
   referencePhotos,effectiveRule,listEffectiveRules,saveRule,
 } from '../../src/features/rules/standards';
 
@@ -55,6 +56,24 @@ export function registerPurkinsRuleTools(
   },async({include_inactive})=>reply({
     categories:await listRuleCategories(db,include_inactive),
   }));
+
+  server.registerTool('get_purkins_rule_category',{
+    description:'Read one category including its revision, built-in/custom status, editable name, group, description and active state.',
+    inputSchema:{slug},
+  },async({slug:categorySlug})=>{
+    try{
+      const category=await getRuleCategory(db,categorySlug);
+      return reply(category?{exists:true,category}:{exists:false,slug:categorySlug});
+    }catch(e){return reply({error:e instanceof Error?e.message:'Cannot read category.'});}
+  });
+
+  server.registerTool('get_purkins_rule_category_history',{
+    description:'Read category revision history so MCP can review and restore past category names, descriptions and status.',
+    inputSchema:{slug,limit:z.number().int().min(1).max(50).default(20)},
+  },async({slug:categorySlug,limit})=>{
+    try{return reply({slug:categorySlug,versions:await getRuleCategoryVersions(db,categorySlug,limit)});}
+    catch(e){return reply({error:e instanceof Error?e.message:'Cannot read category history.'});}
+  });
 
   server.registerTool('list_purkins_rules',{
     description:'Read rules stored in the Purkins rule registry, optionally filtered by category and rule slug. Includes scopes, versions, current instructions and approved media IDs.',
@@ -129,6 +148,24 @@ export function registerPurkinsRuleTools(
     }catch(e){return reply({error:e instanceof Error?e.message:'Rule save refused.'});}
   });
 
+  server.registerTool('restore_guarded_purkins_rule',{
+    description:'Restore a previous rule revision as a NEW revision. Owner-only; requires individual token permission, global+rules write flags, actor, expected current revision and idempotency UUID.',
+    inputSchema:{...ruleKey,restore_revision:z.number().int().min(1),
+      expected_revision:z.number().int().min(1),request_id:z.string().uuid()},
+  },async(input)=>{
+    if(!allowWrites||!actor)return reply({error:'Rule editing is disabled for this owner connection.'});
+    try{
+      const key=normalizeRuleKey(input.category_slug,input.rule_slug,input.scope,input.target_id);
+      const old=await getRuleVersion(db,key,input.restore_revision);
+      if(!old)return reply({error:'Requested history revision does not exist.'});
+      const saved=await saveRule(db,{...key,request_id:input.request_id,actor,
+        expected_revision:input.expected_revision,active:old.active===1,
+        rules:ruleConfig(old),reference_ids:ruleReferences(old)});
+      return reply({restored:true,restored_from:input.restore_revision,new_revision:saved.revision,
+        key,product_published:false});
+    }catch(e){return reply({error:e instanceof Error?e.message:'Rule restore refused.'});}
+  });
+
   server.registerTool('create_guarded_purkins_rule_category',{
     description:'Owner-only creation of a new rules category, guarded by the dedicated rule-write switch, authenticated actor and idempotency UUID.',
     inputSchema:{slug,name:z.string().min(2).max(100),group_name:z.string().min(2).max(100),
@@ -140,4 +177,33 @@ export function registerPurkinsRuleTools(
       return reply({created:true,category});
     }catch(e){return reply({error:e instanceof Error?e.message:'Category creation refused.'});}
   });
+  server.registerTool('update_guarded_purkins_rule_category',{
+    description:'Edit a built-in or custom category name, group, description or active status via MCP, with current revision + UUID idempotency and owner rule-write gate. Stable category slug never changes.',
+    inputSchema:{slug,name:z.string().min(2).max(100),
+      group_name:z.string().min(2).max(100),description:z.string().max(600).default(''),
+      active:z.boolean(),expected_revision:z.number().int().min(1),request_id:z.string().uuid()},
+  },async(input)=>{
+    if(!allowWrites||!actor)return reply({error:'Category editing is disabled for this owner connection.'});
+    try{
+      const category=await updateRuleCategory(db,{...input,actor});
+      return reply({saved:true,category,changed_rule_data:false});
+    }catch(e){return reply({error:e instanceof Error?e.message:'Category edit refused.'});}
+  });
+
+  server.registerTool('restore_guarded_purkins_rule_category',{
+    description:'Restore a previous category snapshot as a NEW category revision. Owner-only gated edit with current expected revision and request UUID.',
+    inputSchema:{slug,restore_revision:z.number().int().min(1),
+      expected_revision:z.number().int().min(1),request_id:z.string().uuid()},
+  },async(input)=>{
+    if(!allowWrites||!actor)return reply({error:'Category editing is disabled for this owner connection.'});
+    try{
+      const old=await getRuleCategoryVersion(db,input.slug,input.restore_revision);
+      if(!old)return reply({error:'Requested category history revision does not exist.'});
+      const category=await updateRuleCategory(db,{slug:input.slug,
+        name:old.name,group_name:old.group_name,description:old.description,active:old.active===1,
+        request_id:input.request_id,expected_revision:input.expected_revision,actor});
+      return reply({restored:true,restored_from:input.restore_revision,category});
+    }catch(e){return reply({error:e instanceof Error?e.message:'Category restore refused.'});}
+  });
+
 }
