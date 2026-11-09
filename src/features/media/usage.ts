@@ -5,11 +5,11 @@ export interface MediaUsage {
   products: Array<{ id: number; public_id: string | null; name: string }>;
   pages: Array<{ id: number; public_id: string | null; title: string }>;
   logo: boolean;
-  creative: Array<{domain:string;scope:string;target_id:string}>;
+  rules: Array<{category_slug:string;rule_slug:string;scope:string;target_id:string}>;
 }
 
 export function emptyUsage(): MediaUsage {
-  return { products: [], pages: [], logo: false, creative: [] };
+  return { products: [], pages: [], logo: false, rules: [] };
 }
 
 export function isUnused(usage: MediaUsage): boolean {
@@ -63,8 +63,8 @@ export async function mediaUsageForIds(
     db.prepare(PRODUCT_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare(PAGE_USAGE_SQL.replace('%IDS%', placeholders)).bind(...ids),
     db.prepare("SELECT value FROM settings WHERE key = 'logo_image_key'"),
-    db.prepare(`SELECT media.id AS media_id, cs.domain, cs.scope, cs.target_id
-      FROM purkins_creative_standards cs
+    db.prepare(`SELECT media.id AS media_id, cs.category_slug, cs.rule_slug, cs.scope, cs.target_id
+      FROM purkins_rules cs
       JOIN json_each(cs.reference_ids) refs
       JOIN media ON media.public_id=refs.value
       WHERE media.id IN (${placeholders})`).bind(...ids),
@@ -91,8 +91,8 @@ export async function mediaUsageForIds(
       ?.pages.push({ id: row.page_id, public_id: row.page_public_id, title: row.page_title });
   }
 
-  for (const row of (creative.results ?? []) as Array<{media_id:number;domain:string;scope:string;target_id:string}>) {
-    usage.get(row.media_id)?.creative.push({domain:row.domain,scope:row.scope,target_id:row.target_id});
+  for (const row of (creative.results ?? []) as Array<{media_id:number;category_slug:string;rule_slug:string;scope:string;target_id:string}>) {
+    usage.get(row.media_id)?.rules.push({category_slug:row.category_slug,rule_slug:row.rule_slug,scope:row.scope,target_id:row.target_id});
   }
   const logoKey = ((logo.results ?? []) as Array<{ value: string }>)[0]?.value;
   if (logoKey) {
@@ -117,7 +117,7 @@ export async function mediaUsage(db: D1Database, id: number): Promise<MediaUsage
 export interface UsageLink {
   href: string;
   label: string;
-  kind: 'product' | 'page' | 'logo' | 'creative';
+  kind: 'product' | 'page' | 'logo' | 'rule';
   /** Tooltip. Per-kind rather than templated: "the logo that uses this image"
    *  reads wrong, because the logo IS the use rather than a thing having one. */
   title: string;
@@ -142,11 +142,11 @@ export function usageLinks(usage: MediaUsage): UsageLink[] {
       kind: 'page' as const,
       title: `Edit the ${p.title} page`,
     })),
-    ...usage.creative.map(c => ({
-      href: `/admin/creative-standards?domain=${encodeURIComponent(c.domain)}&scope=${encodeURIComponent(c.scope)}&target_id=${encodeURIComponent(c.target_id)}`,
-      label: `Creative ${c.domain} (${c.scope})`,
-      kind: 'creative' as const,
-      title: 'Edit the approved Creative Standards reference',
+    ...usage.rules.map(c => ({
+      href: `/admin/rules?category=${encodeURIComponent(c.category_slug)}&rule=${encodeURIComponent(c.rule_slug)}&scope=${encodeURIComponent(c.scope)}&target_id=${encodeURIComponent(c.target_id)}`,
+      label: `Rule ${c.rule_slug} (${c.scope})`,
+      kind: 'rule' as const,
+      title: 'Edit the referenced business rule',
     })),
     // The logo is a setting, not a row, so it links to where it is chosen.
     ...(usage.logo
