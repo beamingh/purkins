@@ -139,7 +139,7 @@ export async function deleteMediaRecord(
              WHERE settings.key = 'logo_image_key' AND settings.value = media.image_key
           )
           AND NOT EXISTS (
-            SELECT 1 FROM purkins_creative_standards cs
+            SELECT 1 FROM purkins_rules cs
             JOIN json_each(cs.reference_ids) refs ON refs.value = media.public_id
           )
         RETURNING image_key`,
