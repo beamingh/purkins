@@ -1,0 +1,12 @@
+---
+// Legacy Admin link from the original Creative Standards proposal.
+// Business rules now share a single registry under /admin/rules.
+const query = new URLSearchParams(Astro.url.searchParams);
+const domain = query.get('domain');
+if (domain) {
+  query.delete('domain');
+  query.set('category', domain);
+  query.set('rule', domain === 'photography' ? 'product-photography' : 'general');
+}
+return Astro.redirect('/admin/rules' + (query.size ? '?' + query.toString() : ''), 302);
+---

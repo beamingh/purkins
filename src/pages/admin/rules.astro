@@ -1,0 +1,367 @@
+---
+import { env } from 'cloudflare:workers';
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import MediaPicker from '../../features/media/MediaPicker.astro';
+import { listCategories as listProductCategories } from '../../features/categories/db';
+import { getConfig } from '../../config';
+import {
+  RULE_SCOPES,RULE_KINDS,normalizeRuleKey,getRule,getRuleVersions,getRuleVersion,
+  getRuleCategory,listRuleCategories,createRuleCategory,updateRuleCategory,getRuleCategoryVersions,getRuleCategoryVersion,listRules,
+  saveRule,ruleConfig,ruleReferences,referencePhotos,effectiveRule,
+  type RuleConfig,
+} from '../../features/rules/standards';
+
+const params=Astro.url.searchParams;
+let category=params.get('category')||'photography';
+let rule=params.get('rule')||'product-photography';
+let scope=params.get('scope')||'global';
+let target=params.get('target_id')||'';
+let error='';
+const success=params.get('saved');
+const page='/admin/rules';
+const back=(values:Record<string,string>)=>page+'?'+new URLSearchParams(values).toString();
+const selected=()=>({category,rule,scope,target_id:target});
+const photoOrigin=(env as typeof env & {STOREFRONT_URL?:string}).STOREFRONT_URL||Astro.url.origin;
+
+if(Astro.request.method==='POST'){
+  const form=await Astro.request.formData();
+  const action=String(form.get('_action')??'save');
+  category=String(form.get('category')??'photography').trim();
+  rule=String(form.get('rule')??'product-photography').trim();
+  scope=String(form.get('scope')??'global').trim();
+  target=String(form.get('target_id')??'').trim();
+  try {
+    if(action==='create-category'){
+      const slug=String(form.get('new_slug')??'').trim();
+      await createRuleCategory(env.DB,{
+        slug,name:String(form.get('new_name')??'').trim(),
+        group_name:String(form.get('new_group')??'Custom').trim(),
+        description:String(form.get('new_description')??'').trim(),
+        request_id:crypto.randomUUID(),actor:'admin:rules',
+      });
+      return Astro.redirect(back({category:slug,rule:'general',scope:'global',saved:'category-created'}),303);
+    }
+    if(action==='edit-category'||action==='restore-category'){
+      const expected_revision=Number(form.get('edit_revision'));
+      if(!Number.isInteger(expected_revision)||expected_revision<1)
+        throw new Error('Reload the current category revision.');
+      let fields;
+      if(action==='restore-category'){
+        const previous=await getRuleCategoryVersion(env.DB,category,Number(form.get('restore_category_revision')));
+        if(!previous)throw new Error('Historical category version not found.');
+        fields={name:previous.name,group_name:previous.group_name,
+          description:previous.description,active:previous.active===1};
+      }else{
+        fields={name:String(form.get('edit_name')??''),
+          group_name:String(form.get('edit_group')??''),
+          description:String(form.get('edit_description')??''),
+          active:form.get('edit_active')==='on'};
+      }
+      await updateRuleCategory(env.DB,{slug:category,...fields,
+        actor:'admin:rules',request_id:crypto.randomUUID(),expected_revision});
+      return Astro.redirect(back({...selected(),saved:action==='restore-category'?'category-restored':'category-updated'}),303);
+    }
+    const key=normalizeRuleKey(category,rule,scope,target);
+    const currentRevision=Number(form.get('expected_revision')??0);
+    if(!Number.isInteger(currentRevision)||currentRevision<0)throw new Error('Reload the current rule revision.');
+    let rules:RuleConfig;
+    let reference_ids:string[];
+    let active:boolean;
+    if(action==='restore'){
+      const revision=Number(form.get('restore_revision'));
+      if(!Number.isInteger(revision)||revision<1)throw new Error('Choose a valid revision.');
+      const history=await getRuleVersion(env.DB,key,revision);
+      if(!history)throw new Error('Historical version not found.');
+      rules=ruleConfig(history);
+      reference_ids=ruleReferences(history);
+      active=history.active===1;
+    }else if(action==='save'){
+      const f=(name:string)=>String(form.get(name)??'').trim();
+      rules={};
+      for(const field of ['title','instructions','criteria','aspect_ratio','background',
+        'accuracy_notes','preferred_preset'] as const){
+        const v=f(field);if(v)rules[field]=v;
+      }
+      const kind=f('kind');
+      if(kind)rules.kind=kind as RuleConfig['kind'];
+      for(const field of ['target_width','target_height'] as const){
+        const v=f(field);if(v)rules[field]=Number(v);
+      }
+      const composite=f('composite_allowed');
+      if(composite==='yes')rules.composite_allowed=true;
+      if(composite==='no')rules.composite_allowed=false;
+      for(const field of ['required_shots','actions','tags'] as const){
+        const values=f(field).split('\n').map(v=>v.trim()).filter(Boolean);
+        if(values.length)rules[field]=values;
+      }
+      const structured=f('fields');
+      if(structured){
+        try{rules.fields=JSON.parse(structured) as RuleConfig['fields'];}
+        catch {throw new Error('Structured fields must be valid JSON.');}
+      }
+      reference_ids=f('reference_ids').split(/[\s,]+/).filter(Boolean);
+      active=form.get('active')==='on';
+    }else throw new Error('Unknown rules action.');
+    await saveRule(env.DB,{...key,rules,reference_ids,active,
+      actor:'admin:rules',request_id:crypto.randomUUID(),expected_revision:currentRevision});
+    return Astro.redirect(back({...selected(),saved:action==='restore'?'restored':'rule-updated'}),303);
+  }catch(e){error=e instanceof Error?e.message:'The changes were not saved.';}
+}
+
+const categories=await listRuleCategories(env.DB,true);
+if(!categories.some(c=>c.slug===category)){
+  error||='Choose an existing rule category.';
+  category=categories[0]?.slug??'photography';
+  rule='product-photography';scope='global';target='';
+}
+let key;
+try {key=normalizeRuleKey(category,rule,scope,target);}
+catch(e){
+  error||=e instanceof Error?e.message:'Invalid rule selection.';
+  rule=category==='photography'?'product-photography':'general';scope='global';target='';
+  key=normalizeRuleKey(category,rule,scope,target);
+}
+const chosen=categories.find(c=>c.slug===category);
+const categoryVersions=chosen?await getRuleCategoryVersions(env.DB,chosen.slug,10):[];
+const [current,versions,related,productCategories,products]=await Promise.all([
+  getRule(env.DB,key),getRuleVersions(env.DB,key),listRules(env.DB,{category_slug:category,limit:300}),
+  listProductCategories(env.DB),
+  env.DB.prepare('SELECT public_id,name FROM products WHERE public_id IS NOT NULL ORDER BY name COLLATE NOCASE LIMIT 350')
+    .all<{public_id:string;name:string}>(),
+]);
+const currentRules=ruleConfig(current);
+const references=ruleReferences(current);
+const photos=await referencePhotos(env.DB,references,photoOrigin);
+let effective=null;
+try{effective=await effectiveRule(env.DB,{category_slug:category,rule_slug:rule,
+  ...(scope==='product'?{product_id:target}:{}),
+  ...(scope==='category'?{category_id:target}:{}),
+  ...(scope==='preset'?{preset:target}:{}),
+  origin:photoOrigin,
+});}catch{}
+const uniques=[...new Set(related.map(r=>r.rule_slug))];
+const groupNames=[...new Set(categories.map(c=>c.group_name))];
+const field='w-full rounded-md border border-line bg-white px-3 py-2 text-sm';
+const lab='mb-1 block text-sm font-medium';
+const value=(v:string|number|undefined)=>v??'';
+---
+<AdminLayout title="Rules & Standards" active="rules">
+  <header class="mb-7">
+    <h1 class="font-serif text-3xl tracking-tight">Rules & Standards</h1>
+    <p class="mt-2 max-w-3xl text-sm text-muted">One private source of truth for Purkins operating guidance, policies, procedures and creative standards. Built-in categories are ready to use, and you can create your own at any time.</p>
+  </header>
+  {error&&<p role="alert" class="mb-5 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+  {success&&!error&&<p role="status" class="mb-5 rounded-md border border-green-300 bg-green-50 p-3 text-sm text-green-800">Changes saved successfully. MCP reads return the current revision.</p>}
+  <div class="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
+    <aside class="space-y-4">
+      <section class="rounded-lg border border-line bg-surface p-4">
+        <h2 class="mb-3 font-semibold">Rule categories</h2>
+        <nav aria-label="Rule categories" class="max-h-[32rem] space-y-3 overflow-auto">
+          {groupNames.map(group=><div>
+            <p class="mb-1 text-xs font-semibold uppercase tracking-wider text-muted">{group}</p>
+            <ul class="space-y-1">
+              {categories.filter(c=>c.group_name===group).map(c=><li>
+                <a href={back({category:c.slug,rule:c.slug==='photography'?'product-photography':'general',scope:'global'})}
+                  aria-current={category===c.slug?'page':undefined}
+                  class={`block rounded-md px-2 py-1.5 text-sm ${category===c.slug?'bg-brand text-white':'hover:bg-paper'}`}>
+                  {c.name}{c.active===0?' (inactive)':''}
+                </a>
+              </li>)}
+            </ul>
+          </div>)}
+        </nav>
+      </section>
+      <details class="rounded-lg border border-line p-4">
+        <summary class="cursor-pointer text-sm font-semibold">+ Create a category</summary>
+        <form method="post" class="mt-3 space-y-3">
+          <input type="hidden" name="_action" value="create-category"/>
+          <label class={lab} for="cat-name">Category name</label>
+          <input id="cat-name" name="new_name" class={field} placeholder="Supplier Communications" required maxlength="100"/>
+          <label class={lab} for="cat-slug">Short ID (lowercase)</label>
+          <input id="cat-slug" name="new_slug" class={field} placeholder="supplier-comms" required maxlength="60" pattern="[a-z][a-z0-9-]+"/>
+          <label class={lab} for="cat-group">Section</label>
+          <input id="cat-group" name="new_group" class={field} value="Custom" required maxlength="100" list="rule-groups"/>
+          <datalist id="rule-groups">{groupNames.map(g=><option value={g}/>)}</datalist>
+          <label class={lab} for="cat-desc">Description</label>
+          <textarea id="cat-desc" name="new_description" class={field} rows="2" maxlength="600"></textarea>
+          <button class="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white">Create category</button>
+        </form>
+      </details>
+      {chosen&&<details class="rounded-lg border border-line p-4">
+        <summary class="cursor-pointer text-sm font-semibold">Edit category details</summary>
+        <form method="post" class="mt-3 space-y-3">
+          <input type="hidden" name="_action" value="edit-category"/>
+          <input type="hidden" name="category" value={category}/>
+          <input type="hidden" name="rule" value={rule}/>
+          <input type="hidden" name="scope" value={scope}/>
+          <input type="hidden" name="target_id" value={target}/>
+          <input type="hidden" name="edit_revision" value={chosen.revision}/>
+          <p class="text-xs text-muted">Category ID: {category}{chosen.builtin?' · Built-in':' · Custom'}</p>
+          <label class={lab} for="edit-cat-name">Display name</label>
+          <input id="edit-cat-name" name="edit_name" value={chosen.name} class={field} required/>
+          <label class={lab} for="edit-cat-group">Section</label>
+          <input id="edit-cat-group" name="edit_group" value={chosen.group_name} class={field} required/>
+          <label class={lab} for="edit-cat-desc">Description</label>
+          <textarea id="edit-cat-desc" name="edit_description" class={field} rows="3">{chosen.description}</textarea>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="edit_active" checked={chosen.active===1}/> Active category</label>
+          <button class="rounded-md border border-line px-3 py-2 text-sm">Save category</button>
+        </form>
+        {categoryVersions.length>1&&<div class="mt-4 border-t border-line pt-3">
+          <p class="mb-2 text-xs font-semibold">Category history</p>
+          {categoryVersions.slice(1).map(v=><form method="post" class="mb-2 flex items-center justify-between gap-2 text-xs">
+            <input type="hidden" name="_action" value="restore-category"/>
+            <input type="hidden" name="category" value={category}/>
+            <input type="hidden" name="rule" value={rule}/>
+            <input type="hidden" name="scope" value={scope}/>
+            <input type="hidden" name="target_id" value={target}/>
+            <input type="hidden" name="edit_revision" value={chosen.revision}/>
+            <input type="hidden" name="restore_category_revision" value={v.revision}/>
+            <span>Revision {v.revision} · {v.name}</span>
+            <button class="text-brand underline">Restore</button>
+          </form>)}
+        </div>}
+      </details>}
+    </aside>
+    <div class="min-w-0 space-y-6">
+      <section class="rounded-lg border border-line bg-surface p-4">
+        <div class="mb-3">
+          <h2 class="font-semibold">{chosen?.name??category}</h2>
+          <p class="text-sm text-muted">{chosen?.description||'Define business rules for this category.'}</p>
+        </div>
+        <form method="get" action={page} class="grid gap-3 sm:grid-cols-2">
+          <input type="hidden" name="category" value={category}/>
+          <div>
+            <label class={lab} for="rule-selector">Rule ID</label>
+            <input id="rule-selector" class={field} name="rule" value={rule} required pattern="[a-z][a-z0-9-]+" list="rule-slugs" placeholder="new-rule"/>
+            <datalist id="rule-slugs">{uniques.map(s=><option value={s}/>)}</datalist>
+            <p class="mt-1 text-xs text-muted">Select an existing rule or type a new slug.</p>
+          </div>
+          <div>
+            <label class={lab} for="scope-selector">Applies to</label>
+            <select id="scope-selector" class={field} name="scope">
+              {RULE_SCOPES.map(s=><option value={s} selected={scope===s}>{s==='category'?'Product category':s[0].toUpperCase()+s.slice(1)}</option>)}
+            </select>
+          </div>
+          <div class="sm:col-span-2">
+            <label class={lab} for="target-selector">Target (blank for global)</label>
+            <input id="target-selector" class={field} name="target_id" list="rule-targets" value={target}
+              placeholder="Preset slug, cat_… or prod_…"/>
+            <datalist id="rule-targets">
+              {['studio-product','feature-composite','purkins-kitchen','lifestyle'].map(p=><option value={p}/>)}
+              {productCategories.filter(p=>p.public_id).map(p=><option value={p.public_id!}>Category: {p.name}</option>)}
+              {(products.results??[]).map(p=><option value={p.public_id}>Product: {p.name}</option>)}
+            </datalist>
+          </div>
+          <div class="sm:col-span-2"><button class="rounded-md bg-ink px-4 py-2 text-sm font-semibold text-white">Load / create rule</button></div>
+        </form>
+      </section>
+      <form method="post" class="space-y-4 rounded-lg border border-line bg-white/60 p-5">
+        <input type="hidden" name="_action" value="save"/>
+        <input type="hidden" name="category" value={category}/>
+        <input type="hidden" name="rule" value={rule}/>
+        <input type="hidden" name="scope" value={scope}/>
+        <input type="hidden" name="target_id" value={target}/>
+        <input type="hidden" name="expected_revision" value={current?.revision??0}/>
+        <div class="flex flex-wrap items-center justify-between gap-2">
+          <div><h2 class="font-semibold">{current?'Edit rule':'Create rule'}: {rule}</h2>
+            <p class="text-xs text-muted">{scope} {target?('· '+target):''} · {current?'Revision '+current.revision:'New rule'} · Saved in D1</p></div>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="active" checked={current?.active!==0}/> Active</label>
+        </div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div><label class={lab} for="rule-title">Title</label>
+            <input id="rule-title" name="title" class={field} value={value(currentRules.title)} maxlength="200" placeholder="e.g. Product photography standard"/></div>
+          <div><label class={lab} for="rule-kind">Rule type</label>
+            <select id="rule-kind" name="kind" class={field}>
+              {RULE_KINDS.map(k=><option value={k} selected={(currentRules.kind??'guidance')===k}>{k[0].toUpperCase()+k.slice(1)}</option>)}
+            </select></div>
+        </div>
+        <div>
+          <label class={lab} for="rule-instructions">Rule instructions</label>
+          <textarea id="rule-instructions" name="instructions" rows="7" class={field} maxlength="12000"
+            placeholder="What should staff or the assistant do? Include exceptions and accuracy requirements.">{currentRules.instructions??''}</textarea>
+        </div>
+        <div><label class={lab} for="rule-criteria">When this rule applies (optional)</label>
+          <textarea id="rule-criteria" name="criteria" rows="2" class={field} maxlength="5000">{currentRules.criteria??''}</textarea></div>
+        <div class="grid gap-3 sm:grid-cols-2">
+          <div><label class={lab} for="rule-actions">Procedure steps (one per line)</label>
+            <textarea id="rule-actions" name="actions" rows="3" class={field}>{(currentRules.actions??[]).join('\n')}</textarea></div>
+          <div><label class={lab} for="rule-tags">Tags (one per line)</label>
+            <textarea id="rule-tags" name="tags" rows="3" class={field}>{(currentRules.tags??[]).join('\n')}</textarea></div>
+        </div>
+        <details open={category==='photography'} class="rounded-lg border border-line p-4">
+          <summary class="cursor-pointer font-semibold">Photography / visual settings</summary>
+          <div class="mt-4 grid gap-3 sm:grid-cols-2">
+            <div><label class={lab} for="ratio">Aspect ratio</label><input id="ratio" name="aspect_ratio" class={field} value={value(currentRules.aspect_ratio)} placeholder="4:5"/></div>
+            <div><label class={lab} for="preset">Preferred preset</label><input id="preset" name="preferred_preset" list="rule-targets" class={field} value={value(currentRules.preferred_preset)}/></div>
+            <div><label class={lab} for="w">Width (px)</label><input id="w" type="number" min="64" max="8000" name="target_width" class={field} value={value(currentRules.target_width)}/></div>
+            <div><label class={lab} for="h">Height (px)</label><input id="h" type="number" min="64" max="8000" name="target_height" class={field} value={value(currentRules.target_height)}/></div>
+            <div class="sm:col-span-2"><label class={lab} for="bg">Background</label><input id="bg" name="background" class={field} value={value(currentRules.background)} placeholder="White studio"/></div>
+            <div><label class={lab} for="composite">Feature composites</label>
+              <select id="composite" name="composite_allowed" class={field}>
+                <option value="" selected={currentRules.composite_allowed===undefined}>Inherit</option>
+                <option value="yes" selected={currentRules.composite_allowed===true}>Allowed</option>
+                <option value="no" selected={currentRules.composite_allowed===false}>Not allowed</option>
+              </select></div>
+            <div><label class={lab} for="shots">Required shots (one per line)</label>
+              <textarea id="shots" name="required_shots" rows="3" class={field}>{(currentRules.required_shots??[]).join('\n')}</textarea></div>
+            <div class="sm:col-span-2"><label class={lab} for="accuracy">Exact product details to preserve</label>
+              <textarea id="accuracy" name="accuracy_notes" rows="3" class={field}>{currentRules.accuracy_notes??''}</textarea></div>
+          </div>
+        </details>
+        <details class="rounded-lg border border-line p-4">
+          <summary class="cursor-pointer font-semibold">Structured fields (optional)</summary>
+          <label class="mb-1 mt-3 block text-sm text-muted" for="rule-fields">JSON object of simple key/value settings, for example a pricing threshold</label>
+          <textarea id="rule-fields" name="fields" rows="4" class={field} placeholder={'{"maximum_discount_percent": 10}'}>{currentRules.fields?JSON.stringify(currentRules.fields,null,2):''}</textarea>
+          <p class="mt-1 text-xs text-muted">These are stored as business instructions. They do not override checkout, pricing or stock validation implemented in code.</p>
+        </details>
+        <div class="space-y-2">
+          <label class={lab} for="reference-images">Approved media references</label>
+          <textarea id="reference-images" name="reference_ids" rows="2" class={field} data-rule-media-ids
+            placeholder="med_… IDs, one per line">{references.join('\n')}</textarea>
+          <MediaPicker id="rule-attachments" label="Choose from Media Library"/>
+          {photos.length>0&&<div class="grid grid-cols-3 gap-3 sm:grid-cols-5">
+            {photos.map(p=><figure><img src={p.image_path} alt={p.name} loading="lazy" class="aspect-[4/5] w-full rounded border border-line object-contain"/><figcaption class="truncate text-xs text-muted">{p.name}</figcaption></figure>)}
+          </div>}
+          <p class="text-xs text-muted">Only approved media library images are accepted. Referenced files are protected from accidental deletion.</p>
+        </div>
+        <button class="rounded-md bg-brand px-5 py-3 text-sm font-semibold text-white">Save rule</button>
+      </form>
+      <div class="grid gap-4 md:grid-cols-2">
+        <section class="rounded-lg border border-line p-4">
+          <h2 class="mb-2 font-semibold">Effective rule preview</h2>
+          {effective?<><p class="mb-2 text-xs text-muted">Global → preset → product category → product. Global instructions remain included.</p>
+            <pre class="max-h-80 overflow-auto whitespace-pre-wrap break-words rounded bg-surface p-3 text-xs">{JSON.stringify(effective.rules,null,2)}</pre>
+            <p class="mt-2 text-xs text-muted">{effective.reference_images.length} reference images · {effective.sources.length} active levels</p>
+          </>:<p class="text-sm text-muted">Choose a valid rule and target to see inherited standards.</p>}
+        </section>
+        <section class="rounded-lg border border-line p-4">
+          <h2 class="mb-2 font-semibold">Revision history</h2>
+          {versions.length===0?<p class="text-sm text-muted">No versions yet.</p>:<ul class="max-h-80 space-y-3 overflow-auto">
+            {versions.map(v=><li class="border-b border-line pb-2 text-xs">
+              <p class="font-semibold">Revision {v.revision} · {v.active?'Active':'Inactive'}</p>
+              <p class="text-muted">{v.created_at} · {v.updated_by}</p>
+              {current&&v.revision!==current.revision&&<form method="post" class="mt-1">
+                <input type="hidden" name="_action" value="restore"/>
+                <input type="hidden" name="category" value={category}/><input type="hidden" name="rule" value={rule}/>
+                <input type="hidden" name="scope" value={scope}/><input type="hidden" name="target_id" value={target}/>
+                <input type="hidden" name="expected_revision" value={current.revision}/>
+                <input type="hidden" name="restore_revision" value={v.revision}/>
+                <button class="text-brand underline">Restore as new revision</button>
+              </form>}
+            </li>)}
+          </ul>}
+        </section>
+      </div>
+    </div>
+  </div>
+  <p class="mt-6 text-xs text-muted">Rules are private and available to authorised MCP tools. Product publication, discounts, stock and other business actions continue to enforce their own code-level permissions.</p>
+</AdminLayout>
+<script>
+  document.addEventListener('media:selected',(event)=>{
+    const selected=(event as CustomEvent<{id?:string}>).detail?.id;
+    const el=document.querySelector<HTMLTextAreaElement>('[data-rule-media-ids]');
+    if(!selected?.startsWith('med_')||!el)return;
+    const refs=el.value.split(/[\s,]+/).filter(Boolean);
+    if(!refs.includes(selected))el.value=[...refs,selected].join('\n');
+  });
+</script>
