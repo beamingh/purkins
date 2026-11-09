@@ -4,7 +4,8 @@ import {Miniflare} from 'miniflare';
 import type {D1Database} from '@cloudflare/workers-types';
 import {splitPurkinsMigrationSql} from '../purkins/migration-test-sql';
 import {
-  listRuleCategories,getRuleCategory,createRuleCategory,editRuleCategory,
+  listRuleCategories,getRuleCategory,createRuleCategory,updateRuleCategory,
+  getRuleCategoryVersions,getRuleCategoryVersion,
   getRule,getRuleVersions,getRuleVersion,saveRule,listRules,ruleConfig,ruleReferences,
   effectiveRule,listEffectiveRules,
 } from './standards';
@@ -66,11 +67,38 @@ describe('Purkins general rule registry on an isolated D1',()=>{
     expect(await createRuleCategory(db,input)).toMatchObject({slug:'supplier-comms'});
     await expect(createRuleCategory(db,{...input,name:'Different name'})).rejects.toThrow('Request ID reused');
     await expect(createRuleCategory(db,{...input,request_id:request_id()})).rejects.toThrow('already exists');
-    const renamed=await editRuleCategory(db,'supplier-comms',{name:'Supplier Relations',
-      group_name:'Operations',description:'Supplier outreach',active:true});
+    const renamed=await updateRuleCategory(db,{slug:'supplier-comms',name:'Supplier Relations',
+      group_name:'Operations',description:'Supplier outreach',active:true,
+      actor,request_id:request_id(),expected_revision:saved.revision});
     expect(renamed).toMatchObject({name:'Supplier Relations',group_name:'Operations'});
     expect(await getRuleCategory(db,'photography')).toMatchObject({builtin:1,active:1});
     expect((await listRuleCategories(db)).length).toBe(17);
+  });
+
+  it('exposes category edits, activation and restoration with the same guarded MCP/Inbox semantics',async()=>{
+    const before=(await getRuleCategory(db,'supplier-comms'))!;
+    const request=request_id();
+    const inactive={slug:'supplier-comms',name:before.name,group_name:before.group_name,
+      description:before.description,active:false,actor,request_id:request,
+      expected_revision:before.revision};
+    const saved=await updateRuleCategory(db,inactive);
+    expect(saved.revision).toBe(before.revision+1);
+    expect(saved.active).toBe(0);
+    expect((await listRuleCategories(db)).map(c=>c.slug)).not.toContain('supplier-comms');
+    expect(await updateRuleCategory(db,inactive)).toMatchObject({revision:saved.revision,active:0});
+    await expect(updateRuleCategory(db,{...inactive,active:true}))
+      .rejects.toThrow('Request ID reused');
+    await expect(updateRuleCategory(db,{...inactive,request_id:request_id()}))
+      .rejects.toThrow('Category changed');
+    const previous=await getRuleCategoryVersion(db,'supplier-comms',before.revision);
+    expect(previous).toMatchObject({name:before.name,active:1});
+    const restored=await updateRuleCategory(db,{slug:'supplier-comms',
+      name:previous!.name,group_name:previous!.group_name,description:previous!.description,
+      active:previous!.active===1,actor,request_id:request_id(),expected_revision:saved.revision});
+    expect(restored.active).toBe(1);
+    expect(restored.revision).toBe(saved.revision+1);
+    expect((await getRuleCategoryVersions(db,'supplier-comms')).length).toBe(restored.revision);
+    expect((await listRuleCategories(db)).map(c=>c.slug)).toContain('supplier-comms');
   });
 
   it('allows multiple distinct policies and procedures inside one category',async()=>{
