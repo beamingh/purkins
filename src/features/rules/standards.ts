@@ -15,9 +15,12 @@ export interface RuleCategory {
   builtin: number;
   active: number;
   position: number;
+  revision: number;
+  updated_by: string;
   updated_at: string;
   last_request_id?: string | null;
 }
+export interface RuleCategoryVersion extends RuleCategory { created_at:string }
 export type RuleConfig = {
   title?: string;
   kind?: RuleKind;
@@ -192,9 +195,9 @@ export async function createRuleCategory(
   }
   await db.batch([
     db.prepare(`INSERT INTO purkins_rule_categories
-      (slug,name,group_name,description,builtin,active,position,last_request_id)
-      VALUES(?,?,?,?,0,1,999,?) ON CONFLICT DO NOTHING`)
-      .bind(data.slug,data.name,data.group_name,data.description,args.request_id),
+      (slug,name,group_name,description,builtin,active,position,updated_by,last_request_id)
+      VALUES(?,?,?,?,0,1,999,?,?) ON CONFLICT DO NOTHING`)
+      .bind(data.slug,data.name,data.group_name,data.description,args.actor,args.request_id),
     db.prepare(`INSERT OR IGNORE INTO purkins_rule_category_receipts
       (request_id,actor,payload_hash,category_slug)
       SELECT ?,?,?,slug FROM purkins_rule_categories
@@ -205,15 +208,64 @@ export async function createRuleCategory(
   if(!result || result.last_request_id!==args.request_id)throw new Error('Category already exists or conflicts with another category name.');
   return result;
 }
-export async function editRuleCategory(
-  db:D1Database, slug:string, fields:{name:string;group_name:string;description:string;active:boolean},
+export async function getRuleCategoryVersions(
+  db:D1Database,slug:string,limit=20,
+):Promise<RuleCategoryVersion[]> {
+  if(!validSlug(slug))throw new Error('Invalid category ID.');
+  const {results}=await db.prepare(`SELECT * FROM purkins_rule_category_versions
+    WHERE slug=? ORDER BY revision DESC LIMIT ?`)
+    .bind(slug,Math.min(50,Math.max(1,limit))).all<RuleCategoryVersion>();
+  return results??[];
+}
+export async function getRuleCategoryVersion(
+  db:D1Database,slug:string,revision:number,
+):Promise<RuleCategoryVersion|null> {
+  if(!validSlug(slug)||!Number.isInteger(revision)||revision<1)throw new Error('Invalid category revision.');
+  return db.prepare('SELECT * FROM purkins_rule_category_versions WHERE slug=? AND revision=?')
+    .bind(slug,revision).first<RuleCategoryVersion>();
+}
+/** Shared by Admin and MCP. Category slugs stay stable; each edit is revision-checked,
+ * idempotent and recoverable from an immutable snapshot. */
+export async function updateRuleCategory(
+  db:D1Database,
+  args:{slug:string;name:string;group_name:string;description:string;active:boolean;
+    actor:string;request_id:string;expected_revision:number},
 ):Promise<RuleCategory>{
-  const input=validateCategoryFields({slug,...fields});
-  const changes=await db.prepare(`UPDATE purkins_rule_categories
-    SET name=?,group_name=?,description=?,active=?,updated_at=datetime('now')
-    WHERE slug=?`).bind(input.name,input.group_name,input.description,fields.active?1:0,slug).run();
-  if(!(changes.meta?.changes))throw new Error('Unknown rule category.');
-  return (await getRuleCategory(db,slug))!;
+  const input=validateCategoryFields(args);
+  requireReceipt(args.request_id,args.actor);
+  if(!Number.isInteger(args.expected_revision)||args.expected_revision<1)
+    throw new Error('Expected category revision must be at least 1.');
+  const active=args.active?1:0;
+  const fingerprint=await hash(JSON.stringify({
+    ...input,active,expected_revision:args.expected_revision,
+  }));
+  const previous=await db.prepare(`SELECT actor,payload_hash,saved_revision
+    FROM purkins_rule_category_update_receipts WHERE request_id=?`)
+    .bind(args.request_id).first<{actor:string;payload_hash:string;saved_revision:number}>();
+  if(previous){
+    if(previous.actor!==args.actor||previous.payload_hash!==fingerprint)
+      throw new Error('Request ID reused with different changes.');
+    const version=await getRuleCategoryVersion(db,args.slug,previous.saved_revision);
+    if(!version)throw new Error('Recorded category revision not found.');
+    return {...version,updated_at:version.created_at,last_request_id:args.request_id};
+  }
+  await db.batch([
+    db.prepare(`UPDATE purkins_rule_categories
+      SET name=?2,group_name=?3,description=?4,active=?5,revision=revision+1,
+      updated_by=?6,last_request_id=?7,updated_at=datetime('now')
+      WHERE slug=?1 AND revision=?8`)
+      .bind(args.slug,input.name,input.group_name,input.description,active,args.actor,
+        args.request_id,args.expected_revision),
+    db.prepare(`INSERT OR IGNORE INTO purkins_rule_category_update_receipts
+      (request_id,actor,payload_hash,category_slug,saved_revision)
+      SELECT ?1,?2,?3,slug,revision FROM purkins_rule_categories
+      WHERE slug=?4 AND last_request_id=?1 AND revision=?5`)
+      .bind(args.request_id,args.actor,fingerprint,args.slug,args.expected_revision+1),
+  ]);
+  const saved=await getRuleCategory(db,args.slug);
+  if(!saved || saved.revision!==args.expected_revision+1 || saved.last_request_id!==args.request_id)
+    throw new Error('Category changed since your last read. Reload and retry.');
+  return saved;
 }
 
 export async function validateRuleTarget(db:D1Database,key:RuleKey):Promise<void>{
