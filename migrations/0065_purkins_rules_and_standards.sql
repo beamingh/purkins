@@ -9,11 +9,38 @@ CREATE TABLE IF NOT EXISTS purkins_rule_categories (
   active INTEGER NOT NULL DEFAULT 1 CHECK(active IN (0,1)),
   position INTEGER NOT NULL DEFAULT 999,
   last_request_id TEXT,
+  revision INTEGER NOT NULL DEFAULT 1 CHECK(revision>=1),
+  updated_by TEXT NOT NULL DEFAULT 'system:seed' CHECK(length(updated_by) BETWEEN 1 AND 254),
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_purkins_rule_category_name ON purkins_rule_categories(name COLLATE NOCASE);
 CREATE INDEX IF NOT EXISTS idx_purkins_rule_category_group ON purkins_rule_categories(group_name,position,name);
+CREATE TABLE IF NOT EXISTS purkins_rule_category_versions (
+  slug TEXT NOT NULL,
+  revision INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  group_name TEXT NOT NULL,
+  description TEXT NOT NULL,
+  active INTEGER NOT NULL,
+  builtin INTEGER NOT NULL,
+  position INTEGER NOT NULL,
+  updated_by TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY(slug,revision)
+);
+CREATE TRIGGER IF NOT EXISTS purkins_rule_category_version_insert AFTER INSERT ON purkins_rule_categories
+BEGIN
+  INSERT INTO purkins_rule_category_versions
+    (slug,revision,name,group_name,description,active,builtin,position,updated_by)
+  VALUES(new.slug,new.revision,new.name,new.group_name,new.description,new.active,new.builtin,new.position,new.updated_by);
+END;
+CREATE TRIGGER IF NOT EXISTS purkins_rule_category_version_update AFTER UPDATE ON purkins_rule_categories
+BEGIN
+  INSERT INTO purkins_rule_category_versions
+    (slug,revision,name,group_name,description,active,builtin,position,updated_by)
+  VALUES(new.slug,new.revision,new.name,new.group_name,new.description,new.active,new.builtin,new.position,new.updated_by);
+END;
 
 -- rule_slug identifies a rule across global/preset/product-category/product override layers.
 -- A category can contain many rules, and newly created categories require no schema update.
@@ -75,6 +102,14 @@ CREATE TABLE IF NOT EXISTS purkins_rule_category_receipts (
   actor TEXT NOT NULL,
   payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
   category_slug TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS purkins_rule_category_update_receipts (
+  request_id TEXT PRIMARY KEY NOT NULL,
+  actor TEXT NOT NULL,
+  payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
+  category_slug TEXT NOT NULL,
+  saved_revision INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
