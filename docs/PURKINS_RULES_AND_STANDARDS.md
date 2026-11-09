@@ -17,7 +17,7 @@ Migration `0065_purkins_rules_and_standards.sql` creates **16 built-in categorie
 | Fulfilment | Pickup & Delivery, Packaging |
 | Technology & Automation | AI & Automation |
 
-The owner can add any number of custom categories under any named section, and edit a category's display name, section, description or active state. A category's stable slug is immutable, so connected rules are not orphaned when renamed. Built-ins are normal editable categories, distinguished only by a `builtin` marker. Newly created categories become available to both Admin and MCP without a code change or database migration.
+The owner can add any number of custom categories under any named section, and edit a category's display name, section, description or active state. Both built-in and custom category changes are revisioned; editing or deactivation can be performed entirely through authenticated MCP and restored without an Admin visit. A category's stable slug is immutable, so connected rules are not orphaned when renamed. Built-ins are normal editable categories, distinguished only by a `builtin` marker. Newly created categories become available to both Admin and MCP without a code change or database migration.
 
 ## Rule documents
 
@@ -46,6 +46,8 @@ Media Library deletion checks the general `purkins_rules` reference table. A fil
 Read tools are individually grantable with read-only owner tokens:
 
 - `list_purkins_rule_categories`
+- `get_purkins_rule_category`
+- `get_purkins_rule_category_history`
 - `list_purkins_rules`
 - `get_purkins_rule`
 - `get_purkins_rule_history`
@@ -55,8 +57,15 @@ Read tools are individually grantable with read-only owner tokens:
 The effective-rule endpoint returns rule provenance, the exact instructions and approved reference URLs, plus an assistant-ready brief. These reads are private. They are not registered for anonymous storefront/buyer sessions.
 
 Write tools:
-- `update_guarded_purkins_rule`
-- `create_guarded_purkins_rule_category`
+- `update_guarded_purkins_rule`: create, edit, activate or deactivate a rule
+- `restore_guarded_purkins_rule`: restore a previous rule revision, preserving history
+- `create_guarded_purkins_rule_category`: create a custom category
+- `update_guarded_purkins_rule_category`: rename/reclassify or activate/deactivate any category
+- `restore_guarded_purkins_rule_category`: restore an earlier category revision
+
+**MCP-first parity:** All routine Rules & Standards management offered through Admin can also be done through MCP. The Admin dashboard is optional for daily rule/category operations. A connected, authenticated owner with the appropriate granted tools and enabled write gates can create categories, maintain rules, change scopes, manage approved reference IDs, inspect resolved guidance, and restore revisions solely through an MCP client.
+
+**Permission boundaries:** Read-only credentials remain read-only. Existing owner-issued tokens with frozen permission lists do not silently gain newly added tools. Reissue/re-authorise a token to grant them; the dedicated rule-write flag and the global write gate must also be enabled. This is a security requirement, not an Admin-only requirement.
 
 These require an authenticated owner actor, a token explicitly granted that individual tool, global MCP writes enabled, and the separate `PURKINS_MCP_RULE_WRITES_ENABLED=true` switch. Rule writes also require a fresh UUID and the expected revision to prevent stale overwrites and handle retries. The separate switch is **off** in the fresh Wrangler template. Existing installations only enable it through their owner-confirmed MCP write configuration process.
 
