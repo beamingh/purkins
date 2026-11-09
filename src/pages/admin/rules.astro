@@ -6,7 +6,7 @@ import { listCategories as listProductCategories } from '../../features/categori
 import { getConfig } from '../../config';
 import {
   RULE_SCOPES,RULE_KINDS,normalizeRuleKey,getRule,getRuleVersions,getRuleVersion,
-  getRuleCategory,listRuleCategories,createRuleCategory,editRuleCategory,listRules,
+  getRuleCategory,listRuleCategories,createRuleCategory,updateRuleCategory,getRuleCategoryVersions,getRuleCategoryVersion,listRules,
   saveRule,ruleConfig,ruleReferences,referencePhotos,effectiveRule,
   type RuleConfig,
 } from '../../features/rules/standards';
@@ -41,14 +41,25 @@ if(Astro.request.method==='POST'){
       });
       return Astro.redirect(back({category:slug,rule:'general',scope:'global',saved:'category-created'}),303);
     }
-    if(action==='edit-category'){
-      await editRuleCategory(env.DB,category,{
-        name:String(form.get('edit_name')??''),
-        group_name:String(form.get('edit_group')??''),
-        description:String(form.get('edit_description')??''),
-        active:form.get('edit_active')==='on',
-      });
-      return Astro.redirect(back({...selected(),saved:'category-updated'}),303);
+    if(action==='edit-category'||action==='restore-category'){
+      const expected_revision=Number(form.get('edit_revision'));
+      if(!Number.isInteger(expected_revision)||expected_revision<1)
+        throw new Error('Reload the current category revision.');
+      let fields;
+      if(action==='restore-category'){
+        const previous=await getRuleCategoryVersion(env.DB,category,Number(form.get('restore_category_revision')));
+        if(!previous)throw new Error('Historical category version not found.');
+        fields={name:previous.name,group_name:previous.group_name,
+          description:previous.description,active:previous.active===1};
+      }else{
+        fields={name:String(form.get('edit_name')??''),
+          group_name:String(form.get('edit_group')??''),
+          description:String(form.get('edit_description')??''),
+          active:form.get('edit_active')==='on'};
+      }
+      await updateRuleCategory(env.DB,{slug:category,...fields,
+        actor:'admin:rules',request_id:crypto.randomUUID(),expected_revision});
+      return Astro.redirect(back({...selected(),saved:action==='restore-category'?'category-restored':'category-updated'}),303);
     }
     const key=normalizeRuleKey(category,rule,scope,target);
     const currentRevision=Number(form.get('expected_revision')??0);
@@ -111,6 +122,7 @@ catch(e){
   key=normalizeRuleKey(category,rule,scope,target);
 }
 const chosen=categories.find(c=>c.slug===category);
+const categoryVersions=chosen?await getRuleCategoryVersions(env.DB,chosen.slug,10):[];
 const [current,versions,related,productCategories,products]=await Promise.all([
   getRule(env.DB,key),getRuleVersions(env.DB,key),listRules(env.DB,{category_slug:category,limit:300}),
   listProductCategories(env.DB),
@@ -183,6 +195,7 @@ const value=(v:string|number|undefined)=>v??'';
           <input type="hidden" name="rule" value={rule}/>
           <input type="hidden" name="scope" value={scope}/>
           <input type="hidden" name="target_id" value={target}/>
+          <input type="hidden" name="edit_revision" value={chosen.revision}/>
           <p class="text-xs text-muted">Category ID: {category}{chosen.builtin?' · Built-in':' · Custom'}</p>
           <label class={lab} for="edit-cat-name">Display name</label>
           <input id="edit-cat-name" name="edit_name" value={chosen.name} class={field} required/>
@@ -193,6 +206,20 @@ const value=(v:string|number|undefined)=>v??'';
           <label class="flex items-center gap-2 text-sm"><input type="checkbox" name="edit_active" checked={chosen.active===1}/> Active category</label>
           <button class="rounded-md border border-line px-3 py-2 text-sm">Save category</button>
         </form>
+        {categoryVersions.length>1&&<div class="mt-4 border-t border-line pt-3">
+          <p class="mb-2 text-xs font-semibold">Category history</p>
+          {categoryVersions.slice(1).map(v=><form method="post" class="mb-2 flex items-center justify-between gap-2 text-xs">
+            <input type="hidden" name="_action" value="restore-category"/>
+            <input type="hidden" name="category" value={category}/>
+            <input type="hidden" name="rule" value={rule}/>
+            <input type="hidden" name="scope" value={scope}/>
+            <input type="hidden" name="target_id" value={target}/>
+            <input type="hidden" name="edit_revision" value={chosen.revision}/>
+            <input type="hidden" name="restore_category_revision" value={v.revision}/>
+            <span>Revision {v.revision} · {v.name}</span>
+            <button class="text-brand underline">Restore</button>
+          </form>)}
+        </div>}
       </details>}
     </aside>
     <div class="min-w-0 space-y-6">
