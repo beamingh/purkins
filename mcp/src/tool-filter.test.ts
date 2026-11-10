@@ -13,14 +13,19 @@ describe('MCP per-connection tool registration',()=>{
       './index.ts','./purkins.ts','./purkins-media.ts','./purkins-gallery.ts',
       './locations.ts','./categories.ts','./purkins-publication.ts',
       './purkins-operations.ts','./purkins-sales.ts','./purkins-photo.ts',
+      './rules.ts',
     ];
     const found=new Set<string>();
+    const registrations:string[]=[];
     for(const path of sources){
       const content=readFileSync(fileURLToPath(new URL(path,import.meta.url)),'utf8');
       for(const match of content.matchAll(/(?:this\.server|scopedServer|server)\.registerTool\(\s*['"]([^'"]+)/g)) {
         found.add(match[1]!);
+        registrations.push(match[1]!);
       }
     }
+    // Detect duplicates in the actual registration modules, not just the permission list.
+    expect(registrations.length).toBe(found.size);
     expect(new Set(MCP_ALL_TOOLS).size).toBe(MCP_ALL_TOOLS.length);
     expect([...MCP_ALL_TOOLS].sort()).toEqual([...found].sort());
   });
