@@ -22,6 +22,7 @@ type Section =
   | 'navigation'
   | 'shipping'
   | 'mcp'
+  | 'pricing'
   | 'settings';
 
 interface Props {
@@ -50,6 +51,7 @@ const inventoryExceptionCount = await countUnresolvedInventoryExceptions(env.DB)
 const nav: { key: Section; label: string; href: string }[] = [
   { key: 'dashboard', label: 'Dashboard', href: '/admin' },
   { key: 'products', label: 'Products', href: '/admin/products' },
+  { key: 'pricing', label: 'Price calculator', href: '/admin/price-calculator' },
   { key: 'locations', label: 'Stock locations', href: '/admin/locations' },
   { key: 'orders', label: 'Orders', href: '/admin/orders' },
   { key: 'customers', label: 'Customers', href: '/admin/customers' },
