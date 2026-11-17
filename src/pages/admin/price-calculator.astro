@@ -1,0 +1,16 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import PriceCalculator from '../../features/purkins/PriceCalculator.astro';
+---
+<AdminLayout title="Price calculator" active="pricing">
+  <header class="mb-7">
+    <p class="mb-2 text-xs uppercase tracking-widest text-gray-500">Purkins / Buying & pricing</p>
+    <h1 class="font-serif text-3xl tracking-tight">Price calculator</h1>
+    <p class="mt-3 max-w-2xl text-sm leading-relaxed text-gray-600">
+      Set your ZAR to ZMW rate and markup once, then enter any South African price.
+      The recommended kwacha selling price updates instantly. These settings stay on
+      this device, with no API calls or live exchange-rate dependency.
+    </p>
+  </header>
+  <PriceCalculator />
+</AdminLayout>
