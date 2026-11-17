@@ -25,14 +25,14 @@
   </div>
 
   <div class="pk-pricing__main">
-    <label class="pk-pricing__label" for="pk-rand-price">South African price (ZAR)</label>
+    <label class="pk-pricing__label" for="pk-rand-price">Enter SA price (R)</label>
     <div class="pk-pricing__rand-wrap">
       <span aria-hidden="true">R</span>
-      <input id="pk-rand-price" data-rand type="number" inputmode="decimal" min="0" step="any" placeholder="Enter rand price" autocomplete="off" />
+      <input id="pk-rand-price" data-rand type="number" inputmode="decimal" min="0" step="any" placeholder="0.00" autocomplete="off" />
     </div>
 
     <div class="pk-pricing__result" aria-live="polite" aria-atomic="true">
-      <span class="pk-pricing__eyebrow">Calculated selling price</span>
+      <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
       <output data-sale for="pk-rand-price pk-zar-rate pk-markup">K0.00</output>
       <span data-formula class="pk-pricing__formula">Enter the South African price to calculate</span>
     </div>
@@ -42,8 +42,8 @@
       <div><span>Markup added</span><output data-added>K0.00</output></div>
     </div>
     <div class="pk-pricing__actions">
-      <button type="button" data-copy disabled>Copy price</button>
-      <button type="button" data-clear>Clear rand price</button>
+      <button type="button" data-copy disabled>Copy selling price</button>
+      <button type="button" data-clear>Clear</button>
     </div>
     <p class="pk-pricing__note">
       This applies markup, not gross profit margin. Transport, tax and other landed costs
@@ -84,6 +84,52 @@
   .pk-pricing__note { margin:0; color:#6b7280; font-size:0.77rem; line-height:1.6; }
   .pk-pricing__connection { margin:0.85rem 0; color:#6b7280; font:0.8rem/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
   @media (min-width:720px) { .pk-pricing { grid-template-columns:minmax(205px,0.85fr) minmax(0,1.6fr); } }
+
+  /* Calculator-first layout: compact settings strip, prominent entry on the
+     left and an equally prominent live result on the right. */
+  .pk-pricing { grid-template-columns:minmax(0,1fr); }
+  .pk-pricing__settings {
+    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:0.35rem 0.8rem; padding:0.9rem 1rem; align-items:end;
+    background:#f8f7f4; border-radius:0.75rem;
+  }
+  .pk-pricing__settings > .pk-pricing__label {font-size:0.76rem; margin:0;}
+  .pk-pricing__settings > .pk-pricing__label:nth-of-type(1) {grid-column:1;grid-row:1;}
+  .pk-pricing__settings > [data-rate] {grid-column:1;grid-row:2;}
+  .pk-pricing__settings > .pk-pricing__label:nth-of-type(2) {grid-column:2;grid-row:1;}
+  .pk-pricing__settings > [data-markup] {grid-column:2;grid-row:2;}
+  .pk-pricing__settings > input {font-size:0.98rem; padding:0.55rem 0.65rem; font-weight:600;}
+  .pk-pricing__settings > .pk-pricing__presets {grid-column:1/-1;grid-row:3; justify-content:flex-start; margin-top:0.3rem;}
+  .pk-pricing__settings .pk-pricing__presets button {flex:0 1 4rem;min-width:3.2rem; padding:0.45rem 0.6rem;}
+  .pk-pricing__settings > .pk-pricing__hint {grid-column:1/-1;grid-row:4;font-size:0.7rem;}
+  .pk-pricing__main { display:grid; grid-template-columns:minmax(0,1fr);gap:0.85rem; padding:1.25rem; }
+  .pk-pricing__main > .pk-pricing__label {font-weight:750;font-size:1.12rem; margin:0; }
+  .pk-pricing__rand-wrap input {
+    border:2px solid #6b7280; border-radius:0.65rem;
+    font-size:clamp(1.8rem,4vw,2.5rem); font-weight:750;
+    padding:0.85rem 0.65rem 0.85rem 3rem; font-variant-numeric:tabular-nums;
+  }
+  .pk-pricing__result {
+    min-width:0; display:flex; justify-content:center;
+    padding:1.4rem 1.2rem; min-height:10rem;
+  }
+  .pk-pricing__result output {font-size:clamp(2.5rem,5vw,3.85rem);line-height:1.13;}
+  .pk-pricing__breakdown { border-top:1px solid #e7e2d9;padding:0.9rem 0 0; }
+  .pk-pricing__actions { align-items:center; }
+  @media (min-width:680px) {
+    .pk-pricing__main {grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto 1fr auto auto auto;gap:0.85rem 1rem;}
+    .pk-pricing__main > .pk-pricing__label {grid-column:1;grid-row:1; align-self:end;padding-top:1rem;}
+    .pk-pricing__rand-wrap {grid-column:1;grid-row:2;align-self:start;}
+    .pk-pricing__result {grid-column:2;grid-row:1 / span 2;}
+    .pk-pricing__breakdown {grid-column:1 / -1;grid-row:3;}
+    .pk-pricing__actions {grid-column:1 / -1;grid-row:4;}
+    .pk-pricing__note {grid-column:1 / -1;grid-row:5;}
+  }
+  @media (min-width:760px) {
+    .pk-pricing__settings {grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(180px,1.2fr);}
+    .pk-pricing__settings > .pk-pricing__presets {grid-column:3;grid-row:2; margin-top:0;}
+    .pk-pricing__settings > .pk-pricing__hint {grid-column:1/-1;grid-row:3;}
+  }
 </style>
 
 <script is:inline type="module">
@@ -179,7 +225,7 @@
       try {
         await navigator.clipboard.writeText(formatKwacha(latest.saleZmw));
         copy.textContent = 'Copied!';
-        setTimeout(() => { copy.textContent = 'Copy price'; }, 1400);
+        setTimeout(() => { copy.textContent = 'Copy selling price'; }, 1400);
       } catch {
         copy.textContent = 'Copy unavailable';
         setTimeout(() => { copy.textContent = 'Copy price'; }, 1400);
