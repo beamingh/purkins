@@ -17,6 +17,7 @@ export function initPriceCalculator(root) {
   const amount = find('[data-amount]');
   const rate = find('[data-rate]');
   const markup = find('[data-markup]');
+  const overhead = find('[data-overhead]');
   const symbol = find('[data-symbol]');
   const costLabel = find('[data-cost-label]');
   const sale = find('[data-sale]');
@@ -48,6 +49,7 @@ export function initPriceCalculator(root) {
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     if (Number.isFinite(settings.rate) && settings.rate > 0) rate.value = String(settings.rate);
     if (Number.isFinite(settings.markup) && settings.markup >= 0) markup.value = String(settings.markup);
+    if (Number.isFinite(settings.overheadZmw) && settings.overheadZmw >= 0) overhead.value = String(settings.overheadZmw);
     if (settings.currency === 'ZAR' || settings.currency === 'ZMW') currency = settings.currency;
     if (ROUNDING_STEPS_ZMW.includes(settings.roundingStepZmw)) {
       roundingStepZmw = settings.roundingStepZmw;
@@ -61,11 +63,13 @@ export function initPriceCalculator(root) {
   function persistSettings() {
     const r = Number(rate.value);
     const m = Number(markup.value);
+    const o = Number(overhead.value);
     if (!rate.value.trim() || !markup.value.trim() || !Number.isFinite(r) || r <= 0 ||
-        !Number.isFinite(m) || m < 0) return;
+        !Number.isFinite(m) || m < 0 || !overhead.value.trim() ||
+        !Number.isFinite(o) || o < 0) return;
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency, roundingStepZmw }));
-      settingsStatus.textContent = 'Rate, markup, currency and roundup saved on this device.';
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency, roundingStepZmw, overheadZmw: o }));
+      settingsStatus.textContent = 'Rate, markup, overhead and rounding saved on this device.';
     } catch {
       storageAvailable = false;
       settingsStatus.textContent = 'Storage unavailable. Settings may reset when this page closes.';
@@ -78,6 +82,7 @@ export function initPriceCalculator(root) {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
       amount: Number(amount.value), currency,
       rate: Number(rate.value), markup: Number(markup.value), roundingStepZmw,
+      overheadZmw: Number(overhead.value),
       source, savedAt: new Date().toISOString(),
     };
   }
@@ -159,7 +164,7 @@ export function initPriceCalculator(root) {
   }
 
   function refresh() {
-    latest = calculateRetailPrice(amount.value, currency, rate.value, markup.value, roundingStepZmw);
+    latest = calculateRetailPrice(amount.value, currency, rate.value, markup.value, roundingStepZmw, overhead.value);
     for (const button of root.querySelectorAll('[data-rounding-step]')) {
       button.setAttribute('aria-pressed', String(Number(button.dataset.roundingStep) === roundingStepZmw));
     }
@@ -274,6 +279,7 @@ export function initPriceCalculator(root) {
         amount.value = String(entry.amount);
         rate.value = String(entry.rate);
         markup.value = String(entry.markup);
+        overhead.value = String(entry.overheadZmw ?? 0);
         roundingStepZmw = entry.roundingStepZmw;
         persistSettings();
         refresh();
@@ -293,7 +299,7 @@ export function initPriceCalculator(root) {
   }
 
   amount.addEventListener('input', refresh);
-  for (const field of [rate, markup]) {
+  for (const field of [rate, markup, overhead]) {
     field.addEventListener('input', () => { persistSettings(); refresh(); });
   }
   for (const button of root.querySelectorAll('[data-currency]')) {
@@ -333,9 +339,9 @@ export function initPriceCalculator(root) {
   });
   find('[data-export]').addEventListener('click', () => {
     const quote = value => '"' + String(value).replaceAll('"', '""') + '"';
-    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Markup %', 'Round up to K', 'Converted cost ZMW', 'Raw selling price ZMW', 'Selling price ZMW'],
+    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Overhead ZMW', 'Markup %', 'Round up to K', 'Landed cost ZMW', 'Raw selling price ZMW', 'Selling price ZMW'],
       ...history.map(row => [row.savedAt, row.source, row.currency, row.amount,
-        row.rate, row.markup, row.roundingStepZmw, row.costZmw, row.rawSaleZmw, row.saleZmw])];
+        row.rate, row.overheadZmw, row.markup, row.roundingStepZmw, row.costZmw, row.rawSaleZmw, row.saleZmw])];
     const csv = '\uFEFF' + data.map(cells => cells.map(quote).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
