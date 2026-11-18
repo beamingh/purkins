@@ -7,7 +7,7 @@
  * network-first while online, falling back to the matched offline cache only
  * when the network actually fails.
  */
-const CACHE = 'purkins-pricing-v4';
+const CACHE = 'purkins-pricing-v5';
 const CALCULATOR = '/admin/price-calculator';
 const OFFLINE = '/admin/price-calculator-offline';
 const MODULES = [
