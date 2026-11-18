@@ -1,7 +1,8 @@
 // Shared UI controller for the protected Admin screen and installable offline
 // calculator. Everything here is local to this browser and origin.
 import {
-  DEFAULT_ZAR_TO_ZMW, DEFAULT_MARKUP_PERCENT, calculateSellingPrice, formatKwacha,
+  DEFAULT_ZAR_TO_ZMW, DEFAULT_MARKUP_PERCENT, DEFAULT_ROUNDING_STEP_ZMW,
+  ROUNDING_STEPS_ZMW, calculateRetailPrice, formatKwacha,
 } from './price-calculator-core.mjs';
 import {
   AUTO_SAVE_MS, HISTORY_KEY, HISTORY_LIMIT, historySignature,
@@ -21,6 +22,8 @@ export function initPriceCalculator(root) {
   const sale = find('[data-sale]');
   const cost = find('[data-cost]');
   const added = find('[data-added]');
+  const rawSale = find('[data-raw]');
+  const roundingNote = find('[data-rounding-note]');
   const formula = find('[data-formula]');
   const copy = find('[data-copy]');
   const save = find('[data-save]');
@@ -33,6 +36,7 @@ export function initPriceCalculator(root) {
   const install = find('[data-install]');
   const connection = document.querySelector('[data-connection-status]');
   let currency = 'ZAR';
+  let roundingStepZmw = DEFAULT_ROUNDING_STEP_ZMW;
   let history = [];
   let latest = null;
   let timer = null;
@@ -45,6 +49,9 @@ export function initPriceCalculator(root) {
     if (Number.isFinite(settings.rate) && settings.rate > 0) rate.value = String(settings.rate);
     if (Number.isFinite(settings.markup) && settings.markup >= 0) markup.value = String(settings.markup);
     if (settings.currency === 'ZAR' || settings.currency === 'ZMW') currency = settings.currency;
+    if (ROUNDING_STEPS_ZMW.includes(settings.roundingStepZmw)) {
+      roundingStepZmw = settings.roundingStepZmw;
+    }
     history = normalizeHistory(JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'));
   } catch {
     storageAvailable = false;
@@ -57,8 +64,8 @@ export function initPriceCalculator(root) {
     if (!rate.value.trim() || !markup.value.trim() || !Number.isFinite(r) || r <= 0 ||
         !Number.isFinite(m) || m < 0) return;
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency }));
-      settingsStatus.textContent = 'Rate, markup and currency saved on this device.';
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency, roundingStepZmw }));
+      settingsStatus.textContent = 'Rate, markup, currency and roundup saved on this device.';
     } catch {
       storageAvailable = false;
       settingsStatus.textContent = 'Storage unavailable. Settings may reset when this page closes.';
@@ -70,7 +77,7 @@ export function initPriceCalculator(root) {
     return {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
       amount: Number(amount.value), currency,
-      rate: Number(rate.value), markup: Number(markup.value),
+      rate: Number(rate.value), markup: Number(markup.value), roundingStepZmw,
       source, savedAt: new Date().toISOString(),
     };
   }
@@ -152,7 +159,10 @@ export function initPriceCalculator(root) {
   }
 
   function refresh() {
-    latest = calculateSellingPrice(amount.value, currency, rate.value, markup.value);
+    latest = calculateRetailPrice(amount.value, currency, rate.value, markup.value, roundingStepZmw);
+    for (const button of root.querySelectorAll('[data-rounding-step]')) {
+      button.setAttribute('aria-pressed', String(Number(button.dataset.roundingStep) === roundingStepZmw));
+    }
     for (const button of root.querySelectorAll('[data-preset]')) {
       button.setAttribute('aria-pressed', String(
         markup.value !== '' && Number(button.dataset.preset) === Number(markup.value)));
@@ -161,15 +171,21 @@ export function initPriceCalculator(root) {
       sale.textContent = '—';
       cost.textContent = '—';
       added.textContent = '—';
+      rawSale.textContent = '—';
+      roundingNote.textContent = '';
       formula.textContent = amount.value.trim()
         ? 'Enter a valid cost, exchange rate and markup.'
         : 'Enter a cost price to calculate';
       save.disabled = true;
       copy.disabled = true;
     } else {
-      sale.textContent = formatKwacha(latest.saleZmw);
+      sale.textContent = formatKwacha(latest.roundedSaleZmw);
       cost.textContent = formatKwacha(latest.costZmw);
       added.textContent = formatKwacha(latest.markupZmw);
+      rawSale.textContent = formatKwacha(latest.saleZmw);
+      roundingNote.textContent = roundingStepZmw === 0
+        ? 'Exact calculated price'
+        : 'Rounded up to K' + roundingStepZmw + ' (+' + formatKwacha(latest.roundingAddedZmw) + ')';
       formula.textContent = currency === 'ZAR'
         ? 'R' + Number(amount.value).toLocaleString('en-ZM') + ' × ' +
           Number(rate.value).toLocaleString('en-ZM', { maximumFractionDigits: 6 }) +
@@ -236,7 +252,9 @@ export function initPriceCalculator(root) {
       const details = document.createElement('small');
       const when = new Date(entry.savedAt).toLocaleString('en-ZM', { dateStyle: 'medium', timeStyle: 'short' });
       details.textContent = (entry.currency === 'ZAR' ? 'Rate ' + entry.rate + ' · ' : '') +
-        entry.markup + '% markup · ' + (entry.source === 'manual' ? 'Manually saved' : 'Auto-saved') +
+        entry.markup + '% markup · ' +
+        (entry.roundingStepZmw === 0 ? 'Exact' : 'Rounded to K' + entry.roundingStepZmw) + ' · ' +
+        (entry.source === 'manual' ? 'Manually saved' : 'Auto-saved') +
         ' · ' + when;
       summary.append(heading, details);
       const buttons = document.createElement('div');
@@ -256,6 +274,7 @@ export function initPriceCalculator(root) {
         amount.value = String(entry.amount);
         rate.value = String(entry.rate);
         markup.value = String(entry.markup);
+        roundingStepZmw = entry.roundingStepZmw;
         persistSettings();
         refresh();
         window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -283,6 +302,13 @@ export function initPriceCalculator(root) {
   for (const button of root.querySelectorAll('[data-preset]')) {
     button.addEventListener('click', () => { markup.value = button.dataset.preset; persistSettings(); refresh(); });
   }
+  for (const button of root.querySelectorAll('[data-rounding-step]')) {
+    button.addEventListener('click', () => {
+      roundingStepZmw = Number(button.dataset.roundingStep);
+      persistSettings();
+      refresh();
+    });
+  }
   find('[data-save]').addEventListener('click', () => record('manual'));
   find('[data-clear]').addEventListener('click', () => {
     amount.value = '';
@@ -292,7 +318,7 @@ export function initPriceCalculator(root) {
   copy.addEventListener('click', async () => {
     if (!latest) return;
     try {
-      await navigator.clipboard.writeText(formatKwacha(latest.saleZmw));
+      await navigator.clipboard.writeText(formatKwacha(latest.roundedSaleZmw));
       copy.textContent = 'Copied!';
     } catch {
       copy.textContent = 'Copy unavailable';
@@ -307,9 +333,9 @@ export function initPriceCalculator(root) {
   });
   find('[data-export]').addEventListener('click', () => {
     const quote = value => '"' + String(value).replaceAll('"', '""') + '"';
-    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Markup %', 'Converted cost ZMW', 'Selling price ZMW'],
+    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Markup %', 'Round up to K', 'Converted cost ZMW', 'Raw selling price ZMW', 'Selling price ZMW'],
       ...history.map(row => [row.savedAt, row.source, row.currency, row.amount,
-        row.rate, row.markup, row.costZmw, row.saleZmw])];
+        row.rate, row.markup, row.roundingStepZmw, row.costZmw, row.rawSaleZmw, row.saleZmw])];
     const csv = '\uFEFF' + data.map(cells => cells.map(quote).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
