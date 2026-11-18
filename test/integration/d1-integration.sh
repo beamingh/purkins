@@ -86,6 +86,27 @@ node node_modules/wrangler/bin/wrangler.js dev \
   --port "$test_port" >"$worker_log" 2>&1 &
 worker_pid="$!"
 
+# A failing curl --fail gives only the HTTP code. Capture the endpoint and
+# Worker diagnostics before the isolated integration directory is deleted.
+# Do not retry HTTP failures: real regressions must remain visible.
+curl_checked() {
+  local arg url="" exit_code
+  for arg in "$@"; do
+    case "$arg" in
+      http://127.0.0.1:*) url="$arg" ;;
+    esac
+  done
+  if curl --max-time 30 --fail --silent --show-error "$@"; then
+    return 0
+  else
+    exit_code=$?
+    echo "D1 integration: request failed at ${url:-unknown URL} (curl exit $exit_code)" >&2
+    echo "--- last 100 lines of wrangler dev log ---" >&2
+    tail -n 100 "$worker_log" >&2
+    return "$exit_code"
+  fi
+}
+
 # Every curl is bounded with --max-time. The readiness loop below bounds RETRIES,
 # not individual requests: if wrangler accepts the connection and then never
 # responds — which a cold CI runner can produce — an unbounded curl blocks
@@ -94,7 +115,7 @@ worker_pid="$!"
 # that into a fast, legible failure with the worker log attached.
 catalog=""
 for _ in {1..40}; do
-  if catalog="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/api/products?limit=1" 2>/dev/null)"; then
+  if catalog="$(curl_checked "http://127.0.0.1:$test_port/api/products?limit=1" 2>/dev/null)"; then
     break
   fi
   if ! kill -0 "$worker_pid" 2>/dev/null; then
@@ -126,7 +147,7 @@ node -e '
 ' "$catalog"
 
 # Search pagination must operate at the FTS query, not slice a fixed-size result.
-search_page="$(curl --max-time 30 --fail --silent --show-error \
+search_page="$(curl_checked \
   "http://127.0.0.1:$test_port/api/products?q=pagination&limit=10&offset=10")"
 node -e '
   const body = JSON.parse(process.argv[1]);
@@ -138,7 +159,7 @@ node -e '
 ' "$search_page"
 
 # Catalog list serialization should fetch categories in bulk and preserve them.
-sample_page="$(curl --max-time 30 --fail --silent --show-error \
+sample_page="$(curl_checked \
   "http://127.0.0.1:$test_port/api/products?q=sample&limit=2")"
 node -e '
   const body = JSON.parse(process.argv[1]);
@@ -213,7 +234,7 @@ if [[ "$page_status" != "200" ]]; then
   exit 1
 fi
 
-page_body="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/pages/shipping")"
+page_body="$(curl_checked "http://127.0.0.1:$test_port/pages/shipping")"
 if [[ "$page_body" != *"We ship worldwide."* ]]; then
   echo "D1 integration failed: published page did not render its Markdown" >&2
   exit 1
@@ -425,7 +446,7 @@ fi
 npx wrangler d1 execute DB --local --persist-to "$state_dir" \
   --command "INSERT INTO menu_items (location, target_type, target_id, position) SELECT 'footer', 'page', id, 1 FROM pages WHERE slug = 'secret-draft';" >/dev/null
 
-home="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/")"
+home="$(curl_checked "http://127.0.0.1:$test_port/")"
 if [[ "$home" != *"/pages/shipping"* ]]; then
   echo "D1 integration failed: menu-linked page missing from the footer" >&2
   exit 1
@@ -437,7 +458,7 @@ fi
 
 # Discovery surfaces published pages and hides drafts.
 for surface in sitemap.xml llms.txt; do
-  body="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/$surface")"
+  body="$(curl_checked "http://127.0.0.1:$test_port/$surface")"
   if [[ "$body" != *"/pages/shipping"* ]]; then
     echo "D1 integration failed: published page missing from $surface" >&2
     exit 1
@@ -452,7 +473,7 @@ for surface in sitemap.xml llms.txt; do
   fi
 done
 
-robots="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/robots.txt")"
+robots="$(curl_checked "http://127.0.0.1:$test_port/robots.txt")"
 if [[ "$robots" != *"Sitemap: https://canonical.example/sitemap.xml"* ]]; then
   echo "D1 integration failed: robots.txt did not use CANONICAL_ORIGIN" >&2
   exit 1
@@ -474,7 +495,7 @@ if [[ "$cart_status" != "204" ]]; then
   exit 1
 fi
 
-cart_count_json="$(curl --max-time 30 --fail --silent --show-error \
+cart_count_json="$(curl_checked \
   --cookie "$cookie_jar" \
   "http://127.0.0.1:$test_port/partials/cart-count")"
 node -e '
@@ -482,7 +503,7 @@ node -e '
   if (body.count !== 1) throw new Error(`expected cart count 1, got ${body.count}`);
 ' "$cart_count_json"
 
-cart_fragment="$(curl --max-time 30 --fail --silent --show-error \
+cart_fragment="$(curl_checked \
   --cookie "$cookie_jar" \
   "http://127.0.0.1:$test_port/partials/cart")"
 if [[ "$cart_fragment" != *"Sample Tee"* ]]; then
@@ -492,7 +513,7 @@ fi
 
 storefront_headers="$state_dir/storefront-headers.txt"
 storefront_body="$state_dir/storefront.html"
-curl --max-time 30 --fail --silent --show-error \
+curl_checked \
   --cookie "$cookie_jar" \
   --dump-header "$storefront_headers" \
   --output "$storefront_body" \
@@ -517,13 +538,13 @@ fi
 stock_before_demo="$(npx wrangler d1 execute DB --local --persist-to "$state_dir" --json \
   --command "SELECT stock FROM products WHERE slug = 'sample-tee';" |
   node -e 'let s=""; process.stdin.on("data",d=>s+=d).on("end",()=>process.stdout.write(String(JSON.parse(s)[0].results[0].stock)))')"
-checkout="$(curl --max-time 30 --fail --silent --show-error \
+checkout="$(curl_checked \
   -H 'content-type: application/json' \
   -H "origin: http://127.0.0.1:$test_port" \
   --data '{"items":[{"slug":"sample-tee","quantity":1}],"method":"demo","ship_to":{"email":"integration@example.com","name":"Integration Test","line1":"1 Test St","city":"Testville","postal":"12345","country":"US"}}' \
   "http://127.0.0.1:$test_port/api/checkout")"
 status_path="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.order_status_url) process.exit(1); process.stdout.write(new URL(b.order_status_url).pathname)' "$checkout")"
-confirming="$(curl --max-time 30 --fail --silent --show-error -H 'Accept:' "http://127.0.0.1:$test_port$status_path")"
+confirming="$(curl_checked -H 'Accept:' "http://127.0.0.1:$test_port$status_path")"
 confirming_item_id="$(node -e '
   const b=JSON.parse(process.argv[1]);
   if (b.status !== "confirming") throw new Error(`expected confirming, got ${b.status}`);
@@ -638,7 +659,7 @@ if [[ "$reservation_status" != "settled" ]]; then
 fi
 
 status_headers="$state_dir/status-headers.txt"
-paid_status="$(curl --max-time 30 --fail --silent --show-error --dump-header "$status_headers" "http://127.0.0.1:$test_port$status_path")"
+paid_status="$(curl_checked --dump-header "$status_headers" "http://127.0.0.1:$test_port$status_path")"
 download_path="$(node -e '
   const b=JSON.parse(process.argv[1]);
   if (b.status !== "paid") throw new Error(`expected paid, got ${b.status}`);
@@ -651,7 +672,7 @@ if ! tr -d '\r' <"$status_headers" | grep -qi '^cache-control: private, no-store
   exit 1
 fi
 download_headers="$state_dir/download-headers.txt"
-curl --max-time 30 --fail --silent --show-error --dump-header "$download_headers" \
+curl_checked --dump-header "$download_headers" \
   --output "$state_dir/downloaded-guide.txt" "http://127.0.0.1:$test_port$download_path"
 cmp README.md "$state_dir/downloaded-guide.txt"
 if ! tr -d '\r' <"$download_headers" | grep -qi '^content-disposition: attachment; filename="integration-guide.txt"'; then
@@ -669,7 +690,7 @@ fi
 # The order page is a capability URL: the guest TOKEN (from checkout_url's
 # /pay/<token>) reads it; the bare ord_ public id must NOT.
 guest_token="${pay_path#/pay/}"
-confirmation="$(curl --max-time 30 --fail --silent --show-error "http://127.0.0.1:$test_port/order/$guest_token")"
+confirmation="$(curl_checked "http://127.0.0.1:$test_port/order/$guest_token")"
 if [[ "$confirmation" != *"Sample Tee"* ]]; then
   echo "D1 integration failed: committed order was not readable via its guest token" >&2
   exit 1
