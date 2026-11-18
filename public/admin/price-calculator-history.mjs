@@ -15,6 +15,7 @@ export function normalizeEntry(raw) {
   const amount = Number(raw.amount);
   const rate = Number(raw.rate);
   const markup = Number(raw.markup);
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(markup) || markup < 0) return null;
   const result = calculateSellingPrice(amount, raw.currency, rate, markup);
   if (!result || amount <= 0) return null;
   const when = Date.parse(raw.savedAt);
