@@ -61,17 +61,22 @@ self.addEventListener('fetch', event => {
     // A redirect or HTTP error (including an expired Access session) is not
     // an offline failure and must never be cached or masked.
     event.respondWith((async () => {
+      let response;
       try {
-        const response = await fetch(request);
-        if (isSafeAsset(response, url.pathname)) {
-          const cache = await caches.open(CACHE);
-          await cache.put(url.pathname, response.clone());
-        }
-        return response;
+        response = await fetch(request);
       } catch {
         return (await caches.match(url.pathname)) ||
           new Response('Offline calculator module is unavailable.', { status: 503 });
       }
+      if (isSafeAsset(response, url.pathname)) {
+        // A full browser quota must not turn a successful online fetch into
+        // a fallback to a stale cached script.
+        try {
+          const cache = await caches.open(CACHE);
+          await cache.put(url.pathname, response.clone());
+        } catch { /* Online code still runs when browser storage is full. */ }
+      }
+      return response;
     })());
     return;
   }
