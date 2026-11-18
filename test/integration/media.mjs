@@ -126,6 +126,19 @@ try {
        key TEXT PRIMARY KEY,
        value TEXT NOT NULL,
        updated_at TEXT NOT NULL DEFAULT (datetime('now')))`,
+    // Media usage and guarded deletion now reference this rules registry.
+    // The full schema comes from migration 0065 in the full migration gate.
+    `CREATE TABLE purkins_rules (
+       category_slug TEXT NOT NULL,
+       rule_slug TEXT NOT NULL,
+       scope TEXT NOT NULL,
+       target_id TEXT NOT NULL DEFAULT '',
+       rules_json TEXT NOT NULL DEFAULT '{}' CHECK(json_valid(rules_json)),
+       reference_ids TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(reference_ids)),
+       active INTEGER NOT NULL DEFAULT 1,
+       revision INTEGER NOT NULL DEFAULT 1,
+       updated_by TEXT NOT NULL,
+       PRIMARY KEY(category_slug, rule_slug, scope, target_id))`,
   ]) {
     await db.prepare(sql).run();
   }
@@ -281,6 +294,25 @@ try {
     assert.equal(await deleteMediaRecord(db, m.id), null);
     await db.prepare("DELETE FROM settings WHERE key = 'logo_image_key'").run();
     assert.equal(await deleteMediaRecord(db, m.id), m.image_key, 'freed media still refused');
+  });
+
+  await check('rule-referenced media cannot be deleted until the rule releases it', async () => {
+    const m = await newMedia('media/rule-reference.png');
+    await db.prepare(
+      `INSERT INTO purkins_rules
+        (category_slug, rule_slug, scope, target_id, reference_ids, updated_by)
+       VALUES ('photography', 'product-photography', 'global', '', ?, 'test')`,
+    ).bind(JSON.stringify([m.public_id])).run();
+
+    const usage = await mediaUsage(db, m.id);
+    assert.equal(usage.rules.length, 1, 'rule reference was not included in usage');
+    assert.equal(usage.rules[0].rule_slug, 'product-photography');
+    assert.equal(await deleteMediaRecord(db, m.id), null, 'rule-referenced image was deleted');
+
+    await db.prepare(
+      "DELETE FROM purkins_rules WHERE category_slug='photography' AND rule_slug='product-photography'",
+    ).run();
+    assert.equal(await deleteMediaRecord(db, m.id), m.image_key, 'released image could not be deleted');
   });
 
   console.log('\nguarded association writes');
