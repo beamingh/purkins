@@ -5,8 +5,9 @@ import {
   ROUNDING_STEPS_ZMW, calculateRetailPrice, formatKwacha,
 } from './price-calculator-core.mjs';
 import {
-  AUTO_SAVE_MS, HISTORY_KEY, HISTORY_LIMIT, historySignature,
-  normalizeHistory, saveHistory, suggestCosts, shouldAutoSave,
+  AUTO_SAVE_MS, HISTORY_KEY, HISTORY_LIMIT, HISTORY_INITIAL_VISIBLE,
+  HISTORY_PAGE_SIZE, historySignature, normalizeHistory, saveHistory,
+  suggestCosts, shouldAutoSave, visibleHistoryPage,
 } from './price-calculator-history.mjs';
 
 const SETTINGS_KEY = 'purkins-price-calculator-settings-v1';
@@ -34,11 +35,14 @@ export function initPriceCalculator(root) {
   const historyList = find('[data-history-list]');
   const historyCount = find('[data-history-count]');
   const historySearch = find('[data-history-search]');
+  const historyMore = find('[data-history-more]');
+  const historyShowing = find('[data-history-showing]');
   const install = find('[data-install]');
   const connection = document.querySelector('[data-connection-status]');
   let currency = 'ZAR';
   let roundingStepZmw = DEFAULT_ROUNDING_STEP_ZMW;
   let history = [];
+  let historyVisibleCount = HISTORY_INITIAL_VISIBLE;
   let latest = null;
   let timer = null;
   let pending = null;
@@ -117,11 +121,12 @@ export function initPriceCalculator(root) {
       return;
     }
     clearPending();
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
     renderSuggestions();
     renderHistory();
     autoStatus.textContent = source === 'manual'
       ? 'Saved to history on this device.'
-      : 'Auto-saved after 20 seconds without changes.';
+      : 'Auto-saved after 7 seconds without changes.';
   }
 
   function queueAutoSave() {
@@ -132,7 +137,7 @@ export function initPriceCalculator(root) {
       return;
     }
     pending = { signature: historySignature(entry), startedAt: Date.now() };
-    autoStatus.textContent = 'Will save after 20 seconds without changes.';
+    autoStatus.textContent = 'Will save after 7 seconds without changes.';
     timer = setTimeout(checkPending, AUTO_SAVE_MS);
   }
 
@@ -236,13 +241,14 @@ export function initPriceCalculator(root) {
   function renderHistory() {
     historyCount.textContent = history.length + ' saved';
     historyList.replaceChildren();
-    const query = historySearch.value.trim().toLowerCase();
-    const rows = history.filter(item => {
-      if (!query) return true;
-      const sourceText = (item.currency === 'ZAR' ? 'R' : 'K') + item.amount;
-      return (sourceText + ' ' + item.saleZmw + ' ' + item.currency + ' ' + item.markup)
-        .toLowerCase().includes(query);
-    }).slice(0, 60);
+    const query = historySearch.value.trim();
+    const { rows, total, remaining } = visibleHistoryPage(history, query, historyVisibleCount);
+    historyShowing.textContent = total
+      ? 'Showing ' + rows.length + ' of ' + total + (query ? ' matching records' : ' saved records')
+      : (query ? 'No matches' : 'No saved records');
+    historyMore.hidden = remaining === 0;
+    historyMore.textContent = 'Load ' + Math.min(HISTORY_PAGE_SIZE, remaining) +
+      ' more (' + remaining + ' remaining)';
     if (!rows.length) {
       const empty = document.createElement('p');
       empty.textContent = query ? 'No saved calculations match your search.' : 'No saved calculations yet.';
@@ -334,10 +340,21 @@ export function initPriceCalculator(root) {
     }
     setTimeout(() => { copy.textContent = 'Copy selling price'; }, 1400);
   });
-  historySearch.addEventListener('input', renderHistory);
+  historySearch.addEventListener('input', () => {
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
+    historyList.scrollTop = 0;
+    renderHistory();
+  });
+  historyMore.addEventListener('click', () => {
+    const previousScroll = historyList.scrollTop;
+    historyVisibleCount += HISTORY_PAGE_SIZE;
+    renderHistory();
+    historyList.scrollTop = previousScroll;
+  });
   find('[data-clear-history]').addEventListener('click', () => {
     if (!history.length || !window.confirm('Delete all saved calculator history on this device?')) return;
     history = [];
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
     if (persistHistory()) { renderHistory(); renderSuggestions(); }
   });
   find('[data-export]').addEventListener('click', () => {
@@ -394,6 +411,8 @@ export function initPriceCalculator(root) {
       history = normalizeHistory(combined);
       if (!persistHistory()) history = previous;
       else {
+        historyVisibleCount = HISTORY_INITIAL_VISIBLE;
+        historyList.scrollTop = 0;
         renderHistory();
         renderSuggestions();
         autoStatus.textContent = 'Backup imported. ' + imported.length + ' valid records found.';
@@ -411,6 +430,7 @@ export function initPriceCalculator(root) {
   window.addEventListener('storage', event => {
     if (event.key === HISTORY_KEY) {
       try { history = normalizeHistory(JSON.parse(event.newValue || '[]')); } catch { history = []; }
+      historyVisibleCount = HISTORY_INITIAL_VISIBLE;
       renderHistory();
       renderSuggestions();
     }
