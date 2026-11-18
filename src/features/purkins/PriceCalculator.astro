@@ -45,7 +45,7 @@
         </div>
         <p class="pk-pricing__entry-help">Suggestions from saved prices</p>
         <div class="pk-pricing__suggestions" data-suggestions aria-label="Previous cost price suggestions"></div>
-        <p class="pk-pricing__auto" data-auto-status aria-live="polite">Auto-saves a price unchanged for 20 seconds.</p>
+        <p class="pk-pricing__auto" data-auto-status aria-live="polite">Auto-saves a price unchanged for 7 seconds.</p>
       </div>
       <div class="pk-pricing__result" aria-live="polite" aria-atomic="true">
         <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
@@ -66,7 +66,7 @@
       <button type="button" data-clear>Clear price</button>
     </div>
     <p class="pk-pricing__note">
-      Markup is added to cost, not calculated as a gross profit margin. Transport, tax and other landed costs are not added separately.
+      Markup is added to cost, not calculated as a gross profit margin. Optional sourcing overhead defaults to K0.
     </p>
   </div>
 
@@ -85,7 +85,11 @@
       <button type="button" data-clear-history>Clear history</button>
     </div>
     <p class="pk-pricing__history-help">On some iPhones, Safari and the installed home-screen app have separate histories. Use Backup JSON and Import backup to transfer your records.</p>
-    <div class="pk-pricing__records" data-history-list aria-live="polite"><p>No saved calculations yet.</p></div>
+    <div class="pk-pricing__records" data-history-list aria-live="polite" aria-label="Scrollable saved calculations"><p>No saved calculations yet.</p></div>
+    <div class="pk-pricing__history-bottom">
+      <span data-history-showing role="status">No saved records</span>
+      <button type="button" data-history-more hidden>Load 10 more</button>
+    </div>
   </section>
 
   <section class="pk-pricing__install" aria-label="Use calculator offline on your phone">
@@ -156,8 +160,11 @@
   .pk-pricing__history-tools input{flex:1 1 160px;width:auto;font-size:.9rem}
   .pk-pricing__history-tools button{font-size:.78rem;padding:.55rem .6rem}
   .pk-pricing__history-help{font-size:.73rem;line-height:1.5;color:#6b7280;margin:0 0 .85rem}
-  .pk-pricing__records{display:grid;gap:.5rem}
+  .pk-pricing__records{display:grid;gap:.5rem;max-height:19rem;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding-right:.2rem}
   .pk-pricing__records>p{color:#6b7280;font-size:.85rem}
+  .pk-pricing__history-bottom{display:flex;justify-content:space-between;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.7rem;font-size:.76rem;color:#6b7280}
+  .pk-pricing__history-bottom button{padding:.5rem .75rem;font-size:.78rem;font-weight:700;border:1px solid #d1d5db;border-radius:.5rem;background:#faf8f4}
+  .pk-pricing [hidden]{display:none!important}
   .pk-pricing__record{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.55rem;border:1px solid #e7e2d9;border-radius:.65rem;padding:.7rem .8rem}
   .pk-pricing__record strong{display:block;font-size:.98rem}
   .pk-pricing__record small{display:block;margin-top:.2rem;color:#6b7280;font-size:.72rem}
