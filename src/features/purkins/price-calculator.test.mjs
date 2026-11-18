@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  calculateZmwSalePrice, calculateSellingPrice,
+  calculateZmwSalePrice, calculateSellingPrice, calculateRetailPrice,
+  roundUpKwacha, DEFAULT_ROUNDING_STEP_ZMW, ROUNDING_STEPS_ZMW,
   formatKwacha,
   DEFAULT_ZAR_TO_ZMW,
   DEFAULT_MARKUP_PERCENT,
@@ -89,5 +90,66 @@ describe('currency modes and device-local history', () => {
     expect(normalized).toHaveLength(HISTORY_LIMIT);
     expect(normalized.every(r => r.saleZmw > 0)).toBe(true);
     expect(normalizeHistory('not an array')).toEqual([]);
+  });
+});
+
+describe('practical upward rounding of retail prices', () => {
+  it('offers exact, K5, K10 and K50 increments with K5 as default', () => {
+    expect(DEFAULT_ROUNDING_STEP_ZMW).toBe(5);
+    expect(ROUNDING_STEPS_ZMW).toEqual([0, 5, 10, 50]);
+    expect(roundUpKwacha(132.47, 0)).toBe(132.47);
+    expect(roundUpKwacha(132.47, 5)).toBe(135);
+    expect(roundUpKwacha(132.47, 10)).toBe(140);
+    expect(roundUpKwacha(132.47, 50)).toBe(150);
+  });
+
+  it('never reduces the original retail price and leaves exact steps alone', () => {
+    expect(roundUpKwacha(130, 5)).toBe(130);
+    expect(roundUpKwacha(130.01, 5)).toBe(135);
+    expect(roundUpKwacha(134.99, 5)).toBe(135);
+    expect(roundUpKwacha(135, 5)).toBe(135);
+    expect(roundUpKwacha(0.01, 5)).toBe(5);
+    expect(roundUpKwacha(193.6, 10)).toBe(200);
+    expect(roundUpKwacha(193.6, 5)).toBe(195);
+  });
+
+  it('retains the original markup calculation separately from rounding', () => {
+    expect(calculateRetailPrice(132.47, 'ZMW', 1.21, 0, 5)).toEqual({
+      costZmw: 132.47,
+      markupZmw: 0,
+      saleZmw: 132.47,
+      roundedSaleZmw: 135,
+      roundingAddedZmw: 2.53,
+    });
+    expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 10)).toEqual({
+      costZmw: 121, markupZmw: 72.6, saleZmw: 193.6,
+      roundedSaleZmw: 200, roundingAddedZmw: 6.4,
+    });
+    expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 0)?.roundedSaleZmw).toBe(193.6);
+  });
+
+  it('rejects invalid rounding steps and unsafe or negative numbers', () => {
+    expect(roundUpKwacha(132.47, 7)).toBeNull();
+    expect(roundUpKwacha(-2, 5)).toBeNull();
+    expect(roundUpKwacha(Infinity, 5)).toBeNull();
+    expect(roundUpKwacha(Number.MAX_SAFE_INTEGER, 5)).toBeNull();
+    expect(calculateRetailPrice(10, 'ZMW', 1.21, 60, 3)).toBeNull();
+  });
+
+  it('stores each rounding choice separately and keeps old history exact', () => {
+    const raw = {
+      id: 'old', amount: 132.47, currency: 'ZMW', rate: 1.21, markup: 0,
+      source: 'manual', savedAt: '2026-11-18T12:00:00.000Z',
+    };
+    const old = normalizeHistory([raw]);
+    expect(old[0].roundingStepZmw).toBe(0);
+    expect(old[0].saleZmw).toBe(132.47);
+    const withFive = saveHistory(old, { ...raw, id: 'rounded', roundingStepZmw: 5 });
+    expect(withFive).toHaveLength(2);
+    expect(withFive[0].saleZmw).toBe(135);
+    expect(withFive[0].rawSaleZmw).toBe(132.47);
+    expect(historySignature(withFive[0])).not.toBe(historySignature(old[0]));
+    expect(shouldAutoSave(historySignature(old[0]), withFive[0], 20_000)).toBe(false);
+    expect(normalizeHistory([{ ...raw, roundingStepZmw: 7 }])).toEqual([]);
   });
 });
