@@ -321,6 +321,55 @@ export function initPriceCalculator(root) {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
+  const backup = find('[data-backup]');
+  const importButton = find('[data-import-button]');
+  const importFile = find('[data-import-file]');
+
+  backup.addEventListener('click', () => {
+    const payload = JSON.stringify({
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      history,
+    }, null, 2);
+    const url = URL.createObjectURL(new Blob([payload], { type: 'application/json' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'purkins-price-history-backup.json';
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  importButton.addEventListener('click', () => importFile.click());
+  importFile.addEventListener('change', async () => {
+    const file = importFile.files?.[0];
+    if (!file) return;
+    try {
+      if (file.size > 2_000_000) throw new Error('Backup file is too large.');
+      const payload = JSON.parse(await file.text());
+      if (payload?.version !== 1 || !Array.isArray(payload.history))
+        throw new Error('Not a Purkins price-history backup.');
+      const imported = normalizeHistory(payload.history);
+      // Merge rather than overwrite. Retain the newest version of each cost,
+      // currency, exchange-rate and markup combination.
+      const combined = [...history, ...imported].sort(
+        (a, b) => Date.parse(b.savedAt) - Date.parse(a.savedAt));
+      const previous = history;
+      history = normalizeHistory(combined);
+      if (!persistHistory()) history = previous;
+      else {
+        renderHistory();
+        renderSuggestions();
+        autoStatus.textContent = 'Backup imported. ' + imported.length + ' valid records found.';
+      }
+    } catch (error) {
+      autoStatus.textContent = error instanceof Error ? error.message : 'Unable to import backup.';
+    } finally {
+      importFile.value = '';
+    }
+  });
+
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) checkPending(); // mobile tabs may throttle timers
   });
