@@ -1,13 +1,13 @@
 // Persistent, device-local pricing history shared by Admin and the offline app.
 // Never store customer, product, or inventory records in this history.
-import { calculateSellingPrice } from './price-calculator-core.mjs';
+import { calculateRetailPrice, ROUNDING_STEPS_ZMW } from './price-calculator-core.mjs';
 
 export const HISTORY_KEY = 'purkins-price-calculator-history-v1';
 export const AUTO_SAVE_MS = 20_000;
 export const HISTORY_LIMIT = 200;
 
 export function historySignature(entry) {
-  return [entry.currency, Number(entry.amount), Number(entry.rate), Number(entry.markup)].join('|');
+  return [entry.currency, Number(entry.amount), Number(entry.rate), Number(entry.markup), Number(entry.roundingStepZmw ?? 0)].join('|');
 }
 
 export function normalizeEntry(raw) {
@@ -16,16 +16,20 @@ export function normalizeEntry(raw) {
   const rate = Number(raw.rate);
   const markup = Number(raw.markup);
   if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(markup) || markup < 0) return null;
-  const result = calculateSellingPrice(amount, raw.currency, rate, markup);
+  // Entries created before rounding existed retain their original exact prices.
+  const roundingStepZmw = raw.roundingStepZmw === undefined ? 0 : Number(raw.roundingStepZmw);
+  if (!ROUNDING_STEPS_ZMW.includes(roundingStepZmw)) return null;
+  const result = calculateRetailPrice(amount, raw.currency, rate, markup, roundingStepZmw);
   if (!result || amount <= 0) return null;
   const when = Date.parse(raw.savedAt);
   if (!Number.isFinite(when)) return null;
   return {
     id: typeof raw.id === 'string' && raw.id.length <= 100 && raw.id.length > 0 ? raw.id : String(when),
     currency: raw.currency,
-    amount, rate, markup,
+    amount, rate, markup, roundingStepZmw,
     costZmw: result.costZmw,
-    saleZmw: result.saleZmw,
+    rawSaleZmw: result.saleZmw,
+    saleZmw: result.roundedSaleZmw,
     source: raw.source === 'manual' ? 'manual' : 'auto',
     savedAt: new Date(when).toISOString(),
   };
