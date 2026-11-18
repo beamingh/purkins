@@ -71,6 +71,10 @@ done
 # services to the dev proxy; with it on, the proxy intermittently answered a
 # request with its own bare 500 without ever invoking the Worker.
 export X_LOCAL_OBSERVABILITY=false
+# Demo checkout is deliberately OFF by default: it can reserve stock and
+# write simulated orders. Enable it only in this clean-room test Worker so the
+# demo payment/settlement integration assertions execute without changing live
+# storefront settings.
 # This suite tests the *launched* public-cache policy. The committed Purkins
 # instance deliberately keeps PRELAUNCH_NOINDEX=true; override only the isolated
 # local Worker so the existing public caching expectations are meaningful.
@@ -82,6 +86,7 @@ node node_modules/wrangler/bin/wrangler.js dev \
   --var PRELAUNCH_NOINDEX:false \
   --var CANONICAL_ORIGIN:https://canonical.example \
   --var AUTH_SECRET:integration-auth-secret \
+  --var PURKINS_DEMO_CHECKOUT_ENABLED:true \
   --ip 127.0.0.1 \
   --port "$test_port" >"$worker_log" 2>&1 &
 worker_pid="$!"
