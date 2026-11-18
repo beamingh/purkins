@@ -7,7 +7,7 @@ export const AUTO_SAVE_MS = 20_000;
 export const HISTORY_LIMIT = 200;
 
 export function historySignature(entry) {
-  return [entry.currency, Number(entry.amount), Number(entry.rate), Number(entry.markup), Number(entry.roundingStepZmw ?? 0)].join('|');
+  return [entry.currency, Number(entry.amount), Number(entry.rate), Number(entry.markup), Number(entry.roundingStepZmw ?? 0), Number(entry.overheadZmw ?? 0)].join('|');
 }
 
 export function normalizeEntry(raw) {
@@ -15,18 +15,20 @@ export function normalizeEntry(raw) {
   const amount = Number(raw.amount);
   const rate = Number(raw.rate);
   const markup = Number(raw.markup);
-  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(markup) || markup < 0) return null;
+  const overheadZmw = raw.overheadZmw === undefined ? 0 : Number(raw.overheadZmw);
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(markup) || markup < 0 ||
+      !Number.isFinite(overheadZmw) || overheadZmw < 0) return null;
   // Entries created before rounding existed retain their original exact prices.
   const roundingStepZmw = raw.roundingStepZmw === undefined ? 0 : Number(raw.roundingStepZmw);
   if (!ROUNDING_STEPS_ZMW.includes(roundingStepZmw)) return null;
-  const result = calculateRetailPrice(amount, raw.currency, rate, markup, roundingStepZmw);
+  const result = calculateRetailPrice(amount, raw.currency, rate, markup, roundingStepZmw, overheadZmw);
   if (!result || amount <= 0) return null;
   const when = Date.parse(raw.savedAt);
   if (!Number.isFinite(when)) return null;
   return {
     id: typeof raw.id === 'string' && raw.id.length <= 100 && raw.id.length > 0 ? raw.id : String(when),
     currency: raw.currency,
-    amount, rate, markup, roundingStepZmw,
+    amount, rate, markup, roundingStepZmw, overheadZmw,
     costZmw: result.costZmw,
     rawSaleZmw: result.saleZmw,
     saleZmw: result.roundedSaleZmw,
