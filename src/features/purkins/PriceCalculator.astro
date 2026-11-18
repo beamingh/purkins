@@ -58,15 +58,19 @@
 
   <section class="pk-pricing__history" aria-label="Saved calculations">
     <div class="pk-pricing__history-top">
-      <div><h2>Calculation history</h2><p>Stored on this device, available offline. Reuse, remove or export your records.</p></div>
+      <div><h2>Calculation history</h2><p>Stored in this browser or installed app. Reuse, delete or export your records, even offline.</p></div>
       <span class="pk-pricing__count" data-history-count>0 saved</span>
     </div>
     <div class="pk-pricing__history-tools">
       <label for="pk-history-query" class="pk-pricing__sr">Search saved calculations</label>
       <input id="pk-history-query" data-history-search type="search" placeholder="Search saved prices…" autocomplete="off" />
       <button type="button" data-export>Export CSV</button>
+      <button type="button" data-backup>Backup JSON</button>
+      <button type="button" data-import-button>Import backup</button>
+      <input data-import-file type="file" accept=".json,application/json" aria-label="Select Purkins history backup" hidden />
       <button type="button" data-clear-history>Clear history</button>
     </div>
+    <p class="pk-pricing__history-help">On some iPhones, Safari and the installed home-screen app have separate histories. Use Backup JSON and Import backup to transfer your records.</p>
     <div class="pk-pricing__records" data-history-list aria-live="polite"><p>No saved calculations yet.</p></div>
   </section>
 
@@ -130,6 +134,7 @@
   .pk-pricing__history-tools{display:flex;flex-wrap:wrap;gap:.45rem;margin:1rem 0}
   .pk-pricing__history-tools input{flex:1 1 160px;width:auto;font-size:.9rem}
   .pk-pricing__history-tools button{font-size:.78rem;padding:.55rem .6rem}
+  .pk-pricing__history-help{font-size:.73rem;line-height:1.5;color:#6b7280;margin:0 0 .85rem}
   .pk-pricing__records{display:grid;gap:.5rem}
   .pk-pricing__records>p{color:#6b7280;font-size:.85rem}
   .pk-pricing__record{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.55rem;border:1px solid #e7e2d9;border-radius:.65rem;padding:.7rem .8rem}
