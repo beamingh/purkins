@@ -202,6 +202,9 @@ export function initPriceCalculator(root) {
     }
     renderSuggestions();
     queueAutoSave();
+    // The optional authenticated product-draft panel follows live inputs and
+    // history restores without changing the offline calculator's behaviour.
+    root.dispatchEvent(new CustomEvent('purkins:pricing-updated', { bubbles: true }));
   }
 
   // Suggest prices from history while typing, without rewriting the user's input.
