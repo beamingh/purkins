@@ -31,3 +31,14 @@ export function formatKwacha(amount) {
     maximumFractionDigits: 2,
   });
 }
+
+/**
+ * Accept Rand or direct Kwacha cost while keeping one selling-price formula.
+ * An exchange rate is required for ZAR only; for ZMW it is retained for history
+ * and later switching back, but must not affect the computed selling price.
+ */
+export function calculateSellingPrice(costPrice, currency, kwachaPerRand, markupPercent) {
+  if (currency !== 'ZAR' && currency !== 'ZMW') return null;
+  if (currency === 'ZAR') return calculateZmwSalePrice(costPrice, kwachaPerRand, markupPercent);
+  return calculateZmwSalePrice(costPrice, 1, markupPercent);
+}
