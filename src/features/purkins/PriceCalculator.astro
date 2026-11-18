@@ -14,7 +14,16 @@
       <button type="button" data-preset="70">70%</button>
       <button type="button" data-preset="80">80%</button>
     </div>
-    <p class="pk-pricing__hint" data-saved-status aria-live="polite">Rate and markup are saved on this device.</p>
+    <div class="pk-pricing__rounding" role="group" aria-label="Round selling price upward">
+      <span class="pk-pricing__label">Round selling price up</span>
+      <div class="pk-pricing__rounding-buttons">
+        <button type="button" data-rounding-step="0" aria-pressed="false">Exact</button>
+        <button type="button" data-rounding-step="5" aria-pressed="true">K5</button>
+        <button type="button" data-rounding-step="10" aria-pressed="false">K10</button>
+        <button type="button" data-rounding-step="50" aria-pressed="false">K50</button>
+      </div>
+    </div>
+    <p class="pk-pricing__hint" data-saved-status aria-live="polite">Pricing settings are saved on this device.</p>
   </div>
 
   <div class="pk-pricing__main">
@@ -40,11 +49,13 @@
         <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
         <output data-sale for="pk-cost-price pk-zar-rate pk-markup">K0.00</output>
         <span data-formula class="pk-pricing__formula">Enter a cost price to calculate</span>
+        <span data-rounding-note class="pk-pricing__rounding-note"></span>
       </div>
     </div>
     <div class="pk-pricing__breakdown">
       <div><span>Cost in kwacha</span><output data-cost>K0.00</output></div>
       <div><span>Markup added</span><output data-added>K0.00</output></div>
+      <div><span>Before rounding</span><output data-raw>K0.00</output></div>
     </div>
     <div class="pk-pricing__actions">
       <button type="button" data-save disabled>Save to history</button>
@@ -95,6 +106,10 @@
   .pk-pricing__settings>.pk-pricing__label:nth-of-type(2){grid-column:2;grid-row:1}
   .pk-pricing__settings>[data-markup]{grid-column:2;grid-row:2}
   .pk-pricing__presets{grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.25rem}
+  .pk-pricing__rounding{grid-column:1/-1;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.35rem}
+  .pk-pricing__rounding-buttons{display:flex;gap:.35rem;flex-wrap:wrap}
+  .pk-pricing__rounding-buttons button{font-size:.8rem;font-weight:700;padding:.45rem .7rem;background:#fff}
+  .pk-pricing__rounding-buttons button[aria-pressed=true]{background:#111827;color:#fff;border-color:#111827}
   .pk-pricing__hint{grid-column:1/-1;margin:0;color:#6b7280;font-size:.74rem}
   .pk-pricing input {box-sizing:border-box;width:100%;min-width:0;border:1px solid #c9c4bb;background:#fff;border-radius:.55rem;color:#111827;font:inherit;padding:.6rem .7rem}
   .pk-pricing button{font:inherit;border-radius:.55rem;border:1px solid #d1d5db;cursor:pointer;padding:.65rem .85rem;background:#fff;color:#111827}
@@ -120,6 +135,7 @@
   .pk-pricing__eyebrow{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:#57534e}
   .pk-pricing__result output{font-size:clamp(2.4rem,5vw,3.9rem);font-weight:850;line-height:1.1;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
   .pk-pricing__formula{font-size:.78rem;color:#57534e;overflow-wrap:anywhere}
+  .pk-pricing__rounding-note{font-size:.78rem;font-weight:700;color:#365314}
   .pk-pricing__breakdown{border-top:1px solid #e7e2d9;padding-top:.85rem;display:grid;gap:.4rem;font-size:.9rem}
   .pk-pricing__breakdown div{display:flex;gap:.7rem;justify-content:space-between}
   .pk-pricing__breakdown span{color:#6b7280}
@@ -150,7 +166,9 @@
   .pk-pricing__connection{color:#6b7280;font: .8rem/1.5 system-ui,sans-serif;margin:.8rem 0}
   @media(min-width:680px){.pk-pricing__live{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}
   @media(min-width:760px){.pk-pricing__settings{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(178px,1.1fr)}
-    .pk-pricing__presets{grid-column:3;grid-row:2;margin:0}.pk-pricing__hint{grid-column:1/-1;grid-row:3}}
+    .pk-pricing__presets{grid-column:3;grid-row:2;margin:0}
+    .pk-pricing__rounding{grid-column:1/-1;grid-row:3}
+    .pk-pricing__hint{grid-column:1/-1;grid-row:4}}
 </style>
 
 <script is:inline type="module">
