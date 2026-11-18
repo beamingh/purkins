@@ -120,10 +120,11 @@ describe('practical upward rounding of retail prices', () => {
       saleZmw: 132.47,
       roundedSaleZmw: 135,
       roundingAddedZmw: 2.53,
+      overheadZmw: 0,
     });
     expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 10)).toEqual({
       costZmw: 121, markupZmw: 72.6, saleZmw: 193.6,
-      roundedSaleZmw: 200, roundingAddedZmw: 6.4,
+      roundedSaleZmw: 200, roundingAddedZmw: 6.4, overheadZmw: 0,
     });
     expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 0)?.roundedSaleZmw).toBe(193.6);
   });
@@ -151,5 +152,36 @@ describe('practical upward rounding of retail prices', () => {
     expect(historySignature(withFive[0])).not.toBe(historySignature(old[0]));
     expect(shouldAutoSave(historySignature(old[0]), withFive[0], 20_000)).toBe(false);
     expect(normalizeHistory([{ ...raw, roundingStepZmw: 7 }])).toEqual([]);
+  });
+});
+
+describe('sourcing overhead in live calculator and history', () => {
+  it('adds per-unit sourcing overhead before markup and upward rounding', () => {
+    const p = calculateRetailPrice(100, 'ZAR', 1.21, 60, 5, 15);
+    expect(p).toMatchObject({
+      costZmw: 136, overheadZmw: 15,
+      markupZmw: 81.6, saleZmw: 217.6,
+      roundedSaleZmw: 220, roundingAddedZmw: 2.4,
+    });
+    expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 5, 0)?.roundedSaleZmw).toBe(195);
+  });
+  it('tracks overhead choices without duplicating legacy no-overhead records', () => {
+    const before = {
+      id:'old', amount:100, currency:'ZAR', rate:1.21, markup:60,
+      roundingStepZmw:5, source:'manual', savedAt:'2026-11-18T10:00:00.000Z',
+    };
+    const old = normalizeHistory([before])[0];
+    expect(old.overheadZmw).toBe(0);
+    expect(old.saleZmw).toBe(195);
+    const withOverhead = saveHistory([old], { ...before, id:'new', overheadZmw:15 });
+    expect(withOverhead).toHaveLength(2);
+    expect(withOverhead[0]).toMatchObject({
+      id:'new', overheadZmw:15, costZmw:136, rawSaleZmw:217.6, saleZmw:220,
+    });
+    expect(historySignature(withOverhead[0])).not.toBe(historySignature(old));
+  });
+  it('rejects unsupported overhead amounts', () => {
+    expect(calculateRetailPrice(100,'ZAR',1.21,60,5,-2)).toBeNull();
+    expect(calculateRetailPrice(100,'ZAR',1.21,60,5,'')).toBeNull();
   });
 });
