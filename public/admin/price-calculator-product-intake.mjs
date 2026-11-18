@@ -7,6 +7,14 @@ export function initCalculatorProductDraft(section, calculator) {
   if (!section || !calculator) return;
   const form = section.querySelector('[data-calculator-product-form]');
   if (!form) return;
+  const shortcut = calculator.querySelector('[data-open-product-draft]');
+  if (shortcut) {
+    shortcut.hidden = false;
+    shortcut.addEventListener('click', () => {
+      section.open = true;
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
   const calc = selector => calculator.querySelector(selector);
   const find = selector => form.querySelector(selector);
   const amount = calc('[data-amount]');
