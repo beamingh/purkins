@@ -1,6 +1,6 @@
 /* Price calculator offline shell only. Never cache private Admin pages,
  * inventory, customers, authentication responses, or other Admin APIs. */
-const CACHE = 'purkins-pricing-v2';
+const CACHE = 'purkins-pricing-v3';
 const CALCULATOR = '/admin/price-calculator';
 const OFFLINE = '/admin/price-calculator-offline';
 const SHELL_ASSETS = [
