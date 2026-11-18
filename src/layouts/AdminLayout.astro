@@ -73,6 +73,8 @@ const currentLabel = nav.find((n) => n.key === active)?.label ?? 'Menu';
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    {active === 'pricing' && <link rel="manifest" href="/admin/price-calculator.webmanifest" />}
+    {active === 'pricing' && <meta name="theme-color" content="#111827" />}
     <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <title>{pageTitle}</title>

@@ -1,262 +1,177 @@
 ---
-/**
- * Reused in the authenticated admin page and the generic offline fallback.
- * No inventory, private costs, or customer data are included in this component.
+/** One device-local calculator shared by authenticated Admin and the offline app.
+ * No inventory, customer data or authenticated pages are cached by its SW.
  */
 ---
-<section class="pk-pricing" data-purkins-pricing aria-label="Rand to kwacha selling price calculator">
+<section class="pk-pricing" data-purkins-pricing aria-label="Purkins selling price calculator">
   <div class="pk-pricing__settings">
-    <label class="pk-pricing__label" for="pk-zar-rate">
-      ZAR to ZMW rate
-      <small>Kwacha for 1 rand</small>
-    </label>
+    <label class="pk-pricing__label" for="pk-zar-rate">ZAR to ZMW rate <small>Kwacha for 1 rand</small></label>
     <input id="pk-zar-rate" data-rate type="number" inputmode="decimal" min="0.000001" step="any" value="1.21" autocomplete="off" />
-    <label class="pk-pricing__label" for="pk-markup">
-      Markup (%)
-      <small>Percentage added to converted cost</small>
-    </label>
+    <label class="pk-pricing__label" for="pk-markup">Markup (%) <small>Percentage added to cost</small></label>
     <input id="pk-markup" data-markup type="number" inputmode="decimal" min="0" step="any" value="60" autocomplete="off" />
     <div class="pk-pricing__presets" aria-label="Markup presets">
       <button type="button" data-preset="60">60%</button>
       <button type="button" data-preset="70">70%</button>
       <button type="button" data-preset="80">80%</button>
     </div>
-    <p class="pk-pricing__hint" data-saved-status aria-live="polite">Rate and markup are saved on this device.</p>
+    <div class="pk-pricing__rounding" role="group" aria-label="Round selling price upward">
+      <span class="pk-pricing__label">Round selling price up</span>
+      <div class="pk-pricing__rounding-buttons">
+        <button type="button" data-rounding-step="0" aria-pressed="false">Exact</button>
+        <button type="button" data-rounding-step="5" aria-pressed="true">K5</button>
+        <button type="button" data-rounding-step="10" aria-pressed="false">K10</button>
+        <button type="button" data-rounding-step="50" aria-pressed="false">K50</button>
+      </div>
+    </div>
+    <p class="pk-pricing__hint" data-saved-status aria-live="polite">Pricing settings are saved on this device.</p>
   </div>
 
   <div class="pk-pricing__main">
-    <label class="pk-pricing__label" for="pk-rand-price">Enter SA price (R)</label>
-    <div class="pk-pricing__rand-wrap">
-      <span aria-hidden="true">R</span>
-      <input id="pk-rand-price" data-rand type="number" inputmode="decimal" min="0" step="any" placeholder="0.00" autocomplete="off" />
+    <div class="pk-pricing__mode" role="group" aria-label="Cost price currency">
+      <span class="pk-pricing__label">Cost price in</span>
+      <div class="pk-pricing__switch">
+        <button type="button" data-currency="ZAR" aria-pressed="true">Rand (R)</button>
+        <button type="button" data-currency="ZMW" aria-pressed="false">Kwacha (K)</button>
+      </div>
     </div>
-
-    <div class="pk-pricing__result" aria-live="polite" aria-atomic="true">
-      <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
-      <output data-sale for="pk-rand-price pk-zar-rate pk-markup">K0.00</output>
-      <span data-formula class="pk-pricing__formula">Enter the South African price to calculate</span>
+    <div class="pk-pricing__live">
+      <div class="pk-pricing__entry">
+        <label class="pk-pricing__primary-label" for="pk-cost-price" data-cost-label>Enter SA price (R)</label>
+        <div class="pk-pricing__amount-wrap">
+          <span aria-hidden="true" data-symbol>R</span>
+          <input id="pk-cost-price" data-amount type="number" inputmode="decimal" min="0" step="any" placeholder="0.00" autocomplete="off" />
+        </div>
+        <p class="pk-pricing__entry-help">Suggestions from saved prices</p>
+        <div class="pk-pricing__suggestions" data-suggestions aria-label="Previous cost price suggestions"></div>
+        <p class="pk-pricing__auto" data-auto-status aria-live="polite">Auto-saves a price unchanged for 20 seconds.</p>
+      </div>
+      <div class="pk-pricing__result" aria-live="polite" aria-atomic="true">
+        <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
+        <output data-sale for="pk-cost-price pk-zar-rate pk-markup">K0.00</output>
+        <span data-formula class="pk-pricing__formula">Enter a cost price to calculate</span>
+        <span data-rounding-note class="pk-pricing__rounding-note"></span>
+      </div>
     </div>
-
     <div class="pk-pricing__breakdown">
-      <div><span>Converted cost</span><output data-cost>K0.00</output></div>
+      <div><span>Cost in kwacha</span><output data-cost>K0.00</output></div>
       <div><span>Markup added</span><output data-added>K0.00</output></div>
+      <div><span>Before rounding</span><output data-raw>K0.00</output></div>
     </div>
     <div class="pk-pricing__actions">
+      <button type="button" data-save disabled>Save to history</button>
       <button type="button" data-copy disabled>Copy selling price</button>
-      <button type="button" data-clear>Clear</button>
+      <button type="button" data-clear>Clear price</button>
     </div>
     <p class="pk-pricing__note">
-      This applies markup, not gross profit margin. Transport, tax and other landed costs
-      are not added separately.
+      Markup is added to cost, not calculated as a gross profit margin. Transport, tax and other landed costs are not added separately.
     </p>
   </div>
+
+  <section class="pk-pricing__history" aria-label="Saved calculations">
+    <div class="pk-pricing__history-top">
+      <div><h2>Calculation history</h2><p>Stored in this browser or installed app. Reuse, delete or export your records, even offline.</p></div>
+      <span class="pk-pricing__count" data-history-count>0 saved</span>
+    </div>
+    <div class="pk-pricing__history-tools">
+      <label for="pk-history-query" class="pk-pricing__sr">Search saved calculations</label>
+      <input id="pk-history-query" data-history-search type="search" placeholder="Search saved prices…" autocomplete="off" />
+      <button type="button" data-export>Export CSV</button>
+      <button type="button" data-backup>Backup JSON</button>
+      <button type="button" data-import-button>Import backup</button>
+      <input data-import-file type="file" accept=".json,application/json" aria-label="Select Purkins history backup" hidden />
+      <button type="button" data-clear-history>Clear history</button>
+    </div>
+    <p class="pk-pricing__history-help">On some iPhones, Safari and the installed home-screen app have separate histories. Use Backup JSON and Import backup to transfer your records.</p>
+    <div class="pk-pricing__records" data-history-list aria-live="polite"><p>No saved calculations yet.</p></div>
+  </section>
+
+  <section class="pk-pricing__install" aria-label="Use calculator offline on your phone">
+    <div><h2>Keep this calculator on your phone</h2>
+      <p>Open the <a href="/admin/price-calculator-offline">standalone calculator</a> and add it to your home screen. Your history stays available on this device.</p>
+      <p class="pk-pricing__install-help">Android: browser menu → Install app / Add to Home screen. iPhone: Safari Share → Add to Home Screen.</p>
+    </div>
+    <button type="button" data-install hidden>Install calculator</button>
+  </section>
 </section>
 <p class="pk-pricing__connection" data-connection-status role="status">Checking offline availability…</p>
 
 <style is:inline>
-  .pk-pricing { display:grid; grid-template-columns:minmax(0, 1fr); gap:1.25rem; color:#111827; font-family:system-ui,-apple-system,"Segoe UI",sans-serif; }
-  .pk-pricing__settings, .pk-pricing__main { border:1px solid #e7e2d9; border-radius:0.875rem; background:#fff; padding:1.25rem; min-width:0; }
-  .pk-pricing__settings { display:flex; flex-direction:column; align-items:stretch; gap:0.7rem; }
-  .pk-pricing__label { display:block; font-size:0.875rem; line-height:1.4; font-weight:650; color:#24242a; }
-  .pk-pricing__label small { display:block; color:#6b7280; margin-top:0.15rem; font-size:0.75rem; font-weight:400; }
-  .pk-pricing input { box-sizing:border-box; display:block; min-width:0; width:100%; padding:0.8rem 0.9rem; border:1px solid #c9c4bb; border-radius:0.55rem; background:#fff; font:inherit; font-size:1.05rem; color:#111827; }
-  .pk-pricing input:focus-visible, .pk-pricing button:focus-visible { outline:3px solid #a5b4fc; outline-offset:2px; }
-  .pk-pricing__presets { display:flex; flex-wrap:wrap; gap:0.45rem; }
-  .pk-pricing__presets button { flex:1; min-width:3.5rem; padding:0.55rem 0.7rem; border:1px solid #dad5cb; border-radius:0.5rem; color:#374151; background:#faf8f4; font-weight:650; cursor:pointer; }
-  .pk-pricing__presets button[aria-pressed="true"] { border-color:#111827; color:white; background:#111827; }
-  .pk-pricing__hint { margin:0.25rem 0 0; font-size:0.75rem; color:#6b7280; }
-  .pk-pricing__main { display:flex; flex-direction:column; gap:1rem; }
-  .pk-pricing__rand-wrap { position:relative; }
-  .pk-pricing__rand-wrap span { position:absolute; left:1rem; top:50%; transform:translateY(-50%); font-size:1.4rem; font-weight:750; }
-  .pk-pricing__rand-wrap input { padding-left:2.7rem; font-size:1.35rem; font-weight:600; }
-  .pk-pricing__result { display:flex; flex-direction:column; gap:0.45rem; border-radius:0.8rem; background:#f5f2eb; padding:1.25rem; }
-  .pk-pricing__eyebrow { color:#4b5563; font-size:0.78rem; text-transform:uppercase; letter-spacing:0.07em; }
-  .pk-pricing__result output { color:#111827; font-weight:800; font-size:clamp(2rem,6vw,3.25rem); line-height:1.15; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
-  .pk-pricing__formula { color:#57534e; font-size:0.8rem; line-height:1.4; overflow-wrap:anywhere; }
-  .pk-pricing__breakdown { display:flex; flex-direction:column; gap:0.55rem; padding:0.1rem 0; font-size:0.9rem; }
-  .pk-pricing__breakdown div { display:flex; gap:0.6rem; align-items:baseline; justify-content:space-between; }
-  .pk-pricing__breakdown span { color:#6b7280; }
-  .pk-pricing__breakdown output { font-weight:700; font-variant-numeric:tabular-nums; }
-  .pk-pricing__actions { display:flex; flex-wrap:wrap; gap:0.6rem; }
-  .pk-pricing__actions button { padding:0.65rem 0.85rem; background:#111827; border:1px solid #111827; border-radius:0.55rem; color:#fff; font:inherit; font-size:0.85rem; cursor:pointer; }
-  .pk-pricing__actions button + button { background:#fff; color:#111827; }
-  .pk-pricing__actions button:disabled { opacity:0.45; cursor:not-allowed; }
-  .pk-pricing__note { margin:0; color:#6b7280; font-size:0.77rem; line-height:1.6; }
-  .pk-pricing__connection { margin:0.85rem 0; color:#6b7280; font:0.8rem/1.5 system-ui,-apple-system,"Segoe UI",sans-serif; }
-  @media (min-width:720px) { .pk-pricing { grid-template-columns:minmax(205px,0.85fr) minmax(0,1.6fr); } }
-
-  /* Calculator-first layout: compact settings strip, prominent entry on the
-     left and an equally prominent live result on the right. */
-  .pk-pricing { grid-template-columns:minmax(0,1fr); }
-  .pk-pricing__settings {
-    display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
-    gap:0.35rem 0.8rem; padding:0.9rem 1rem; align-items:end;
-    background:#f8f7f4; border-radius:0.75rem;
-  }
-  .pk-pricing__settings > .pk-pricing__label {font-size:0.76rem; margin:0;}
-  .pk-pricing__settings > .pk-pricing__label:nth-of-type(1) {grid-column:1;grid-row:1;}
-  .pk-pricing__settings > [data-rate] {grid-column:1;grid-row:2;}
-  .pk-pricing__settings > .pk-pricing__label:nth-of-type(2) {grid-column:2;grid-row:1;}
-  .pk-pricing__settings > [data-markup] {grid-column:2;grid-row:2;}
-  .pk-pricing__settings > input {font-size:0.98rem; padding:0.55rem 0.65rem; font-weight:600;}
-  .pk-pricing__settings > .pk-pricing__presets {grid-column:1/-1;grid-row:3; justify-content:flex-start; margin-top:0.3rem;}
-  .pk-pricing__settings .pk-pricing__presets button {flex:0 1 4rem;min-width:3.2rem; padding:0.45rem 0.6rem;}
-  .pk-pricing__settings > .pk-pricing__hint {grid-column:1/-1;grid-row:4;font-size:0.7rem;}
-  .pk-pricing__main { display:grid; grid-template-columns:minmax(0,1fr);gap:0.85rem; padding:1.25rem; }
-  .pk-pricing__main > .pk-pricing__label {font-weight:750;font-size:1.12rem; margin:0; }
-  .pk-pricing__rand-wrap input {
-    border:2px solid #6b7280; border-radius:0.65rem;
-    font-size:clamp(1.8rem,4vw,2.5rem); font-weight:750;
-    padding:0.85rem 0.65rem 0.85rem 3rem; font-variant-numeric:tabular-nums;
-  }
-  .pk-pricing__result {
-    min-width:0; display:flex; justify-content:center;
-    padding:1.4rem 1.2rem; min-height:10rem;
-  }
-  .pk-pricing__result output {font-size:clamp(2.5rem,5vw,3.85rem);line-height:1.13;}
-  .pk-pricing__breakdown { border-top:1px solid #e7e2d9;padding:0.9rem 0 0; }
-  .pk-pricing__actions { align-items:center; }
-  @media (min-width:680px) {
-    .pk-pricing__main {grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);grid-template-rows:auto 1fr auto auto auto;gap:0.85rem 1rem;}
-    .pk-pricing__main > .pk-pricing__label {grid-column:1;grid-row:1; align-self:end;padding-top:1rem;}
-    .pk-pricing__rand-wrap {grid-column:1;grid-row:2;align-self:start;}
-    .pk-pricing__result {grid-column:2;grid-row:1 / span 2;}
-    .pk-pricing__breakdown {grid-column:1 / -1;grid-row:3;}
-    .pk-pricing__actions {grid-column:1 / -1;grid-row:4;}
-    .pk-pricing__note {grid-column:1 / -1;grid-row:5;}
-  }
-  @media (min-width:760px) {
-    .pk-pricing__settings {grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(180px,1.2fr);}
-    .pk-pricing__settings > .pk-pricing__presets {grid-column:3;grid-row:2; margin-top:0;}
-    .pk-pricing__settings > .pk-pricing__hint {grid-column:1/-1;grid-row:3;}
-  }
+  .pk-pricing {display:grid;gap:1rem;color:#111827;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;max-width:100%;min-width:0}
+  .pk-pricing__settings,.pk-pricing__main,.pk-pricing__history,.pk-pricing__install {min-width:0;background:#fff;border:1px solid #e7e2d9;border-radius:0.9rem;padding:1rem}
+  .pk-pricing__settings {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.4rem .85rem;align-items:end;background:#f8f7f4}
+  .pk-pricing__label {display:block;font-size:.8rem;line-height:1.35;font-weight:700;color:#292929}
+  .pk-pricing__label small {display:block;font-size:.72rem;font-weight:400;color:#6b7280;padding-top:.2rem}
+  .pk-pricing__settings>.pk-pricing__label:nth-of-type(1){grid-column:1;grid-row:1}
+  .pk-pricing__settings>[data-rate]{grid-column:1;grid-row:2}
+  .pk-pricing__settings>.pk-pricing__label:nth-of-type(2){grid-column:2;grid-row:1}
+  .pk-pricing__settings>[data-markup]{grid-column:2;grid-row:2}
+  .pk-pricing__presets{grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.25rem}
+  .pk-pricing__rounding{grid-column:1/-1;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.35rem}
+  .pk-pricing__rounding-buttons{display:flex;gap:.35rem;flex-wrap:wrap}
+  .pk-pricing__rounding-buttons button{font-size:.8rem;font-weight:700;padding:.45rem .7rem;background:#fff}
+  .pk-pricing__rounding-buttons button[aria-pressed=true]{background:#111827;color:#fff;border-color:#111827}
+  .pk-pricing__hint{grid-column:1/-1;margin:0;color:#6b7280;font-size:.74rem}
+  .pk-pricing input {box-sizing:border-box;width:100%;min-width:0;border:1px solid #c9c4bb;background:#fff;border-radius:.55rem;color:#111827;font:inherit;padding:.6rem .7rem}
+  .pk-pricing button{font:inherit;border-radius:.55rem;border:1px solid #d1d5db;cursor:pointer;padding:.65rem .85rem;background:#fff;color:#111827}
+  .pk-pricing button:disabled{opacity:.4;cursor:not-allowed}
+  .pk-pricing input:focus-visible,.pk-pricing button:focus-visible,.pk-pricing a:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+  .pk-pricing__presets button{font-size:.82rem;padding:.4rem .8rem;font-weight:700;background:#fff}
+  .pk-pricing__presets button[aria-pressed=true],.pk-pricing__switch button[aria-pressed=true]{background:#111827;color:#fff;border-color:#111827}
+  .pk-pricing__main{display:grid;gap:1rem}
+  .pk-pricing__mode{display:flex;align-items:center;flex-wrap:wrap;gap:.8rem}
+  .pk-pricing__switch{display:flex;gap:.25rem;background:#f4f4f5;padding:.2rem;border-radius:.7rem}
+  .pk-pricing__switch button{font-weight:700;padding:.55rem .9rem;background:transparent;border-color:transparent}
+  .pk-pricing__live{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+  .pk-pricing__entry{min-width:0}
+  .pk-pricing__primary-label{display:block;font-size:1.1rem;font-weight:750;margin-bottom:.7rem}
+  .pk-pricing__amount-wrap{position:relative}
+  .pk-pricing__amount-wrap>span{position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-size:1.35rem;font-weight:750}
+  .pk-pricing__amount-wrap input{border:2px solid #737373;padding:.9rem .8rem .9rem 2.6rem;font-size:clamp(1.6rem,4vw,2.45rem);font-weight:800;font-variant-numeric:tabular-nums}
+  .pk-pricing__entry-help{color:#777;font-size:.72rem;margin:.85rem 0 .4rem}
+  .pk-pricing__suggestions{display:flex;flex-wrap:wrap;gap:.35rem;min-height:1.75rem}
+  .pk-pricing__suggestions button{font-size:.8rem;padding:.28rem .55rem;border-color:#dad5cb;background:#faf8f4}
+  .pk-pricing__auto{font-size:.75rem;color:#57534e;margin:.75rem 0 0;min-height:1.3rem}
+  .pk-pricing__result{border-radius:.8rem;background:#f5f2eb;padding:1.3rem;min-width:0;min-height:10rem;display:flex;flex-direction:column;justify-content:center;gap:.6rem}
+  .pk-pricing__eyebrow{font-size:.75rem;letter-spacing:.06em;text-transform:uppercase;color:#57534e}
+  .pk-pricing__result output{font-size:clamp(2.4rem,5vw,3.9rem);font-weight:850;line-height:1.1;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+  .pk-pricing__formula{font-size:.78rem;color:#57534e;overflow-wrap:anywhere}
+  .pk-pricing__rounding-note{font-size:.78rem;font-weight:700;color:#365314}
+  .pk-pricing__breakdown{border-top:1px solid #e7e2d9;padding-top:.85rem;display:grid;gap:.4rem;font-size:.9rem}
+  .pk-pricing__breakdown div{display:flex;gap:.7rem;justify-content:space-between}
+  .pk-pricing__breakdown span{color:#6b7280}
+  .pk-pricing__breakdown output{font-variant-numeric:tabular-nums;font-weight:750}
+  .pk-pricing__actions{display:flex;flex-wrap:wrap;gap:.5rem}
+  .pk-pricing__actions [data-save]{background:#111827;color:#fff;border-color:#111827;font-weight:750}
+  .pk-pricing__note{font-size:.75rem;line-height:1.6;color:#6b7280;margin:0}
+  .pk-pricing__history-top{display:flex;gap:1rem;justify-content:space-between;align-items:start}
+  .pk-pricing h2{margin:0 0 .35rem;font-size:1.1rem;font-weight:750}
+  .pk-pricing__history-top p,.pk-pricing__install p{margin:0;color:#6b7280;font-size:.8rem;line-height:1.55}
+  .pk-pricing__count{white-space:nowrap;border-radius:1rem;background:#f3f4f6;padding:.25rem .55rem;font-size:.76rem;font-weight:700}
+  .pk-pricing__history-tools{display:flex;flex-wrap:wrap;gap:.45rem;margin:1rem 0}
+  .pk-pricing__history-tools input{flex:1 1 160px;width:auto;font-size:.9rem}
+  .pk-pricing__history-tools button{font-size:.78rem;padding:.55rem .6rem}
+  .pk-pricing__history-help{font-size:.73rem;line-height:1.5;color:#6b7280;margin:0 0 .85rem}
+  .pk-pricing__records{display:grid;gap:.5rem}
+  .pk-pricing__records>p{color:#6b7280;font-size:.85rem}
+  .pk-pricing__record{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.55rem;border:1px solid #e7e2d9;border-radius:.65rem;padding:.7rem .8rem}
+  .pk-pricing__record strong{display:block;font-size:.98rem}
+  .pk-pricing__record small{display:block;margin-top:.2rem;color:#6b7280;font-size:.72rem}
+  .pk-pricing__record-actions{display:flex;gap:.3rem}
+  .pk-pricing__record-actions button{font-size:.76rem;padding:.45rem .65rem}
+  .pk-pricing__install{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;background:#faf8f4}
+  .pk-pricing__install a{text-decoration:underline;color:#111827}
+  .pk-pricing__install .pk-pricing__install-help{margin-top:.4rem}
+  .pk-pricing__install [data-install]{background:#111827;color:#fff;font-weight:750}
+  .pk-pricing__sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}
+  .pk-pricing__connection{color:#6b7280;font: .8rem/1.5 system-ui,sans-serif;margin:.8rem 0}
+  @media(min-width:680px){.pk-pricing__live{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}
+  @media(min-width:760px){.pk-pricing__settings{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(178px,1.1fr)}
+    .pk-pricing__presets{grid-column:3;grid-row:2;margin:0}
+    .pk-pricing__rounding{grid-column:1/-1;grid-row:3}
+    .pk-pricing__hint{grid-column:1/-1;grid-row:4}}
 </style>
 
 <script is:inline type="module">
-  import {
-    calculateZmwSalePrice, formatKwacha, DEFAULT_ZAR_TO_ZMW, DEFAULT_MARKUP_PERCENT,
-  } from '/admin/price-calculator-core.mjs';
-
-  const root = document.querySelector('[data-purkins-pricing]');
-  if (root) {
-    const find = (selector) => root.querySelector(selector);
-    const rand = find('[data-rand]');
-    const rate = find('[data-rate]');
-    const markup = find('[data-markup]');
-    const sale = find('[data-sale]');
-    const cost = find('[data-cost]');
-    const added = find('[data-added]');
-    const formula = find('[data-formula]');
-    const copy = find('[data-copy]');
-    const saved = find('[data-saved-status]');
-    const connection = document.querySelector('[data-connection-status]');
-    const STORAGE_KEY = 'purkins-price-calculator-settings-v1';
-
-    try {
-      const settings = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      if (Number.isFinite(settings.rate) && settings.rate > 0) rate.value = String(settings.rate);
-      if (Number.isFinite(settings.markup) && settings.markup >= 0) markup.value = String(settings.markup);
-    } catch {
-      saved.textContent = 'Calculation works here, but this browser may not save your settings.';
-    }
-
-    function validSettings() {
-      const r = Number(rate.value);
-      const m = Number(markup.value);
-      if (!rate.value.trim() || !markup.value.trim() ||
-          !Number.isFinite(r) || r <= 0 || !Number.isFinite(m) || m < 0) return null;
-      return { rate: r, markup: m };
-    }
-
-    function persist() {
-      const current = validSettings();
-      if (!current) return;
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
-        saved.textContent = 'Rate and markup saved on this device.';
-      } catch {
-        saved.textContent = 'Calculation works, but settings cannot be saved on this device.';
-      }
-    }
-
-    let latest = null;
-    function refresh() {
-      latest = calculateZmwSalePrice(rand.value, rate.value, markup.value);
-      for (const button of root.querySelectorAll('[data-preset]')) {
-        button.setAttribute('aria-pressed', String(Number(button.dataset.preset) === Number(markup.value) && markup.value !== ''));
-      }
-      if (!latest) {
-        sale.textContent = '—';
-        cost.textContent = '—';
-        added.textContent = '—';
-        formula.textContent = !rand.value.trim()
-          ? 'Enter the South African price to calculate'
-          : 'Enter a valid rand price, positive exchange rate and nonnegative markup.';
-        copy.disabled = true;
-        return;
-      }
-      sale.textContent = formatKwacha(latest.saleZmw);
-      cost.textContent = formatKwacha(latest.costZmw);
-      added.textContent = formatKwacha(latest.markupZmw);
-      formula.textContent = 'R' + Number(rand.value).toLocaleString('en-ZM') +
-        ' × ' + Number(rate.value).toLocaleString('en-ZM', { maximumFractionDigits: 6 }) +
-        ' × ' + (1 + Number(markup.value) / 100).toLocaleString('en-ZM', { maximumFractionDigits: 6 });
-      copy.disabled = false;
-    }
-
-    rand.addEventListener('input', refresh);
-    for (const input of [rate, markup]) {
-      input.addEventListener('input', () => { persist(); refresh(); });
-    }
-    for (const button of root.querySelectorAll('[data-preset]')) {
-      button.addEventListener('click', () => {
-        markup.value = button.dataset.preset;
-        persist();
-        refresh();
-      });
-    }
-    find('[data-clear]').addEventListener('click', () => {
-      rand.value = '';
-      refresh();
-      rand.focus();
-    });
-    copy.addEventListener('click', async () => {
-      if (!latest) return;
-      try {
-        await navigator.clipboard.writeText(formatKwacha(latest.saleZmw));
-        copy.textContent = 'Copied!';
-        setTimeout(() => { copy.textContent = 'Copy selling price'; }, 1400);
-      } catch {
-        copy.textContent = 'Copy unavailable';
-        setTimeout(() => { copy.textContent = 'Copy price'; }, 1400);
-      }
-    });
-
-    function updateConnection() {
-      if (connection) connection.textContent = navigator.onLine
-        ? 'Online. Your calculations do not require internet.'
-        : 'Offline. Calculator and saved settings are available on this device.';
-    }
-    window.addEventListener('online', updateConnection);
-    window.addEventListener('offline', updateConnection);
-    updateConnection();
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/admin/price-calculator-sw.js', { scope: '/admin/' })
-        .then(() => navigator.serviceWorker.ready)
-        .then(() => {
-          if (connection && navigator.onLine)
-            connection.textContent = 'Ready for offline use on this device after the first online visit.';
-        })
-        .catch(() => {
-          if (connection && navigator.onLine)
-            connection.textContent = 'The calculator works without a connection in this tab; offline reopening is unavailable in this browser.';
-        });
-    }
-    refresh();
-    if (rate.value === '' || markup.value === '') {
-      rate.value = String(DEFAULT_ZAR_TO_ZMW);
-      markup.value = String(DEFAULT_MARKUP_PERCENT);
-      refresh();
-    }
-  }
+  import { initPriceCalculator } from '/admin/price-calculator-app.mjs';
+  initPriceCalculator(document.querySelector('[data-purkins-pricing]'));
 </script>
