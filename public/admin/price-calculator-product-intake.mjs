@@ -74,6 +74,7 @@ export function initCalculatorProductDraft(section, calculator) {
   }
 
   // Any calculator change immediately refreshes the new-product price preview.
+  calculator.addEventListener('purkins:pricing-updated', update);
   calculator.addEventListener('input', update);
   calculator.addEventListener('change', update);
   calculator.addEventListener('click', () => queueMicrotask(update));
@@ -166,7 +167,10 @@ export function initCalculatorProductDraft(section, calculator) {
       status.textContent = 'Connect to the internet to save this product draft.';
       return;
     }
+    const checkedName = value(name);
+    const checkedBarcode = value(barcode);
     submitting = true;
+    let handedOff = false;
     saveButton.disabled = true;
     status.textContent = 'Checking for similar products before saving…';
     if (lookupTimer) clearTimeout(lookupTimer);
@@ -175,7 +179,7 @@ export function initCalculatorProductDraft(section, calculator) {
       if (matches === null) throw new Error('Duplicate lookup was interrupted. Please retry.');
       // A name, cost or markup may change during an async duplicate search.
       const stillValid = currentSnapshot();
-      if ('error' in stillValid || value(name).length === 0 ||
+      if ('error' in stillValid || value(name) !== checkedName || value(barcode) !== checkedBarcode ||
           JSON.stringify(stillValid.data) !== JSON.stringify(snapshot.data)) {
         throw new Error('Product or price changed during duplicate check. Review and save again.');
       }
@@ -190,12 +194,15 @@ export function initCalculatorProductDraft(section, calculator) {
       // The authoritative Admin product route validates and creates the
       // public product + private intake together. No automatic publication.
       status.textContent = 'Saving your unpublished Purkins product…';
+      handedOff = true;
       HTMLFormElement.prototype.submit.call(form);
     } catch (error) {
       status.textContent = error?.message || 'Unable to check duplicates; nothing was saved.';
     } finally {
-      submitting = false;
-      update();
+      if (!handedOff) {
+        submitting = false;
+        update();
+      }
     }
   });
   update();
