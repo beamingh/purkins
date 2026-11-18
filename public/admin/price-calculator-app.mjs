@@ -5,8 +5,9 @@ import {
   ROUNDING_STEPS_ZMW, calculateRetailPrice, formatKwacha,
 } from './price-calculator-core.mjs';
 import {
-  AUTO_SAVE_MS, HISTORY_KEY, HISTORY_LIMIT, historySignature,
-  normalizeHistory, saveHistory, suggestCosts, shouldAutoSave,
+  AUTO_SAVE_MS, HISTORY_KEY, HISTORY_LIMIT, HISTORY_INITIAL_VISIBLE,
+  HISTORY_PAGE_SIZE, historySignature, normalizeHistory, saveHistory,
+  suggestCosts, shouldAutoSave, visibleHistoryPage,
 } from './price-calculator-history.mjs';
 
 const SETTINGS_KEY = 'purkins-price-calculator-settings-v1';
@@ -17,6 +18,7 @@ export function initPriceCalculator(root) {
   const amount = find('[data-amount]');
   const rate = find('[data-rate]');
   const markup = find('[data-markup]');
+  const overhead = find('[data-overhead]');
   const symbol = find('[data-symbol]');
   const costLabel = find('[data-cost-label]');
   const sale = find('[data-sale]');
@@ -33,11 +35,14 @@ export function initPriceCalculator(root) {
   const historyList = find('[data-history-list]');
   const historyCount = find('[data-history-count]');
   const historySearch = find('[data-history-search]');
+  const historyMore = find('[data-history-more]');
+  const historyShowing = find('[data-history-showing]');
   const install = find('[data-install]');
   const connection = document.querySelector('[data-connection-status]');
   let currency = 'ZAR';
   let roundingStepZmw = DEFAULT_ROUNDING_STEP_ZMW;
   let history = [];
+  let historyVisibleCount = HISTORY_INITIAL_VISIBLE;
   let latest = null;
   let timer = null;
   let pending = null;
@@ -48,6 +53,7 @@ export function initPriceCalculator(root) {
     const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
     if (Number.isFinite(settings.rate) && settings.rate > 0) rate.value = String(settings.rate);
     if (Number.isFinite(settings.markup) && settings.markup >= 0) markup.value = String(settings.markup);
+    if (Number.isFinite(settings.overheadZmw) && settings.overheadZmw >= 0) overhead.value = String(settings.overheadZmw);
     if (settings.currency === 'ZAR' || settings.currency === 'ZMW') currency = settings.currency;
     if (ROUNDING_STEPS_ZMW.includes(settings.roundingStepZmw)) {
       roundingStepZmw = settings.roundingStepZmw;
@@ -61,11 +67,13 @@ export function initPriceCalculator(root) {
   function persistSettings() {
     const r = Number(rate.value);
     const m = Number(markup.value);
+    const o = Number(overhead.value);
     if (!rate.value.trim() || !markup.value.trim() || !Number.isFinite(r) || r <= 0 ||
-        !Number.isFinite(m) || m < 0) return;
+        !Number.isFinite(m) || m < 0 || !overhead.value.trim() ||
+        !Number.isFinite(o) || o < 0) return;
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency, roundingStepZmw }));
-      settingsStatus.textContent = 'Rate, markup, currency and roundup saved on this device.';
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ rate: r, markup: m, currency, roundingStepZmw, overheadZmw: o }));
+      settingsStatus.textContent = 'Rate, markup, overhead and rounding saved on this device.';
     } catch {
       storageAvailable = false;
       settingsStatus.textContent = 'Storage unavailable. Settings may reset when this page closes.';
@@ -78,6 +86,7 @@ export function initPriceCalculator(root) {
       id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
       amount: Number(amount.value), currency,
       rate: Number(rate.value), markup: Number(markup.value), roundingStepZmw,
+      overheadZmw: Number(overhead.value),
       source, savedAt: new Date().toISOString(),
     };
   }
@@ -112,11 +121,12 @@ export function initPriceCalculator(root) {
       return;
     }
     clearPending();
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
     renderSuggestions();
     renderHistory();
     autoStatus.textContent = source === 'manual'
       ? 'Saved to history on this device.'
-      : 'Auto-saved after 20 seconds without changes.';
+      : 'Auto-saved after 7 seconds without changes.';
   }
 
   function queueAutoSave() {
@@ -127,7 +137,7 @@ export function initPriceCalculator(root) {
       return;
     }
     pending = { signature: historySignature(entry), startedAt: Date.now() };
-    autoStatus.textContent = 'Will save after 20 seconds without changes.';
+    autoStatus.textContent = 'Will save after 7 seconds without changes.';
     timer = setTimeout(checkPending, AUTO_SAVE_MS);
   }
 
@@ -159,7 +169,7 @@ export function initPriceCalculator(root) {
   }
 
   function refresh() {
-    latest = calculateRetailPrice(amount.value, currency, rate.value, markup.value, roundingStepZmw);
+    latest = calculateRetailPrice(amount.value, currency, rate.value, markup.value, roundingStepZmw, overhead.value);
     for (const button of root.querySelectorAll('[data-rounding-step]')) {
       button.setAttribute('aria-pressed', String(Number(button.dataset.roundingStep) === roundingStepZmw));
     }
@@ -197,6 +207,9 @@ export function initPriceCalculator(root) {
     }
     renderSuggestions();
     queueAutoSave();
+    // The optional authenticated product-draft panel follows live inputs and
+    // history restores without changing the offline calculator's behaviour.
+    root.dispatchEvent(new CustomEvent('purkins:pricing-updated', { bubbles: true }));
   }
 
   // Suggest prices from history while typing, without rewriting the user's input.
@@ -228,13 +241,14 @@ export function initPriceCalculator(root) {
   function renderHistory() {
     historyCount.textContent = history.length + ' saved';
     historyList.replaceChildren();
-    const query = historySearch.value.trim().toLowerCase();
-    const rows = history.filter(item => {
-      if (!query) return true;
-      const sourceText = (item.currency === 'ZAR' ? 'R' : 'K') + item.amount;
-      return (sourceText + ' ' + item.saleZmw + ' ' + item.currency + ' ' + item.markup)
-        .toLowerCase().includes(query);
-    }).slice(0, 60);
+    const query = historySearch.value.trim();
+    const { rows, total, remaining } = visibleHistoryPage(history, query, historyVisibleCount);
+    historyShowing.textContent = total
+      ? 'Showing ' + rows.length + ' of ' + total + (query ? ' matching records' : ' saved records')
+      : (query ? 'No matches' : 'No saved records');
+    historyMore.hidden = remaining === 0;
+    historyMore.textContent = 'Load ' + Math.min(HISTORY_PAGE_SIZE, remaining) +
+      ' more (' + remaining + ' remaining)';
     if (!rows.length) {
       const empty = document.createElement('p');
       empty.textContent = query ? 'No saved calculations match your search.' : 'No saved calculations yet.';
@@ -274,6 +288,7 @@ export function initPriceCalculator(root) {
         amount.value = String(entry.amount);
         rate.value = String(entry.rate);
         markup.value = String(entry.markup);
+        overhead.value = String(entry.overheadZmw ?? 0);
         roundingStepZmw = entry.roundingStepZmw;
         persistSettings();
         refresh();
@@ -293,7 +308,7 @@ export function initPriceCalculator(root) {
   }
 
   amount.addEventListener('input', refresh);
-  for (const field of [rate, markup]) {
+  for (const field of [rate, markup, overhead]) {
     field.addEventListener('input', () => { persistSettings(); refresh(); });
   }
   for (const button of root.querySelectorAll('[data-currency]')) {
@@ -325,17 +340,28 @@ export function initPriceCalculator(root) {
     }
     setTimeout(() => { copy.textContent = 'Copy selling price'; }, 1400);
   });
-  historySearch.addEventListener('input', renderHistory);
+  historySearch.addEventListener('input', () => {
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
+    historyList.scrollTop = 0;
+    renderHistory();
+  });
+  historyMore.addEventListener('click', () => {
+    const previousScroll = historyList.scrollTop;
+    historyVisibleCount += HISTORY_PAGE_SIZE;
+    renderHistory();
+    historyList.scrollTop = previousScroll;
+  });
   find('[data-clear-history]').addEventListener('click', () => {
     if (!history.length || !window.confirm('Delete all saved calculator history on this device?')) return;
     history = [];
+    historyVisibleCount = HISTORY_INITIAL_VISIBLE;
     if (persistHistory()) { renderHistory(); renderSuggestions(); }
   });
   find('[data-export]').addEventListener('click', () => {
     const quote = value => '"' + String(value).replaceAll('"', '""') + '"';
-    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Markup %', 'Round up to K', 'Converted cost ZMW', 'Raw selling price ZMW', 'Selling price ZMW'],
+    const data = [['Saved at', 'Source', 'Currency', 'Cost', 'ZAR to ZMW rate', 'Overhead ZMW', 'Markup %', 'Round up to K', 'Landed cost ZMW', 'Raw selling price ZMW', 'Selling price ZMW'],
       ...history.map(row => [row.savedAt, row.source, row.currency, row.amount,
-        row.rate, row.markup, row.roundingStepZmw, row.costZmw, row.rawSaleZmw, row.saleZmw])];
+        row.rate, row.overheadZmw, row.markup, row.roundingStepZmw, row.costZmw, row.rawSaleZmw, row.saleZmw])];
     const csv = '\uFEFF' + data.map(cells => cells.map(quote).join(',')).join('\r\n');
     const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
     const link = document.createElement('a');
@@ -385,6 +411,8 @@ export function initPriceCalculator(root) {
       history = normalizeHistory(combined);
       if (!persistHistory()) history = previous;
       else {
+        historyVisibleCount = HISTORY_INITIAL_VISIBLE;
+        historyList.scrollTop = 0;
         renderHistory();
         renderSuggestions();
         autoStatus.textContent = 'Backup imported. ' + imported.length + ' valid records found.';
@@ -402,6 +430,7 @@ export function initPriceCalculator(root) {
   window.addEventListener('storage', event => {
     if (event.key === HISTORY_KEY) {
       try { history = normalizeHistory(JSON.parse(event.newValue || '[]')); } catch { history = []; }
+      historyVisibleCount = HISTORY_INITIAL_VISIBLE;
       renderHistory();
       renderSuggestions();
     }

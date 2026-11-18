@@ -9,6 +9,8 @@
     <input id="pk-zar-rate" data-rate type="number" inputmode="decimal" min="0.000001" step="any" value="1.21" autocomplete="off" />
     <label class="pk-pricing__label" for="pk-markup">Markup (%) <small>Percentage added to cost</small></label>
     <input id="pk-markup" data-markup type="number" inputmode="decimal" min="0" step="any" value="60" autocomplete="off" />
+    <label class="pk-pricing__label" for="pk-overhead">Sourcing overhead (K) <small>Transport or tax allocated per item</small></label>
+    <input id="pk-overhead" data-overhead type="number" inputmode="decimal" min="0" step="0.01" value="0" autocomplete="off" />
     <div class="pk-pricing__presets" aria-label="Markup presets">
       <button type="button" data-preset="60">60%</button>
       <button type="button" data-preset="70">70%</button>
@@ -43,7 +45,7 @@
         </div>
         <p class="pk-pricing__entry-help">Suggestions from saved prices</p>
         <div class="pk-pricing__suggestions" data-suggestions aria-label="Previous cost price suggestions"></div>
-        <p class="pk-pricing__auto" data-auto-status aria-live="polite">Auto-saves a price unchanged for 20 seconds.</p>
+        <p class="pk-pricing__auto" data-auto-status aria-live="polite">Auto-saves a price unchanged for 7 seconds.</p>
       </div>
       <div class="pk-pricing__result" aria-live="polite" aria-atomic="true">
         <span class="pk-pricing__eyebrow">Selling price (ZMW)</span>
@@ -53,17 +55,18 @@
       </div>
     </div>
     <div class="pk-pricing__breakdown">
-      <div><span>Cost in kwacha</span><output data-cost>K0.00</output></div>
+      <div><span>Landed cost in kwacha</span><output data-cost>K0.00</output></div>
       <div><span>Markup added</span><output data-added>K0.00</output></div>
       <div><span>Before rounding</span><output data-raw>K0.00</output></div>
     </div>
     <div class="pk-pricing__actions">
       <button type="button" data-save disabled>Save to history</button>
+      <button type="button" data-open-product-draft hidden>Save as product draft</button>
       <button type="button" data-copy disabled>Copy selling price</button>
       <button type="button" data-clear>Clear price</button>
     </div>
     <p class="pk-pricing__note">
-      Markup is added to cost, not calculated as a gross profit margin. Transport, tax and other landed costs are not added separately.
+      Markup is added to cost, not calculated as a gross profit margin. Optional sourcing overhead defaults to K0.
     </p>
   </div>
 
@@ -82,7 +85,11 @@
       <button type="button" data-clear-history>Clear history</button>
     </div>
     <p class="pk-pricing__history-help">On some iPhones, Safari and the installed home-screen app have separate histories. Use Backup JSON and Import backup to transfer your records.</p>
-    <div class="pk-pricing__records" data-history-list aria-live="polite"><p>No saved calculations yet.</p></div>
+    <div class="pk-pricing__records" data-history-list aria-live="polite" aria-label="Scrollable saved calculations"><p>No saved calculations yet.</p></div>
+    <div class="pk-pricing__history-bottom">
+      <span data-history-showing role="status">No saved records</span>
+      <button type="button" data-history-more hidden>Load 10 more</button>
+    </div>
   </section>
 
   <section class="pk-pricing__install" aria-label="Use calculator offline on your phone">
@@ -105,12 +112,14 @@
   .pk-pricing__settings>[data-rate]{grid-column:1;grid-row:2}
   .pk-pricing__settings>.pk-pricing__label:nth-of-type(2){grid-column:2;grid-row:1}
   .pk-pricing__settings>[data-markup]{grid-column:2;grid-row:2}
-  .pk-pricing__presets{grid-column:1/-1;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.25rem}
-  .pk-pricing__rounding{grid-column:1/-1;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.35rem}
+  .pk-pricing__settings>.pk-pricing__label:nth-of-type(3){grid-column:1/-1;grid-row:3}
+  .pk-pricing__settings>[data-overhead]{grid-column:1/-1;grid-row:4}
+  .pk-pricing__presets{grid-column:1/-1;grid-row:5;display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.25rem}
+  .pk-pricing__rounding{grid-column:1/-1;grid-row:6;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.35rem}
   .pk-pricing__rounding-buttons{display:flex;gap:.35rem;flex-wrap:wrap}
   .pk-pricing__rounding-buttons button{font-size:.8rem;font-weight:700;padding:.45rem .7rem;background:#fff}
   .pk-pricing__rounding-buttons button[aria-pressed=true]{background:#111827;color:#fff;border-color:#111827}
-  .pk-pricing__hint{grid-column:1/-1;margin:0;color:#6b7280;font-size:.74rem}
+  .pk-pricing__hint{grid-column:1/-1;grid-row:7;margin:0;color:#6b7280;font-size:.74rem}
   .pk-pricing input {box-sizing:border-box;width:100%;min-width:0;border:1px solid #c9c4bb;background:#fff;border-radius:.55rem;color:#111827;font:inherit;padding:.6rem .7rem}
   .pk-pricing button{font:inherit;border-radius:.55rem;border:1px solid #d1d5db;cursor:pointer;padding:.65rem .85rem;background:#fff;color:#111827}
   .pk-pricing button:disabled{opacity:.4;cursor:not-allowed}
@@ -151,8 +160,11 @@
   .pk-pricing__history-tools input{flex:1 1 160px;width:auto;font-size:.9rem}
   .pk-pricing__history-tools button{font-size:.78rem;padding:.55rem .6rem}
   .pk-pricing__history-help{font-size:.73rem;line-height:1.5;color:#6b7280;margin:0 0 .85rem}
-  .pk-pricing__records{display:grid;gap:.5rem}
+  .pk-pricing__records{display:grid;gap:.5rem;max-height:19rem;overflow-y:auto;overscroll-behavior:contain;align-content:start;padding-right:.2rem}
   .pk-pricing__records>p{color:#6b7280;font-size:.85rem}
+  .pk-pricing__history-bottom{display:flex;justify-content:space-between;align-items:center;gap:.7rem;flex-wrap:wrap;margin-top:.7rem;font-size:.76rem;color:#6b7280}
+  .pk-pricing__history-bottom button{padding:.5rem .75rem;font-size:.78rem;font-weight:700;border:1px solid #d1d5db;border-radius:.5rem;background:#faf8f4}
+  .pk-pricing [hidden]{display:none!important}
   .pk-pricing__record{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.55rem;border:1px solid #e7e2d9;border-radius:.65rem;padding:.7rem .8rem}
   .pk-pricing__record strong{display:block;font-size:.98rem}
   .pk-pricing__record small{display:block;margin-top:.2rem;color:#6b7280;font-size:.72rem}
@@ -166,9 +178,11 @@
   .pk-pricing__connection{color:#6b7280;font: .8rem/1.5 system-ui,sans-serif;margin:.8rem 0}
   @media(min-width:680px){.pk-pricing__live{grid-template-columns:minmax(0,1fr) minmax(0,1.15fr)}}
   @media(min-width:760px){.pk-pricing__settings{grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(178px,1.1fr)}
-    .pk-pricing__presets{grid-column:3;grid-row:2;margin:0}
-    .pk-pricing__rounding{grid-column:1/-1;grid-row:3}
-    .pk-pricing__hint{grid-column:1/-1;grid-row:4}}
+    .pk-pricing__settings>.pk-pricing__label:nth-of-type(3){grid-column:3;grid-row:1}
+    .pk-pricing__settings>[data-overhead]{grid-column:3;grid-row:2}
+    .pk-pricing__presets{grid-column:1/-1;grid-row:3;margin:0}
+    .pk-pricing__rounding{grid-column:1/-1;grid-row:4}
+    .pk-pricing__hint{grid-column:1/-1;grid-row:5}}
 </style>
 
 <script is:inline type="module">

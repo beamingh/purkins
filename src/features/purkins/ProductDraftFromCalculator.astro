@@ -1,0 +1,135 @@
+---
+import type { LocationOption } from './locations';
+
+interface Props {
+  locations: LocationOption[];
+}
+const { locations } = Astro.props;
+---
+<details class="pk-draft" data-calculator-product>
+  <summary class="pk-draft__summary">
+    <span>
+      <strong>Save this price as a Purkins product</strong>
+      <small>Optional: enter a few item details and create a private inventory draft</small>
+    </span>
+    <span aria-hidden="true">+</span>
+  </summary>
+  <div class="pk-draft__body">
+    <p class="pk-draft__intro">Your purchase cost, currency, exchange rate, overhead, markup and final selling price will be copied directly from the live calculator. This never publishes a product.</p>
+    <form data-calculator-product-form method="POST" action="/api/admin/products" enctype="multipart/form-data" class="pk-draft__form">
+      <input type="hidden" name="currency" value="ZMW" />
+      <input type="hidden" name="price" value="" />
+      <input type="hidden" name="purchase_currency" value="" />
+      <input type="hidden" name="purchase_cost" value="" />
+      <input type="hidden" name="zar_to_zmw" value="" />
+      <input type="hidden" name="overhead_zwm" value="" />
+      <input type="hidden" name="markup_percent" value="" />
+      <input type="hidden" name="pricing_mode" value="cost_based" />
+      <input type="hidden" name="requires_shipping" value="on" />
+      <input type="hidden" name="after_create" value="next" />
+      <div class="pk-draft__grid">
+        <label class="pk-draft__wide">Product name <span class="pk-draft__required">*</span>
+          <input name="name" type="text" maxlength="200" required autocomplete="off" placeholder="e.g. Foldable Baby Bathtub" data-draft-name />
+        </label>
+        <label>Brand
+          <input name="brand" type="text" maxlength="100" placeholder="Optional" />
+        </label>
+        <label>Supplier barcode / label code
+          <input name="supplier_barcode" data-draft-barcode type="text" maxlength="80" autocomplete="off" placeholder="Preserves leading zeros" />
+        </label>
+        <div class="pk-draft__matches pk-draft__wide" data-draft-matches hidden aria-live="polite">
+          <strong>Possible matching stock</strong>
+          <p>Check these products before creating a separate draft.</p>
+          <ul data-draft-match-list></ul>
+        </div>
+        <label>Quantity in stock
+          <input name="stock" type="number" inputmode="numeric" min="0" max="1000000" step="1" value="0" required />
+        </label>
+        <label>Storage location
+          <select name="location_id">
+            <option value="">Unassigned</option>
+            {locations.map(loc => <option value={loc.id}>{loc.path}</option>)}
+          </select>
+        </label>
+        <label>Colour
+          <input name="colour" type="text" maxlength="60" placeholder="Optional" />
+        </label>
+        <label>Size or age
+          <input name="size_label" type="text" maxlength="60" placeholder="Optional" />
+        </label>
+        <label>Stock condition
+          <select name="condition_status">
+            <option value="review">Needs checking</option>
+            <option value="complete">Complete, new</option>
+            <option value="incomplete">Incomplete</option>
+          </select>
+        </label>
+        <label>Pack quantity
+          <input name="pack_count" type="number" inputmode="numeric" min="1" max="999" step="1" placeholder="Optional" />
+        </label>
+        <label class="pk-draft__wide">Description
+          <textarea name="description" rows="2" maxlength="4000" placeholder="Optional product description"></textarea>
+        </label>
+        <label class="pk-draft__wide">Product photograph
+          <input name="image" type="file" accept="image/*" />
+        </label>
+      </div>
+      <div class="pk-draft__price">
+        <div class="pk-draft__price-top">
+          <div><span>Suggested selling price</span><strong data-draft-suggested>—</strong></div>
+          <div><span>Estimated landed cost</span><strong data-draft-landed>—</strong></div>
+        </div>
+        <label class="pk-draft__override"><input data-draft-override type="checkbox" /> Set a different selling price</label>
+        <label class="pk-draft__manual" data-draft-manual-wrap hidden>Final selling price (K)
+          <input data-draft-manual type="number" inputmode="decimal" min="0.01" step="0.01" placeholder="Enter your selling price" />
+        </label>
+        <div class="pk-draft__final"><span>Price to save in Purkins</span><strong data-draft-final>—</strong></div>
+      </div>
+      <p class="pk-draft__status" data-draft-status role="status">Enter a valid purchase cost in the calculator and a product name to save.</p>
+      <button type="submit" data-draft-save disabled>Save private product draft</button>
+      <p class="pk-draft__footnote">A save requires an online Admin session and a fresh duplicate check. Calculation history still saves independently after 20 seconds. For products with size/colour variants, use <a href="/admin/stock-intake">Rapid Stock Intake</a>.</p>
+    </form>
+  </div>
+</details>
+
+<style is:inline>
+  .pk-draft{border:1px solid #e7e2d9;border-radius:.9rem;background:#fff;color:#111827;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;overflow:hidden}
+  .pk-draft__summary{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1.25rem;list-style:none}
+  .pk-draft__summary::-webkit-details-marker{display:none}
+  .pk-draft__summary strong{display:block;font-size:1.08rem}
+  .pk-draft__summary small{display:block;font-weight:400;color:#6b7280;margin-top:.25rem;line-height:1.4;font-size:.79rem}
+  .pk-draft__summary>span:last-child{font-size:1.4rem;font-weight:800}
+  .pk-draft[open] .pk-draft__summary>span:last-child{transform:rotate(45deg)}
+  .pk-draft__body{padding:0 1.25rem 1.3rem}
+  .pk-draft__intro{font-size:.8rem;line-height:1.5;color:#57534e;margin:0 0 1rem}
+  .pk-draft__form{display:grid;gap:1rem}
+  .pk-draft__grid{display:grid;grid-template-columns:minmax(0,1fr);gap:.8rem}
+  .pk-draft label{display:block;font-size:.82rem;font-weight:700;line-height:1.4}
+  .pk-draft input:not([type=checkbox]),.pk-draft select,.pk-draft textarea{box-sizing:border-box;display:block;width:100%;min-width:0;margin-top:.35rem;padding:.65rem .75rem;border:1px solid #c9c4bb;border-radius:.55rem;background:#fff;color:#111827;font:inherit;font-weight:400}
+  .pk-draft input:focus-visible,.pk-draft button:focus-visible,.pk-draft a:focus-visible{outline:3px solid #a5b4fc;outline-offset:2px}
+  .pk-draft [hidden]{display:none!important}
+  .pk-draft__required{color:#b91c1c}
+  .pk-draft__matches{border:1px solid #e0c78f;background:#fffbea;border-radius:.6rem;padding:.8rem;font-size:.83rem}
+  .pk-draft__matches p{margin:.3rem 0;color:#6b7280;font-weight:400}
+  .pk-draft__matches ul{padding-left:1.25rem;list-style:disc;margin:.6rem 0 0}
+  .pk-draft__matches li{padding:.2rem 0}
+  .pk-draft__matches a,.pk-draft__footnote a{color:#92400e;text-decoration:underline}
+  .pk-draft__price{border-radius:.8rem;background:#f8f7f4;padding:1rem;display:grid;gap:.8rem}
+  .pk-draft__price-top{display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+  .pk-draft__price-top span,.pk-draft__final span{display:block;color:#6b7280;font-size:.76rem}
+  .pk-draft__price-top strong{display:block;margin-top:.25rem}
+  .pk-draft__override{display:flex!important;gap:.55rem;align-items:center}
+  .pk-draft__override input{width:1rem;height:1rem}
+  .pk-draft__manual input{max-width:240px}
+  .pk-draft__final{border-top:1px solid #e7e2d9;padding-top:.75rem}
+  .pk-draft__final strong{font-size:1.75rem;font-weight:800}
+  .pk-draft__status{margin:0;font-size:.79rem;color:#57534e;line-height:1.5}
+  .pk-draft__form>button{justify-self:start;background:#111827;border:1px solid #111827;color:white;font:inherit;font-weight:700;padding:.8rem 1.2rem;border-radius:.55rem;cursor:pointer}
+  .pk-draft__form>button:disabled{opacity:.4;cursor:not-allowed}
+  .pk-draft__footnote{margin:0;color:#6b7280;font-size:.74rem;line-height:1.6}
+  @media(min-width:650px){.pk-draft__grid{grid-template-columns:repeat(2,minmax(0,1fr))}.pk-draft__wide{grid-column:1/-1}}
+</style>
+<script is:inline type="module">
+  import { initCalculatorProductDraft } from '/admin/price-calculator-product-intake.mjs';
+  initCalculatorProductDraft(document.querySelector('[data-calculator-product]'), document.querySelector('[data-purkins-pricing]'));
+</script>

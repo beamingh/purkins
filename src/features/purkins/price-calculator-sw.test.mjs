@@ -106,7 +106,7 @@ describe('Purkins offline calculator service worker cache recovery', () => {
     sw.cacheStores.set('purkins-pricing-v3', new Map());
     await sw.install();
     await sw.activate();
-    expect([...sw.cacheStores.keys()]).toEqual(['purkins-pricing-v4']);
+    expect([...sw.cacheStores.keys()]).toEqual(['purkins-pricing-v6']);
   });
 
   it('returns cached module only when the network fails', async () => {
@@ -132,7 +132,7 @@ describe('Purkins offline calculator service worker cache recovery', () => {
   it('does not downgrade to stale cached JavaScript if an online cache write fails', async () => {
     const sw = workerHarness();
     await sw.install();
-    const store = sw.cacheStores.get('purkins-pricing-v4');
+    const store = sw.cacheStores.get('purkins-pricing-v6');
     store.set('/admin/price-calculator-core.mjs', okResponse('/admin/price-calculator-core.mjs', 'STALE'));
     sw.setNetwork(async () => okResponse('/admin/price-calculator-core.mjs', 'FRESH'));
     // The implementation should keep returning the fetched response even if

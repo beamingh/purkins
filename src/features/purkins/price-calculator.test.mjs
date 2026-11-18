@@ -7,8 +7,9 @@ import {
   DEFAULT_MARKUP_PERCENT,
 } from '../../../public/admin/price-calculator-core.mjs';
 import {
-  AUTO_SAVE_MS, HISTORY_LIMIT, historySignature, normalizeHistory,
-  saveHistory, suggestCosts, shouldAutoSave,
+  AUTO_SAVE_MS, HISTORY_LIMIT, HISTORY_INITIAL_VISIBLE, HISTORY_PAGE_SIZE,
+  historySignature, normalizeHistory, saveHistory, suggestCosts,
+  shouldAutoSave, visibleHistoryPage,
 } from '../../../public/admin/price-calculator-history.mjs';
 
 describe('Purkins offline price calculator', () => {
@@ -57,15 +58,41 @@ describe('currency modes and device-local history', () => {
     expect(suggestCosts(history, 'ZMW', '205').map(r => r.amount)).toEqual([2050]);
   });
 
-  it('auto-saves only once the unchanged signature reaches twenty seconds', () => {
+  it('auto-saves only once the unchanged signature reaches seven seconds', () => {
     const completed = sample(2050);
     const pending = historySignature(completed);
-    expect(AUTO_SAVE_MS).toBe(20_000);
-    expect(shouldAutoSave(pending, completed, 19_999)).toBe(false);
-    expect(shouldAutoSave(pending, completed, 20_000)).toBe(true);
-    expect(shouldAutoSave(pending, sample(205), 20_000)).toBe(false);
-    expect(shouldAutoSave(pending, sample(2050, 'ZMW'), 20_000)).toBe(false);
-    expect(shouldAutoSave(pending, sample(2050, 'ZAR', { markup: 80 }), 20_000)).toBe(false);
+    expect(AUTO_SAVE_MS).toBe(7_000);
+    expect(shouldAutoSave(pending, completed, 6_999)).toBe(false);
+    expect(shouldAutoSave(pending, completed, 7_000)).toBe(true);
+    expect(shouldAutoSave(pending, sample(205), 7_000)).toBe(false);
+    expect(shouldAutoSave(pending, sample(2050, 'ZMW'), 7_000)).toBe(false);
+    expect(shouldAutoSave(pending, sample(2050, 'ZAR', { markup: 80 }), 7_000)).toBe(false);
+  });
+
+  it('shows only the newest three entries, then loads ten at a time without losing older history', () => {
+    const history = normalizeHistory(Array.from({ length: 25 }, (_, i) => sample(3000 - i)));
+    expect(HISTORY_INITIAL_VISIBLE).toBe(3);
+    expect(HISTORY_PAGE_SIZE).toBe(10);
+    const initial = visibleHistoryPage(history);
+    expect(initial.rows.map(x => x.amount)).toEqual([3000, 2999, 2998]);
+    expect(initial).toMatchObject({ total: 25, remaining: 22 });
+    const expanded = visibleHistoryPage(history, '', HISTORY_INITIAL_VISIBLE + HISTORY_PAGE_SIZE);
+    expect(expanded.rows).toHaveLength(13);
+    expect(expanded.remaining).toBe(12);
+    const all = visibleHistoryPage(history, '', HISTORY_INITIAL_VISIBLE + 3 * HISTORY_PAGE_SIZE);
+    expect(all.rows).toHaveLength(25);
+    expect(all.remaining).toBe(0);
+    expect(history).toHaveLength(25);
+  });
+
+  it('searches all history, not only the three currently rendered records', () => {
+    const history = normalizeHistory(Array.from({ length: 25 }, (_, i) => sample(3000 - i)));
+    const matches = visibleHistoryPage(history, 'R2976');
+    expect(matches.rows.map(x => x.amount)).toEqual([2976]);
+    expect(matches).toMatchObject({ total: 1, remaining: 0 });
+    expect(visibleHistoryPage(history, 'no such cost')).toMatchObject({
+      rows: [], total: 0, remaining: 0,
+    });
   });
 
   it('deduplicates identical calculations and keeps changing rates separate', () => {
@@ -120,10 +147,11 @@ describe('practical upward rounding of retail prices', () => {
       saleZmw: 132.47,
       roundedSaleZmw: 135,
       roundingAddedZmw: 2.53,
+      overheadZmw: 0,
     });
     expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 10)).toEqual({
       costZmw: 121, markupZmw: 72.6, saleZmw: 193.6,
-      roundedSaleZmw: 200, roundingAddedZmw: 6.4,
+      roundedSaleZmw: 200, roundingAddedZmw: 6.4, overheadZmw: 0,
     });
     expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 0)?.roundedSaleZmw).toBe(193.6);
   });
@@ -149,7 +177,38 @@ describe('practical upward rounding of retail prices', () => {
     expect(withFive[0].saleZmw).toBe(135);
     expect(withFive[0].rawSaleZmw).toBe(132.47);
     expect(historySignature(withFive[0])).not.toBe(historySignature(old[0]));
-    expect(shouldAutoSave(historySignature(old[0]), withFive[0], 20_000)).toBe(false);
+    expect(shouldAutoSave(historySignature(old[0]), withFive[0], 7_000)).toBe(false);
     expect(normalizeHistory([{ ...raw, roundingStepZmw: 7 }])).toEqual([]);
+  });
+});
+
+describe('sourcing overhead in live calculator and history', () => {
+  it('adds per-unit sourcing overhead before markup and upward rounding', () => {
+    const p = calculateRetailPrice(100, 'ZAR', 1.21, 60, 5, 15);
+    expect(p).toMatchObject({
+      costZmw: 136, overheadZmw: 15,
+      markupZmw: 81.6, saleZmw: 217.6,
+      roundedSaleZmw: 220, roundingAddedZmw: 2.4,
+    });
+    expect(calculateRetailPrice(100, 'ZAR', 1.21, 60, 5, 0)?.roundedSaleZmw).toBe(195);
+  });
+  it('tracks overhead choices without duplicating legacy no-overhead records', () => {
+    const before = {
+      id:'old', amount:100, currency:'ZAR', rate:1.21, markup:60,
+      roundingStepZmw:5, source:'manual', savedAt:'2026-11-18T10:00:00.000Z',
+    };
+    const old = normalizeHistory([before])[0];
+    expect(old.overheadZmw).toBe(0);
+    expect(old.saleZmw).toBe(195);
+    const withOverhead = saveHistory([old], { ...before, id:'new', overheadZmw:15 });
+    expect(withOverhead).toHaveLength(2);
+    expect(withOverhead[0]).toMatchObject({
+      id:'new', overheadZmw:15, costZmw:136, rawSaleZmw:217.6, saleZmw:220,
+    });
+    expect(historySignature(withOverhead[0])).not.toBe(historySignature(old));
+  });
+  it('rejects unsupported overhead amounts', () => {
+    expect(calculateRetailPrice(100,'ZAR',1.21,60,5,-2)).toBeNull();
+    expect(calculateRetailPrice(100,'ZAR',1.21,60,5,'')).toBeNull();
   });
 });

@@ -63,14 +63,32 @@ export function roundUpKwacha(amount, stepZmw = DEFAULT_ROUNDING_STEP_ZMW) {
 /** Original cost and markup stay visible. The retail price includes only
  * the optional upward rounding, never a downward change to the markup.
  */
-export function calculateRetailPrice(costPrice, currency, rate, markup, roundingStepZmw = DEFAULT_ROUNDING_STEP_ZMW) {
-  const result = calculateSellingPrice(costPrice, currency, rate, markup);
-  if (!result) return null;
+export function calculateRetailPrice(costPrice, currency, rate, markup, roundingStepZmw = DEFAULT_ROUNDING_STEP_ZMW, overheadZmw = 0) {
+  const base = calculateSellingPrice(costPrice, currency, rate, markup);
+  if (!base) return null;
+  const overhead = Number(overheadZmw);
+  if (overheadZmw === '' || !Number.isFinite(overhead) || overhead < 0 ||
+      overhead > Number.MAX_SAFE_INTEGER / 100) return null;
+  const cents = Math.round(overhead * 100);
+  if (!Number.isSafeInteger(cents)) return null;
+  const roundedOverhead = cents / 100;
+  let result = base;
+  if (roundedOverhead !== 0) {
+    const costZmw = Math.round((base.costZmw + roundedOverhead) * 100) / 100;
+    const saleZmw = Math.round((costZmw * (1 + Number(markup) / 100) + Number.EPSILON) * 100) / 100;
+    if (!Number.isSafeInteger(Math.round(saleZmw * 100))) return null;
+    result = {
+      costZmw,
+      saleZmw,
+      markupZmw: Math.round((saleZmw - costZmw) * 100) / 100,
+    };
+  }
   const roundedSaleZmw = roundUpKwacha(result.saleZmw, roundingStepZmw);
   if (roundedSaleZmw === null) return null;
   const roundingAddedZmw = Math.round((roundedSaleZmw - result.saleZmw) * 100) / 100;
   return {
     ...result,
+    overheadZmw: roundedOverhead,
     roundedSaleZmw,
     roundingAddedZmw,
   };
