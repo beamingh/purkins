@@ -101,6 +101,16 @@ describe('Purkins route-level Worker isolation', () => {
     expect(monolithic).toContain('HAS_LOCAL_ADMIN_ROUTES = true');
   });
 
+  it('routes the private Admin hostname root to the authenticated dashboard', () => {
+    const adminWorker = readFileSync(new URL('../../src/admin-worker.ts', import.meta.url), 'utf8');
+    expect(adminWorker).toContain("import { redirectAdminRoot } from './features/runtime/adminRoot'");
+    expect(adminWorker).toContain('const rootRedirect = redirectAdminRoot(request)');
+    expect(adminWorker).toContain('if (rootRedirect) return rootRedirect');
+    expect(adminWorker).toContain("if (!allowed) return new Response('Not found.', { status: 404 })");
+    // No storefront root is accidentally bundled into the private Worker.
+    expect(routeBelongsToWorker('admin', 'index.astro')).toBe(false);
+  });
+
   it('public Worker rejects Admin and MCP even if a build accidentally included the routes', () => {
     const publicWorker = readFileSync(new URL('../../src/worker.ts', import.meta.url), 'utf8');
     const adminWorker = readFileSync(new URL('../../src/admin-worker.ts', import.meta.url), 'utf8');
