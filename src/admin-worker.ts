@@ -1,4 +1,5 @@
 import { handle } from '@astrojs/cloudflare/handler';
+import { redirectAdminRoot } from './features/runtime/adminRoot';
 import mcpHandler, { StoreMcp } from '../mcp/src/index';
 
 /**
@@ -16,6 +17,11 @@ export { StoreMcp };
 export default {
   async fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
+
+    // Visiting the bare Admin hostname should reach the dashboard, not the
+    // unbundled storefront root. /admin remains gated by the normal auth flow.
+    const rootRedirect = redirectAdminRoot(request);
+    if (rootRedirect) return rootRedirect;
 
     if (pathname === '/mcp' || pathname.startsWith('/mcp/')) {
       // This Worker is operator-only: never expose the legacy anonymous buyer
